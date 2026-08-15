@@ -39,7 +39,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Serif+TC:wght@400;600;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./style.css?v=20260816_v21">
+  <link rel="stylesheet" href="./style.css?v=20260816_v22">
 </head>
 <body class="bg-[#0c0d12] text-[#e6e8f0] font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-black">
 
@@ -81,10 +81,11 @@
       </button>
 
       <!-- 登入身分指示器 -->
-      <div id="user-badge" class="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-lg bg-brand-card border border-brand-border text-xs text-slate-300">
-        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-        <span id="username-display" class="font-mono text-brand-gold text-xs">訪客</span>
-        <button id="logout-btn" class="ml-0.5 text-[11px] text-slate-400 hover:text-rose-400 transition" title="登出切換帳號">登出</button>
+      <div id="user-badge" class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-brand-card border border-brand-border text-xs text-slate-300">
+        <span class="w-2 h-2 rounded-full bg-emerald-400" id="user-status-dot"></span>
+        <span id="username-display" class="font-mono text-brand-gold text-xs">訪客玩家</span>
+        <button id="logout-btn" class="ml-0.5 text-[11px] text-slate-400 hover:text-rose-400 transition hidden" title="登出切換帳號">登出</button>
+        <button id="header-login-btn" class="ml-0.5 text-[11px] text-brand-gold hover:underline font-bold" title="登入或註冊">登入</button>
       </div>
 
       <!-- 開局創角按鈕 -->
@@ -165,15 +166,19 @@
           五月的台北士林，暴雨傾盆。黑道二把手、地檢署白日判官、政商巨頭與身懷密錄帳冊的妳，在權謀殺伐與情慾狂瀾的深淵交鋒。
         </p>
         
-        <!-- 當前登入者資訊列 -->
-        <div class="pt-3 flex flex-wrap items-center justify-center gap-3 text-xs">
+        <!-- 當前登入者資訊列與一鍵重置 -->
+        <div class="pt-3 flex flex-wrap items-center justify-center gap-2.5 text-xs">
           <div class="bg-brand-card/90 px-3 py-1.5 rounded-lg border border-brand-border flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span class="text-slate-400">登入玩家：</span>
-            <span id="home-username-display" class="font-mono text-brand-gold font-bold">訪客玩家</span>
+            <span class="w-2 h-2 rounded-full bg-emerald-400" id="home-user-dot"></span>
+            <span class="text-slate-400">當前身分：</span>
+            <span id="home-username-display" class="font-mono text-brand-gold font-bold">訪客玩家（單機）</span>
           </div>
-          <button id="home-switch-account-btn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-brand-border transition">
-            🔄 切換帳號 / 登出
+          <button id="home-auth-action-btn" class="px-3 py-1.5 rounded-lg bg-brand-gold/20 hover:bg-brand-gold/30 text-brand-gold font-bold border border-brand-gold/40 transition">
+            🔑 登入 / 註冊新帳號
+          </button>
+          <button id="home-clear-all-data-btn" class="px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white border border-rose-800/50 transition flex items-center gap-1" title="清空本機所有存檔與暫存，完全重置開局">
+            <span>💥</span>
+            <span>清空所有存檔重置</span>
           </button>
         </div>
       </div>
@@ -310,9 +315,12 @@
     </div>
   </div>
 
-  <!-- 🔐 玩家帳號登入 / 註冊強制攔截視窗 (Auth Gatekeeper Modal) -->
+  <!-- 🔐 玩家帳號登入 / 註冊視窗 (Auth Gatekeeper Modal) -->
   <div id="auth-modal" class="fixed inset-0 bg-black/90 backdrop-blur-lg z-[90] flex items-center justify-center p-4 transition-opacity" style="display:none;">
-    <div class="bg-brand-surface border border-brand-gold/50 rounded-2xl max-w-md w-full p-6 sm:p-8 shadow-2xl shadow-black space-y-6">
+    <div class="relative bg-brand-surface border border-brand-gold/50 rounded-2xl max-w-md w-full p-6 sm:p-8 shadow-2xl shadow-black space-y-6">
+      <button id="close-auth-modal-btn" class="absolute top-4 right-4 text-slate-400 hover:text-white p-1" title="關閉視窗（以訪客身分繼續）">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
       
       <div class="text-center space-y-1">
         <div class="inline-block font-mono text-[11px] text-brand-gold tracking-widest uppercase bg-brand-gold/10 border border-brand-gold/20 px-2.5 py-0.5 rounded">
@@ -720,6 +728,6 @@
     </button>
   </div>
 
-  <script src="./app.js?v=20260816_v21"></script>
+  <script src="./app.js?v=20260816_v22"></script>
 </body>
 </html>
