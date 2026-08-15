@@ -181,7 +181,23 @@ window.addEventListener('DOMContentLoaded', async () => {
     dom.apiUrlInput.value = state.gasApiUrl;
   }
 
+  // 檢查是否已有暫存進度
+  const savedHistory = localStorage.getItem('undercurrent_full_story_chapters');
+  if (savedHistory) {
+    try {
+      const parsed = JSON.parse(savedHistory);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        state.chapterHistoryList = parsed;
+        state.chapterData = parsed[parsed.length - 1];
+        renderStoryStream(state.chapterData);
+      }
+    } catch (e) {
+      console.warn('Failed to parse saved story history:', e);
+    }
+  }
+
   checkAuthSession();
+  switchView('home');
 });
 
 function setupEventListeners() {
@@ -923,16 +939,21 @@ function renderChoices(choices) {
 // ==========================================
 
 function checkAuthSession() {
+  if (dom.authModal) dom.authModal.style.display = 'none';
+  
   if (state.token && state.username) {
-    dom.authModal.style.display = 'none';
     if (dom.userBadge) dom.userBadge.classList.remove('hidden');
     if (dom.usernameDisplay) dom.usernameDisplay.textContent = state.username;
-    updateSaveSlotsDisplay();
-    initializeStory();
   } else {
-    dom.authModal.style.display = 'flex';
-    if (dom.userBadge) dom.userBadge.classList.add('hidden');
+    if (dom.userBadge) dom.userBadge.classList.remove('hidden');
+    if (dom.usernameDisplay) dom.usernameDisplay.textContent = '訪客玩家';
   }
+  
+  updateSaveSlotsDisplay();
+  updateHomeViewDisplay();
+  
+  // 預設進入首頁 (Home View)
+  switchView('home');
 }
 
 function setSession(token, userId, username) {
@@ -1710,30 +1731,33 @@ function generateDynamicTurnChapter(turnCount, choiceId, customInput, profile) {
 
 async function handleCharacterCreationSubmit() {
   const targetSelect = document.getElementById('form-target-lead');
-  const selectedOption = targetSelect.options[targetSelect.selectedIndex];
+  const selectedOption = targetSelect ? targetSelect.options[targetSelect.selectedIndex] : null;
   
   const playerProfile = {
-    name: document.getElementById('form-player-name').value.trim(),
-    gender: document.getElementById('form-player-gender').value,
-    age: document.getElementById('form-player-age').value.trim(),
-    profession: document.getElementById('form-player-profession').value.trim(),
-    background: document.getElementById('form-player-background').value.trim(),
-    appearance: document.getElementById('form-player-appearance').value.trim(),
-    taboos: document.getElementById('form-player-taboos').value.trim(),
-    targetLead: targetSelect.value,
-    targetLeadName: selectedOption.getAttribute('data-name') || '徐令謙',
-    allowR18: document.getElementById('form-allow-r18').checked,
-    customScenario: document.getElementById('form-custom-scenario').value.trim()
+    name: (document.getElementById('form-player-name')?.value || '阮思薇').trim(),
+    gender: document.getElementById('form-player-gender')?.value || '女',
+    age: (document.getElementById('form-player-age')?.value || '25').trim(),
+    profession: (document.getElementById('form-player-profession')?.value || '調查記者').trim(),
+    background: (document.getElementById('form-player-background')?.value || '').trim(),
+    appearance: (document.getElementById('form-player-appearance')?.value || '').trim(),
+    taboos: (document.getElementById('form-player-taboos')?.value || '無').trim(),
+    targetLead: targetSelect ? targetSelect.value : '01_徐令謙',
+    targetLeadName: selectedOption ? selectedOption.getAttribute('data-name') : '徐令謙',
+    allowR18: document.getElementById('form-allow-r18') ? document.getElementById('form-allow-r18').checked : true,
+    customScenario: (document.getElementById('form-custom-scenario')?.value || '').trim()
   };
 
-  dom.charCreationModal.style.display = 'none';
-  showLoading(`正在為【${playerProfile.name}】構建與【${playerProfile.targetLeadName}】的專屬開場命運篇章……`);
+  showLoading('以太筆觸流轉中，主筆作家正在為您構建第 1 回篇章……');
 
-  state.chapterHistoryList = [];
-  localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify([]));
-
+  // 初始化第 1 回
   loadMockDataWithProfile(playerProfile);
+  
+  if (dom.charCreationModal) dom.charCreationModal.style.display = 'none';
   hideLoading();
+  
+  // 進入遊戲畫面並滾動至頂部
+  switchView('gameplay');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function initializeStory() {
