@@ -646,10 +646,10 @@ async function waitForRpmCooldown() {
     let remainingSec = Math.ceil((MIN_REQUEST_GAP_MS - elapsed) / 1000);
     while (remainingSec > 0) {
       if (dom.loadingText) {
-        dom.loadingText.textContent = `⚡ 伺服器頻率保護冷卻中（剩餘 ${remainingSec} 秒）……`;
+        dom.loadingText.textContent = `⚡ 筆觸沉澱冷卻中（剩餘 ${remainingSec} 秒）……`;
       }
       if (dom.loadingSubtext) {
-        dom.loadingSubtext.textContent = '官方 API 限制每分鐘 5 次請求，系統正為您自動排隊，即將於倒數結束後極速生成……';
+        dom.loadingSubtext.textContent = '系統正為您自動排隊，即將於倒數結束後即時推演劇情……';
       }
       await new Promise(r => setTimeout(r, 1000));
       remainingSec--;
@@ -677,7 +677,7 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
         dom.loadingText.textContent = `以太筆觸流轉中，AI 主筆作家正在為您現場創作……`;
       }
       if (dom.loadingSubtext) {
-        dom.loadingSubtext.textContent = `正由高速模型 [${model}] 現場即時生成 1000~1500 字沉浸式長篇……`;
+        dom.loadingSubtext.textContent = `無預設範本 · 100% 依據您的自訂人設與即時抉擇創作長篇情節……`;
       }
 
       const controller = new AbortController();
@@ -706,11 +706,11 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
       lastRequestTimestamp = Date.now();
 
       if (response.status === 429) {
-        console.warn(`[Pure AI] Model ${model} returned 429 Rate Limit. Waiting 12s cooldown...`);
+        console.warn(`[Pure AI] Rate Limit. Waiting 12s cooldown...`);
         let cd = 12;
         while (cd > 0) {
-          if (dom.loadingText) dom.loadingText.textContent = `⚡ 伺服器頻率冷卻中（剩餘 ${cd} 秒）……`;
-          if (dom.loadingSubtext) dom.loadingSubtext.textContent = '正在為您自動重試，請稍候……';
+          if (dom.loadingText) dom.loadingText.textContent = `⚡ 筆觸冷卻中（剩餘 ${cd} 秒）……`;
+          if (dom.loadingSubtext) dom.loadingSubtext.textContent = '正在為您自動重試推進，請稍候……';
           await new Promise(r => setTimeout(r, 1000));
           cd--;
         }
