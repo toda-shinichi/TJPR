@@ -478,6 +478,40 @@ function switchAuthTab(tab) {
   }
 }
 
+
+/**
+ * ☁️ 非同步同步存檔至 Google Drive (Player_Saves) 與 Google Sheets (Master_Index)
+ */
+async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj) {
+  if (!saveStateObj && !chapterDataObj) return;
+
+  try {
+    const email = state.username ? (state.username.includes('@') ? state.username : `${state.username}@undercurrent.game`) : 'anonymous_player@undercurrent.game';
+    const payload = {
+      action: 'novel/save-state',
+      token: state.token || 'epi_guest_token',
+      userId: state.userId || 'usr_guest',
+      email: email,
+      saveState: saveStateObj || state.saveState,
+      chapter: chapterDataObj || state.chapterData
+    };
+
+    // 嘗試向 Google Apps Script 後端推播存檔與小說章節
+    fetch(state.gasApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+      mode: 'no-cors' // Google Apps Script Web App 跨域支援
+    }).then(() => {
+      console.log('[Cloud Sync] Successfully triggered Google Drive (Player_Saves) synchronization.');
+    }).catch(e => {
+      console.warn('[Cloud Sync] Background cloud sync warning (silent fallback):', e.message);
+    });
+  } catch (err) {
+    console.warn('[Cloud Sync] Sync dispatch skipped:', err.message);
+  }
+}
+
 function handleLogin(e) {
   e.preventDefault();
   const username = document.getElementById('login-username').value.trim();
@@ -564,8 +598,8 @@ function updateUserBadgeUI() {
 const LLM_CONFIG = {
   API_URL: 'https://api.banana2556.com/v1/chat/completions',
   API_KEY: 'sk-TcKczU9MQ5abSWYrF51eU85aQjZV6IzPqeypYYn9zVDoSram',
-  PRIMARY_MODEL: 'gemini-3.6-flash',
-  FALLBACK_MODEL: 'mistral-large-3',
+  PRIMARY_MODEL: 'mistral-large-3',
+  FALLBACK_MODEL: 'deepseek-v4-pro',
   TEMPERATURE: 0.92
 };
 
@@ -842,13 +876,13 @@ async function startNewGameWithProfile(profile) {
     console.error('[Pure AI] First turn generation error:', aiErr);
     alert('AI 大模型生成逾時，正在為您重新連接……');
     initialChapter = {
-      chapterTitle: `第 1 回．雨夜初會 · ${profile.targetLeadName}`,
+      chapterTitle: `第 1 回．雨夜初會 · ${profile.targetLeadName || '徐令謙'}`,
       prose: `五月深夜的台北，暴雨如注。\n\n${profile.name}手握關鍵底牌踏入現場，對面男人的視線在第一時間精準鎖定了她……`,
       statusPanel: {
         timeLocation: '台北市深夜暴雨街頭',
         tension: '張力值 [75%]',
         intoxication: '微醺度 [20%]',
-        outfit: `${profile.name}（高級訂製風衣） ｜ ${profile.targetLeadName}`,
+        outfit: `${profile.name}（高級訂製風衣） ｜ ${profile.targetLeadName || '徐令謙'}`,
         interaction: '目光鎖定',
         inventory: '密錄隨身碟',
         rumors: '台北政媒暗潮湧動'
@@ -876,6 +910,7 @@ async function startNewGameWithProfile(profile) {
   updateGameplayBreadcrumb();
   
   saveGameStateToSlot('1');
+  syncStateToGoogleDriveCloud(state.saveState, initialChapter);
 }
 
 async function makeChoice(choiceId, customInput, isRegenerating = false) {
@@ -1499,6 +1534,7 @@ function createNamedSave(saveName) {
   saves.unshift(newSaveEntry);
   persistNamedSavesList(saves);
   alert(`🎉 存檔「${name}」已成功儲存至存檔庫！`);
+  syncStateToGoogleDriveCloud(state.saveState, state.chapterData);
 }
 
 function renameNamedSave(saveId) {
@@ -1805,11 +1841,38 @@ function saveGameStateToSlot(slotId) {
   }));
 }
 
-function handleRegenerateTurn() {
-  if (state.lastChoicePayload) {
-    makeChoice(state.lastChoicePayload.choiceId, state.lastChoicePayload.customInput, true);
+async function handleRegenerateTurn() {
+  const turnCount = state.saveState?.turnCount || 1;
+  
+  if (turnCount <= 1 || !state.lastChoicePayload) {
+    // 重新演繹第 1 回開局
+    const profile = getActivePlayerProfile();
+    showLoading(
+      '以太筆觸流轉中，AI 主筆作家正在重新為您現場創作第 1 回長篇小說……',
+      '無預設範本 · 100% 依據您的自訂人設與情境即時生成……'
+    );
+    try {
+      const { systemPrompt, userPrompt } = buildFirstTurnPrompt(profile);
+      const regeneratedChapter = await generateStoryFromLLM(systemPrompt, userPrompt);
+      regeneratedChapter.act = 1;
+      regeneratedChapter.turn = 1;
+      regeneratedChapter.chosenLabel = '【正式開局】';
+      state.chapterData = regeneratedChapter;
+      state.chapterHistoryList = [regeneratedChapter];
+      localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+      renderStoryStream(regeneratedChapter);
+      renderSaveState();
+      saveGameStateToSlot('1');
+  syncStateToGoogleDriveCloud(state.saveState, initialChapter);
+      syncStateToGoogleDriveCloud(state.saveState, regeneratedChapter);
+    } catch (err) {
+      console.error('第 1 回重新生成失敗:', err);
+      alert('第 1 回重新生成逾時，請檢查網路連線或稍後再試。');
+    } finally {
+      hideLoading();
+    }
   } else {
-    alert('目前尚無上一步抉擇紀錄可重新演繹。');
+    makeChoice(state.lastChoicePayload.choiceId, state.lastChoicePayload.customInput, true);
   }
 }
 
