@@ -680,7 +680,8 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
       }
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 18000); // 18 秒極速容錯
+      state.currentAbortController = controller;
+      const timeoutId = setTimeout(() => controller.abort(), 16000); // 16 秒極速換線保護
 
       const response = await fetch(LLM_CONFIG.API_URL, {
         method: 'POST',
@@ -1989,15 +1990,31 @@ function startServerCooldown(seconds) {
   }, 1000);
 }
 
+let loadingTimer = null;
+
 function showLoading(text, subtext) {
   if (dom.loadingOverlay) {
     dom.loadingOverlay.style.display = 'flex';
     if (dom.loadingText) dom.loadingText.textContent = text || '載入中...';
     if (dom.loadingSubtext) dom.loadingSubtext.textContent = subtext || '正在依照《系統核心指令》構建多方博弈……';
+    
+    let secondsElapsed = 0;
+    const timerSpan = document.getElementById('loading-timer-badge');
+    if (timerSpan) timerSpan.textContent = `⏱️ 已耗時 0 秒`;
+
+    if (loadingTimer) clearInterval(loadingTimer);
+    loadingTimer = setInterval(() => {
+      secondsElapsed++;
+      if (timerSpan) timerSpan.textContent = `⏱️ 已耗時 ${secondsElapsed} 秒`;
+    }, 1000);
   }
 }
 
 function hideLoading() {
+  if (loadingTimer) {
+    clearInterval(loadingTimer);
+    loadingTimer = null;
+  }
   if (dom.loadingOverlay) {
     dom.loadingOverlay.style.display = 'none';
   }

@@ -623,7 +623,8 @@
   <div id="loading-overlay" class="fixed inset-0 bg-[#0c0d12]/85 backdrop-blur-sm z-[100] flex flex-col items-center justify-center p-4 transition-opacity" style="display:none;">
     <div class="w-12 h-12 border-4 border-brand-gold/20 border-t-brand-gold rounded-full animate-spin mb-4"></div>
     <div id="loading-text" class="font-serif text-brand-gold text-sm tracking-wide text-center mb-2">筆觸流轉中，AI 主筆作家正在即時創作小說……</div>
-    <div id="loading-subtext" class="text-xs text-slate-400 mb-6 text-center max-w-sm">無預設範本 · 100% 依據您的自訂人設與情境即時生成……</div>
+    <div id="loading-subtext" class="text-xs text-slate-400 mb-2 text-center max-w-sm">無預設範本 · 100% 依據您的自訂人設與情境即時生成……</div>
+    <div id="loading-timer-badge" class="text-xs text-amber-400 font-mono mb-5 bg-amber-950/40 px-3 py-1 rounded-full border border-amber-800/40">⏱️ 已耗時 0 秒</div>
     <button id="abort-generation-btn" class="px-4 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-700/50 text-rose-200 hover:text-white transition text-xs font-bold flex items-center gap-1.5 shadow-lg cursor-pointer">
       <span>🛑</span>
       <span>中止本次生成</span>
@@ -639,6 +640,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-  <script src="./app.js?v=20260816_v65"></script>
+  <script src="./app.js?v=20260816_v70"></script>
 </body>
 </html>
