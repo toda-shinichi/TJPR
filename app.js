@@ -13,7 +13,7 @@
 
 // 全域狀態
 const state = {
-  gasApiUrl: localStorage.getItem('epilogue_gas_url') || 'https://script.google.com/macros/s/AKfycbzoUqtgXpP5qKpf6FNyc3lT3G1FHqjH5B4GopdO4pZ_jLa8GDTA51LcKuR5ostcXP6hKw/exec',
+  gasApiUrl: 'https://script.google.com/macros/s/AKfycbzg3xfoXqVMM90YoIlx4FLwHRg5qy2wu0kV2Bae8xI-kWuNWd_ZNVKuOANygFZKv7rBhQ/exec',
   token: localStorage.getItem('undercurrent_auth_token') || '',
   userId: localStorage.getItem('undercurrent_user_id') || '',
   username: localStorage.getItem('undercurrent_user_name') || '',
