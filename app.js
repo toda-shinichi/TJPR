@@ -763,32 +763,32 @@ function buildFirstTurnPrompt(profile) {
     targetLeadPrompt = `【攻略男主】${profile.targetLeadName || '徐令謙'}`;
   }
 
-  const systemPrompt = `你是一位頂級華語長篇情慾權謀互動小說家與RPG核心引擎。
-請遵守《情慾文學指引》與《系統核心指令》：
+  const systemPrompt = `你是一位頂級華語長篇懸疑權謀與浪漫互動小說家與RPG核心引擎。
+請遵守以下文學創作指引：
 1. 【嚴格身分防火牆】：
    - 徐令謙是「黑道玄辰幫二把手 · 天裕會中樞 · 幕後制策者」，絕對不是檢察官或警察！（士林地檢署檢察官是韓正寰）。
    - 韓正寰是「士林地檢署主任檢察官 · 白日判官」。
    - 徐承勳是「中華民國副總統」。
    絕不可混淆男主身分！
-2. 風格：極致性張力、高位推拉、五感具象描寫、權謀殺伐、多方博弈，使用純繁體中文（台灣習慣用語）。
-3. 每一次生成都必須完全原創、富有新鮮感、細膩且字數達 1,000~1,500 字，絕不套用固定模板。
-4. 輸出必須為合法純 JSON 格式（不要包含任何 markdown 代碼標記，直接輸出合法 JSON 格式）：
+2. 風格：極致心理張力、高位推拉、五感具象描寫（體溫微熱、香氣、眼神壓迫、近身肢體接觸、氣息交纏）、權謀殺伐、多方博弈，使用純台灣繁體中文。
+3. 每一次生成完全原創、字數達 1,000~1,500 字，絕不套用固定模板。
+4. 輸出必須為合法純 JSON 格式（不要包含任何 markdown 代碼標記）：
 {
   "chapterTitle": "第 1 回．【原創吸睛標題】",
-  "prose": "【1000~1500字極具性張力與權謀拉扯的長篇小說正文】",
+  "prose": "【1000~1500字極具張力與權謀拉扯的長篇小說正文】",
   "statusPanel": {
     "timeLocation": "具體時空地點（如：2026年5月12日 21:30 台北市士林區...）",
     "tension": "張力值 [80%]",
     "intoxication": "微醺度 [25%]",
-    "outfit": "角色著裝（若玩家寫隨機，請依職業為女主原創極致高級優雅的穿搭與體香）",
-    "interaction": "肢體與眼神互動狀態（包含極限物理距離與觸摸）",
+    "outfit": "角色著裝神態（若玩家寫隨機，請依職業為女主原創專屬高級迷人穿搭、體香與神態）",
+    "interaction": "肢體與眼神互動狀態（包含極限物理距離、微表情與觸摸）",
     "inventory": "隨身攜帶之關鍵底牌或隨身碟",
     "rumors": "台北政媒黑白兩道最新暗流傳聞"
   },
   "choices": [
-    { "id": "A", "label": "[A] 【選項完整行動與對白描述】", "risk": "low", "hint": "策略提示" },
-    { "id": "B", "label": "[B] 【選項完整行動與對白描述】", "risk": "medium", "hint": "策略提示" },
-    { "id": "C", "label": "[C] 【選項完整行動與對白描述】", "risk": "high", "hint": "策略提示" }
+    { "id": "A", "label": "[A] 【選項A完整行動與對白描述】", "risk": "low", "hint": "策略提示" },
+    { "id": "B", "label": "[B] 【選項B完整行動與對白描述】", "risk": "medium", "hint": "策略提示" },
+    { "id": "C", "label": "[C] 【選項C完整行動與對白描述】", "risk": "high", "hint": "策略提示" }
   ]
 }`;
 
@@ -800,7 +800,6 @@ function buildFirstTurnPrompt(profile) {
 - 身世背景：${profile.background || '遊走於台北政商黑白兩道'}
 - 外貌特徵：${profile.appearance || '隨機（請替我原創專屬高級迷人穿搭、體香與神態）'}
 - 禁忌標籤：${profile.taboos || '無'}
-- 成人情慾模式 (R-18)：${profile.allowR18 ? '開啟（包含露骨細緻的體溫、喘息與肢體性張力）' : '關閉'}
 
 ${targetLeadPrompt}
 
@@ -815,10 +814,10 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
   const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
   const recentHistory = (historyList || []).slice(-2).map((h, i) => `【第 ${h.turn || (i + 1)} 回：${h.chapterTitle || '前篇'}】\n玩家抉擇：${h.chosenLabel || '無'}\n情節摘要：${(h.prose || '').slice(0, 300)}...`).join('\n\n');
 
-  const systemPrompt = `你是一位頂級華語長篇情慾權謀互動小說家與RPG核心引擎。
-請遵守《情慾文學指引》：
+  const systemPrompt = `你是一位頂級華語長篇懸疑權謀與浪漫互動小說家與RPG核心引擎。
+請遵守以下文學創作指引：
 1. 嚴格依據玩家剛才執行的最新行動/抉擇，即時推進後續 1,000~1,500 字長篇小說正文。
-2. 描寫要求：極致性張力、上位者男性佔有欲與嫉妒心、細節肢體碰觸、五感溫度、權謀博弈。
+2. 描寫要求：極致心理張力、上位者男性佔有欲、五感溫度、氣息交纏、細節肢體碰觸、權謀博弈，使用純台灣繁體中文。
 3. 絕不重複前篇標題與對話，每次推進都是全新事件與衝突升級！
 4. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼標記）：
 {
