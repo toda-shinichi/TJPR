@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Project Epilogue — 台灣權謀世界沉浸式互動文字RPG</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              gold: '#d4af37',
+              dark: '#0c0d12',
+              surface: '#141620',
+              card: '#1a1d2c',
+              border: '#2a2e42',
+              crimson: '#e06c75',
+              blue: '#61afef',
+              emerald: '#98c379'
+            }
+          },
+          fontFamily: {
+            serif: ['Noto Serif TC', 'serif'],
+            sans: ['Plus Jakarta Sans', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Serif+TC:wght@400;600;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body class="bg-[#0c0d12] text-[#e6e8f0] font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-black">
+
+  <!-- 頂部固定導航列 -->
+  <header class="sticky top-0 z-40 bg-[#0c0d12]/95 backdrop-blur-md border-b border-brand-border/60 px-3 sm:px-6 py-3 flex justify-between items-center">
+    <div class="flex items-center space-x-2">
+      <span class="text-brand-gold font-serif font-black text-base sm:text-lg tracking-wider">PROJECT EPILOGUE</span>
+      <span class="text-[11px] bg-brand-gold/10 text-brand-gold px-2 py-0.5 rounded border border-brand-gold/20 font-mono hidden sm:inline" id="model-indicator">Mistral-3</span>
+    </div>
+    
+    <!-- 右側功能：重新開局 / 數值 / 狀態抽屜觸發按鈕 -->
+    <div class="flex items-center space-x-2 sm:space-x-3">
+      <!-- 重新開局 / 創建角色按鈕 -->
+      <button id="open-create-char-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold transition flex items-center gap-1 text-xs font-bold shadow-sm">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        <span>開局創角</span>
+      </button>
+
+      <div class="flex items-center space-x-1.5 text-xs font-mono">
+        <span class="flex items-center space-x-1 px-2 py-1 rounded-full bg-red-950/40 text-rose-400 border border-red-800/30">
+          <span>♥</span> <span id="hp-display" class="font-bold">100</span>
+        </span>
+        <span class="flex items-center space-x-1 px-2 py-1 rounded-full bg-sky-950/40 text-sky-400 border border-sky-800/30">
+          <span>✦</span> <span id="sanity-display" class="font-bold">100</span>
+        </span>
+      </div>
+
+      <!-- 右上角狀態抽屜開關 (好感度 / 背包 / 記憶池 / 卷末換窗) -->
+      <button id="open-drawer-btn" class="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-brand-gold hover:text-white transition flex items-center gap-1.5 text-xs font-semibold" title="查看狀態與背包">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        <span class="hidden md:inline">狀態欄</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 主要閱讀區容器 -->
+  <main class="flex-1 max-w-3xl w-full mx-auto px-4 py-6 sm:py-8 pb-32">
+    <!-- 章節標題與幕次回合徽章 -->
+    <div class="mb-6">
+      <div id="chapter-badge" class="inline-block font-mono text-xs text-brand-gold tracking-widest uppercase bg-brand-gold/10 border border-brand-gold/20 px-2.5 py-1 rounded mb-2">
+        第 1 幕 · 第 1 回合
+      </div>
+      <h1 id="chapter-title" class="font-serif text-2xl sm:text-3xl font-black text-white leading-tight">
+        載入中...
+      </h1>
+    </div>
+
+    <!-- 小說長篇正文（支援打字機逐字動態呈現） -->
+    <article id="prose-content" class="font-serif text-lg sm:text-[1.18rem] leading-[2.2] text-[#d8dbe6] tracking-wide prose-tc mb-8">
+      故事載入中，正在連接世界線……
+    </article>
+
+    <!-- 📊 即時狀態面板 (時空 / 氛圍 / 互動 / 傳聞) -->
+    <div id="inline-status-panel" class="mb-10 bg-brand-surface/80 border border-brand-border rounded-xl p-4 text-xs font-sans space-y-2" style="display:none;">
+      <div class="flex flex-wrap gap-x-4 gap-y-1 text-slate-300">
+        <div><strong>🕰 時空：</strong><span id="panel-time-location" class="text-brand-gold">-</span></div>
+        <div><strong>🌡 氛圍：</strong><span id="panel-tension" class="text-rose-400">張力 0%</span> ｜ <span id="panel-intoxication" class="text-amber-300">微醺 0%</span></div>
+      </div>
+      <div class="text-slate-300"><strong>👫 互動：</strong><span id="panel-interaction">-</span></div>
+      <div class="text-slate-400"><strong>🌍 傳聞：</strong><span id="panel-rumors" class="italic">-</span></div>
+    </div>
+
+    <!-- 決策分支區塊 (Decisions) -->
+    <section class="mt-8 pt-6 border-t border-dashed border-brand-border">
+      <div class="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
+        <svg class="w-4 h-4 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+        <span>下一步行動 (3 個預設選項 + 1 個自定義輸入)</span>
+      </div>
+
+      <!-- 3 個預設分支選項容器 -->
+      <div id="choices-container" class="space-y-3"></div>
+
+      <!-- 1 個自定義行動輸入框 -->
+      <div class="mt-4 flex gap-2">
+        <input type="text" id="custom-action-input" placeholder="或輸入自定義對話、動作或使用情報（例：使用情報：某某案）..." class="flex-1 bg-brand-surface border border-brand-border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold transition">
+        <button id="submit-custom-btn" class="bg-brand-gold hover:bg-yellow-500 text-slate-950 font-bold px-5 py-3 rounded-xl text-sm transition shadow-lg shadow-brand-gold/10 shrink-0">
+          行動
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- 🌟 開局創建玩家角色與人物設定表單彈窗 (Character Creation Modal) -->
+  <div id="character-creation-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[80] flex items-center justify-center p-4 overflow-y-auto transition-opacity" style="display:none;">
+    <div class="bg-brand-surface border border-brand-gold/40 rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl shadow-black/80 space-y-6">
+      
+      <div class="border-b border-brand-border pb-4 flex justify-between items-center">
+        <div>
+          <h2 class="font-serif font-black text-xl sm:text-2xl text-brand-gold tracking-wide">開局角色與開局情境設定</h2>
+          <p class="text-xs text-slate-400 mt-1">填寫您的身分背景、選擇主要攻略對象與劇情尺度，主筆將為您量身定制開場篇章。</p>
+        </div>
+        <button id="close-modal-btn" class="text-slate-400 hover:text-white p-1">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <form id="char-creation-form" class="space-y-4 text-xs sm:text-sm">
+        <!-- 1. 基本身分 -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">玩家姓名 *</label>
+            <input type="text" id="form-player-name" required value="阮思薇" placeholder="您的姓名" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">性別</label>
+            <select id="form-player-gender" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
+              <option value="女" selected>女性</option>
+              <option value="男">男性</option>
+              <option value="雙性/非二元">自訂/非二元</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">年齡</label>
+            <input type="number" id="form-player-age" value="26" min="18" max="99" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
+          </div>
+        </div>
+
+        <!-- 2. 身分職業與背景 -->
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">身分背景與職業 *</label>
+          <input type="text" id="form-player-profession" required value="司法政經調查記者（兼獨立自媒體主筆）" placeholder="例如：最高檢檢察事務官、財團特助、黑道暗線..." class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">核心動機與過往背景</label>
+          <input type="text" id="form-player-background" value="追查三年前未結的洗錢弊案，手中掌握一份殘缺的帳冊底牌" placeholder="例如：為了復仇、尋找失蹤親人、政商博弈..." class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
+        </div>
+
+        <!-- 3. 外觀與雷區 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">外觀特徵與著裝風格</label>
+            <input type="text" id="form-player-appearance" value="深黑合身西裝大衣，珍珠耳釘，神情冷靜敏銳" placeholder="外貌與穿搭細節" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">不喜歡的字眼 / 雷區禁忌</label>
+            <input type="text" id="form-player-taboos" value="無特定雷區，禁止酒駕" placeholder="避免出現的情節或字眼" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
+          </div>
+        </div>
+
+        <!-- 4. 主要攻略對象 (十三男主下拉) -->
+        <div>
+          <label class="block font-bold text-brand-gold mb-1">主要攻略對象 (男主選擇) *</label>
+          <select id="form-target-lead" class="w-full bg-brand-dark border border-brand-gold/60 rounded-lg px-3 py-2.5 text-white font-semibold focus:border-brand-gold focus:outline-none">
+            <option value="01_徐令謙" data-name="徐令謙" selected>01 · 徐令謙（玄辰幫二把手 · 天裕會首領 · 高雅白手套）</option>
+            <option value="02_韓正寰" data-name="韓正寰">02 · 韓正寰（最高檢特偵組主任檢察官 · 司法刀鋒）</option>
+            <option value="03_邵翊衡" data-name="邵翊衡">03 · 邵翊衡（立法委員 · 司法委員會召集人 · 政壇菁英）</option>
+            <option value="04_楊紹宸" data-name="楊紹宸">04 · 楊紹宸（弘楊集團執行長 · 資本獵手）</option>
+            <option value="05_徐宇寧" data-name="徐宇寧">05 · 徐宇寧（天才駭客 · 暗網情報掮客 · 細膩引導）</option>
+            <option value="06_林政修" data-name="林政修">06 · 林政修（刑事辯護大律師 · 灰色邊界遊走者）</option>
+            <option value="07_沈湛然" data-name="沈湛然">07 · 沈湛然（心智分析犯罪心理學家 · 解構師）</option>
+            <option value="08_江瀚文" data-name="江瀚文">08 · 江瀚文（資深調查記者 · 執著正義追尋者）</option>
+            <option value="09_吳衛廷" data-name="吳衛廷">09 · 吳衛廷（黑道王牌打手 · 粗暴直率溫柔）</option>
+            <option value="10_徐承勳" data-name="徐承勳">10 · 徐承勳（國家副元首 · 權力巔峰者）</option>
+            <option value="11_徐耀南" data-name="徐耀南">11 · 徐耀南（遠洋航運巨頭 · 海上霸權）</option>
+            <option value="12_徐若宸" data-name="徐若宸">12 · 徐若宸（頂級外科主治醫師 · 冷靜精準雙手）</option>
+            <option value="13_徐予澈" data-name="徐予澈">13 · 徐予澈（警政署重案組隊長 · 直覺追獵警官）</option>
+            <option value="修羅場" data-name="修羅場">⚡ 【修羅場模式】全員交鋒 · 多方權力情慾推拉</option>
+          </select>
+        </div>
+
+        <!-- 5. 成人互動開關 (R-18) -->
+        <div class="bg-brand-card p-3 rounded-xl border border-brand-border flex items-center justify-between">
+          <div>
+            <div class="font-bold text-slate-200">成人互動 (R-18) 權限</div>
+            <div class="text-[11px] text-slate-400">開啟後遵循《情慾文學指引》，在張力臨界或指令觸發時展開寫實直白描寫。</div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="form-allow-r18" checked class="sr-only peer">
+            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+          </label>
+        </div>
+
+        <!-- 6. 自定義開場劇情 (選填) -->
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">自定義開場劇情 / 初始情境 (選填)</label>
+          <textarea id="form-custom-scenario" rows="3" placeholder="例如：深夜十一點，士林思慕咖啡VIP室。我帶著被銷毀的洗錢帳冊底牌走進雨幕中，與坐在角落搖晃威士忌的徐令謙四目相接……" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none resize-none"></textarea>
+          
+          <!-- 快捷情境建議 -->
+          <div class="flex flex-wrap gap-1.5 mt-2 text-[11px]">
+            <span class="text-slate-400">快捷模板：</span>
+            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="深夜士林思慕咖啡VIP室，我帶著洗錢帳冊底牌前來尋求庇護與談判。">【深夜咖啡館交鋒】</button>
+            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="最高檢特偵組走廊外，暴雨滂沱，我與檢察官在電梯口狹路相逢。">【特偵組走廊偶遇】</button>
+            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="政商慈善晚宴深處，燈光昏暗的露台，我無意間撞破了一場密謀。">【晚宴露台密會】</button>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-brand-border flex gap-3">
+          <button type="submit" id="submit-create-char-btn" class="flex-1 bg-brand-gold hover:bg-yellow-500 text-slate-950 font-black py-3 rounded-xl transition text-sm shadow-xl shadow-brand-gold/15">
+            ✦ 正式入局 · 開啟篇章
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 右側滑出式狀態抽屜 (Drawer: 好感度 / 背包 / 記憶池 / 卷末換窗) -->
+  <div id="drawer-backdrop" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity opacity-0 pointer-events-none"></div>
+  <aside id="side-drawer" class="fixed top-0 right-0 bottom-0 w-full sm:w-96 bg-brand-surface border-l border-brand-border z-50 p-6 overflow-y-auto transform translate-x-full transition-transform duration-300 ease-in-out shadow-2xl">
+    <div class="flex justify-between items-center pb-4 border-b border-brand-border mb-6">
+      <h2 class="font-serif font-bold text-lg text-white flex items-center gap-2">
+        <svg class="w-5 h-5 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+        角色狀態與系統
+      </h2>
+      <button id="close-drawer-btn" class="text-slate-400 hover:text-white p-1">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+
+    <!-- 0. 玩家角色設定卡預覽 -->
+    <div id="player-profile-card" class="mb-6 bg-brand-card p-3.5 rounded-xl border border-brand-border text-xs space-y-1">
+      <div class="font-bold text-brand-gold" id="profile-card-name">阮思薇（獨立調查記者）</div>
+      <div class="text-slate-400" id="profile-card-lead">攻略對象：徐令謙 ｜ R-18：允許</div>
+    </div>
+
+    <!-- 1. 角色關係與好感度 -->
+    <div class="mb-6">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
+        <span>♥ 人物好感度 / 關係網絡</span>
+      </h3>
+      <div id="relationships-list" class="space-y-2">
+        <div class="text-xs text-slate-500 italic">尚無特定好感度變化</div>
+      </div>
+    </div>
+
+    <!-- 2. 物品背包清單 -->
+    <div class="mb-6">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
+        <span>🎒 掌握道具與關鍵情報 (Inventory)</span>
+      </h3>
+      <div id="inventory-list" class="space-y-2"></div>
+    </div>
+
+    <!-- 3. 高密度記憶池 -->
+    <div class="mb-6">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+        <span>🧠 滾動記憶摘要池 (Summary Pool)</span>
+      </h3>
+      <div id="summary-pool-content" class="bg-black/40 border border-brand-border/60 rounded-xl p-3.5 text-xs text-slate-300 leading-relaxed font-sans"></div>
+    </div>
+
+    <!-- 4. 『卷末換窗』(Act Rebase) 按鈕 -->
+    <div class="pt-4 border-t border-brand-border mb-6">
+      <div class="mb-2">
+        <div class="font-bold text-sm text-white">卷末換窗 (Act Rebase)</div>
+        <div class="text-xs text-slate-400 leading-normal">
+          一鍵將本幕章節濃縮為 800 字檔案，並將即時上下文視窗歸零，同時保留數值、好感度與背包。
+        </div>
+      </div>
+      <button id="rebase-act-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition shadow-lg shadow-rose-900/20">
+        執行卷末換窗重整
+      </button>
+    </div>
+
+    <!-- 5. 後端 API 設定 -->
+    <div class="pt-4 border-t border-brand-border">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">GAS 後端 Web App URL</h3>
+      <div class="space-y-2">
+        <input type="text" id="api-url-input" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-white" placeholder="https://script.google.com/macros/s/.../exec">
+        <button id="save-settings-btn" class="w-full bg-slate-800 hover:bg-slate-700 text-brand-gold border border-brand-border py-1.5 rounded-lg text-xs font-semibold transition">
+          儲存端點設定
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 載入中動畫遮罩 -->
+  <div id="loading-overlay" class="fixed inset-0 bg-[#0c0d12]/85 backdrop-blur-sm z-[100] flex flex-col items-center justify-center transition-opacity" style="display:none;">
+    <div class="w-12 h-12 border-4 border-brand-gold/20 border-t-brand-gold rounded-full animate-spin mb-4"></div>
+    <div id="loading-text" class="font-serif text-brand-gold text-sm tracking-wide">筆觸流轉中，主筆作家正在撰寫情節……</div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

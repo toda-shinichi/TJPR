@@ -1,0 +1,75 @@
+{
+  "mockSession": {
+    "token": "epi_mock_test_token_889922",
+    "userId": "usr_test_01",
+    "email": "player@epilogue.tw",
+    "driveFolderId": "1RQEErlJE4f6eaTHlpB9OlGP5Vd0EvIKM"
+  },
+  "mockChapter": {
+    "chapterTitle": "第一幕 第一回：古鐘塔的低語",
+    "prose": "陰雨連綿的倫敦港口，霧氣像某種冰冷的裹屍布，一層層纏繞在廢棄的第七號發電廠鐵塔上。\n\n艾倫·索恩拉緊了風衣領口，右眉上那道因三年前爆炸留下的疤痕隱隱作痛。他低頭看了看手中的銀質齒輪懷錶——指針正以一種怪異的反向節奏瘋狂顫動。這代表著，那座早該停止運作的深層以太引擎，正在地下三十公尺處重新點火。\n\n「索恩先生，你確定我們要從通風管下去嗎？」身後傳來莉莉安壓低的聲音，女孩的手指緊握著那把經過改造的微型放電手槍，雨水順著她的金髮滴落在鏽蝕的鐵梯上。\n\n「若走正門，門後的自動防衛機槍會在三秒內把我們打成蜂窩。」艾倫輕聲回答，目光鎖定在前方通風管道上那道泛著微弱幽藍色光芒的封印符文。\n\n空氣中瀰漫著濃烈的臭氧與古老羊皮紙腐朽的味道。這座鐘塔隱藏的秘密，遠比自由同盟預期的更加致命……",
+    "narrativeSummaryDelta": "艾倫與莉莉安抵達第七號發電廠廢棄鐵塔，發現以太引擎異常重啟。艾倫決定避開正面防衛系統，準備從通風管道潛入。",
+    "choices": [
+      {
+        "id": "choice_a",
+        "label": "以古代符文解讀技能破解通風管的幽藍封印",
+        "risk": "medium",
+        "hint": "可能引發以太能量共振，但能無聲無息打開通道"
+      },
+      {
+        "id": "choice_b",
+        "label": "讓莉莉安使用放電手槍超載通風口的排風扇動力源",
+        "risk": "low",
+        "hint": "迅速有效，但微弱的爆鳴聲可能引起底層巡邏警衛的警覺"
+      },
+      {
+        "id": "choice_c",
+        "label": "先退回側翼警衛室，尋找當年的工程維修圖紙與備用通行鑰",
+        "risk": "high",
+        "hint": "耗費時間且警衛室可能有陷阱，但有機會獲得全區地圖與補給品"
+      }
+    ],
+    "stateDelta": {
+      "hpChange": 0,
+      "sanityChange": -2,
+      "itemsAdded": [],
+      "relationshipChanges": { "莉莉安": 2 },
+      "questProgress": "已成功抵達第七號發電廠鐵塔外圍，正嘗試突破外層防線。"
+    }
+  },
+  "mockSaveState": {
+    "meta": {
+      "userId": "usr_test_01",
+      "createdAt": "2026-08-15T12:00:00.000Z",
+      "updatedAt": "2026-08-15T12:30:00.000Z",
+      "currentAct": 1
+    },
+    "turnCount": 1,
+    "protagonist": {
+      "id": "character_protagonist_01",
+      "hp": 100,
+      "sanity": 98,
+      "statusEffects": []
+    },
+    "inventory": [
+      { "id": "item_journal", "name": "破舊的旅行筆記本", "count": 1, "desc": "記載著先前的線索與模糊的地圖。" },
+      { "id": "item_pocket_watch", "name": "銀質齒輪懷錶", "count": 1, "desc": "指針會對以太能量產生共振反應。" }
+    ],
+    "relationships": {
+      "莉莉安": 92
+    },
+    "questFlags": {
+      "main_quest": "潛入第七號發電廠，查明以太引擎重啟真相"
+    },
+    "summaryPool": "艾倫與莉莉安抵達廢棄鐵塔，懷錶感應到以太引擎重新點火，兩人正於通風口策劃潛入方案。",
+    "actDossiers": [],
+    "turnHistory": [
+      {
+        "turn": 1,
+        "choice": "START_STORY",
+        "title": "第一幕 第一回：古鐘塔的低語",
+        "summaryDelta": "抵達發電廠，發現異常以太共振。"
+      }
+    ]
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProjectEpilogueSaveState",
+  "description": "Project Epilogue 玩家存檔狀態結構 (save_slot.json)",
+  "type": "object",
+  "required": ["meta", "turnCount", "protagonist", "inventory", "summaryPool"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "example": "usr_9a8b7c" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "currentAct": { "type": "integer", "default": 1 }
+      },
+      "required": ["userId", "currentAct"]
+    },
+    "turnCount": {
+      "type": "integer",
+      "description": "當前累積推進之故事回合總數",
+      "default": 1
+    },
+    "protagonist": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "example": "character_protagonist_01" },
+        "hp": { "type": "integer", "minimum": 0, "maximum": 100, "default": 100 },
+        "sanity": { "type": "integer", "minimum": 0, "maximum": 100, "default": 100 },
+        "statusEffects": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["id", "hp", "sanity"]
+    },
+    "inventory": {
+      "type": "array",
+      "description": "玩家持有物品清單",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "count": { "type": "integer", "default": 1 },
+          "desc": { "type": "string" }
+        },
+        "required": ["id", "name"]
+      }
+    },
+    "relationships": {
+      "type": "object",
+      "description": "主要 NPC 好感度 / 關係點數 (鍵為角色名稱或ID，值為點數)",
+      "additionalProperties": { "type": "integer" }
+    },
+    "questFlags": {
+      "type": "object",
+      "description": "當前主支線任務與劇情旗標狀態",
+      "additionalProperties": { "type": "string" }
+    },
+    "summaryPool": {
+      "type": "string",
+      "description": "每 5 回合滾動壓縮更新之高密度事實記憶池 (上限 2,000 字元)",
+      "maxLength": 2000
+    },
+    "actDossiers": {
+      "type": "array",
+      "description": "已完結各幕之 800 字歷史重整檔案 Markdown",
+      "items": { "type": "string" }
+    },
+    "turnHistory": {
+      "type": "array",
+      "description": "即時滑動視窗對話歷史 (最近 4~5 回合)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "turn": { "type": "integer" },
+          "choice": { "type": "string" },
+          "title": { "type": "string" },
+          "summaryDelta": { "type": "string" }
+        }
+      }
+    },
+    "auditLog": {
+      "type": "array",
+      "description": "每 10 回合 Fast Auditor 之一致性檢查記錄",
+      "items": { "type": "object" }
+    }
+  }
+}

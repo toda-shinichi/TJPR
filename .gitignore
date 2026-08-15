@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node / NPM
+node_modules/
+npm-debug.log
+
+# Google Apps Script Clasp Auth
+.clasprc.json
+
+# System temp / logs
+*.log
