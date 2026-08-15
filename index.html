@@ -39,7 +39,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Serif+TC:wght@400;600;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./style.css?v=20260815_v13">
+  <link rel="stylesheet" href="./style.css?v=20260816_v16">
 </head>
 <body class="bg-[#0c0d12] text-[#e6e8f0] font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-black">
 
@@ -60,6 +60,18 @@
       <button id="ambience-toggle-btn" class="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-slate-400 hover:text-brand-gold transition text-xs flex items-center gap-1" title="切換雨夜氛圍音效">
         <span id="ambience-icon">🌧</span>
         <span class="text-[11px] hidden lg:inline" id="ambience-label">雨聲: 關</span>
+      </button>
+
+      <!-- 🏠 回首頁按鈕 -->
+      <button id="nav-home-btn" class="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold font-bold transition text-xs flex items-center gap-1 shadow-sm" title="返回首頁主選單">
+        <span>🏠</span>
+        <span class="hidden sm:inline">首頁</span>
+      </button>
+
+      <!-- 💾 存檔庫按鈕 -->
+      <button id="nav-saves-btn" class="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-slate-300 hover:text-white transition text-xs flex items-center gap-1" title="存檔庫與讀檔中心">
+        <span>💾</span>
+        <span class="hidden sm:inline">存檔庫</span>
       </button>
 
       <!-- 📜 歷史章節對話 Log -->
@@ -135,32 +147,149 @@
     </div>
   </div>
 
-  <!-- 主要閱讀區容器 -->
+  <!-- 主要內容容器 -->
   <main class="flex-1 max-w-3xl w-full mx-auto px-4 py-6 sm:py-8 pb-32">
     
-    <!-- 📜 長篇連貫小說瀑布流容器 (Continuous Novel Stream: 累積所有章節可隨時向上回滾閱讀) -->
-    <div id="novel-stream-container" class="space-y-12 mb-8">
-      <!-- 先前章節與當前章節會在此處如書卷般完整連貫呈現 -->
+    <!-- 🏠 1. 遊戲首頁 / 主選單視圖 (Home View) -->
+    <div id="home-view" class="space-y-6" style="display:none;">
+      
+      <!-- 主視覺 Banner -->
+      <div class="relative overflow-hidden rounded-2xl bg-gradient-to-b from-brand-surface to-[#0c0d12] border border-brand-gold/40 p-6 sm:p-8 shadow-2xl shadow-black/80 text-center space-y-3">
+        <div class="inline-block px-3 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/30 text-brand-gold text-xs font-mono tracking-widest uppercase mb-1">
+          UNDER CURRENT · 沉浸式互動文字 RPG
+        </div>
+        <h1 class="font-serif font-black text-3xl sm:text-4xl text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-brand-gold to-yellow-500 tracking-wider">
+          《暗 流》
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-300 max-w-lg mx-auto leading-relaxed">
+          五月的台北士林，暴雨傾盆。黑道二把手、地檢署白日判官、政商巨頭與身懷密錄帳冊的妳，在權謀殺伐與情慾狂瀾的深淵交鋒。
+        </p>
+        
+        <!-- 當前登入者資訊列 -->
+        <div class="pt-3 flex flex-wrap items-center justify-center gap-3 text-xs">
+          <div class="bg-brand-card/90 px-3 py-1.5 rounded-lg border border-brand-border flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span class="text-slate-400">登入玩家：</span>
+            <span id="home-username-display" class="font-mono text-brand-gold font-bold">訪客玩家</span>
+          </div>
+          <button id="home-switch-account-btn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-brand-border transition">
+            🔄 切換帳號 / 登出
+          </button>
+        </div>
+      </div>
+
+      <!-- 🎮 4 大核心入口導航按鈕卡片 -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        
+        <!-- 1. 開啟新局 -->
+        <div id="home-new-game-btn" class="cursor-pointer group bg-brand-surface hover:bg-brand-card border border-brand-border hover:border-brand-gold/60 p-5 rounded-2xl transition duration-200 shadow-lg space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-2xl group-hover:scale-110 transition transform">⚔️</span>
+            <span class="text-[11px] bg-brand-gold/15 text-brand-gold px-2 py-0.5 rounded font-bold">NEW GAME</span>
+          </div>
+          <h3 class="font-serif font-bold text-base text-white group-hover:text-brand-gold transition">
+            開啟全新局 · 重新創角
+          </h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            重設進度並自由設定玩家身分、年齡背景、選擇 14 位專屬男主或修羅場模式，從第 1 回開始全新冒險。
+          </p>
+        </div>
+
+        <!-- 2. 繼續當前冒險 -->
+        <div id="home-continue-game-btn" class="cursor-pointer group bg-brand-surface hover:bg-brand-card border border-brand-border hover:border-emerald-500/60 p-5 rounded-2xl transition duration-200 shadow-lg space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-2xl group-hover:scale-110 transition transform">📖</span>
+            <span class="text-[11px] bg-emerald-950/40 text-emerald-400 px-2 py-0.5 rounded font-bold">RESUME</span>
+          </div>
+          <h3 class="font-serif font-bold text-base text-white group-hover:text-emerald-400 transition">
+            繼續當前冒險
+          </h3>
+          <p class="text-xs text-slate-400 leading-relaxed" id="home-continue-desc">
+            返回目前進行中的章節與抉擇，隨時接續您的權謀與情慾推拉。
+          </p>
+        </div>
+
+        <!-- 3. 自訂命名存檔庫 -->
+        <div id="home-open-saves-btn" class="cursor-pointer group bg-brand-surface hover:bg-brand-card border border-brand-border hover:border-sky-500/60 p-5 rounded-2xl transition duration-200 shadow-lg space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-2xl group-hover:scale-110 transition transform">💾</span>
+            <span class="text-[11px] bg-sky-950/40 text-sky-400 px-2 py-0.5 rounded font-bold">ARCHIVES</span>
+          </div>
+          <h3 class="font-serif font-bold text-base text-white group-hover:text-sky-400 transition">
+            存檔庫與自訂命名存檔
+          </h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            無限制儲存多個自訂命名的精彩回合，隨時查找並讀取不同女主與男主的劇情路線。
+          </p>
+        </div>
+
+        <!-- 4. 角色與劇情設定庫 -->
+        <div id="home-open-presets-btn" class="cursor-pointer group bg-brand-surface hover:bg-brand-card border border-brand-border hover:border-purple-500/60 p-5 rounded-2xl transition duration-200 shadow-lg space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-2xl group-hover:scale-110 transition transform">📝</span>
+            <span class="text-[11px] bg-purple-950/40 text-purple-400 px-2 py-0.5 rounded font-bold">PRESETS</span>
+          </div>
+          <h3 class="font-serif font-bold text-base text-white group-hover:text-purple-400 transition">
+            人物與劇情設定檔
+          </h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            管理、編輯並匯出多套女主背景範本與自訂開場情境（楊慕璃／阮思薇／自訂私設角色）。
+          </p>
+        </div>
+
+      </div>
+
+      <!-- 🌟 最近存檔快速讀取區 (Recent Saves Quick Section) -->
+      <div class="bg-brand-surface border border-brand-border rounded-2xl p-5 space-y-3 shadow-lg">
+        <div class="flex items-center justify-between">
+          <h3 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
+            <span>⚡ 最近存檔快速讀取</span>
+          </h3>
+          <button id="home-view-all-saves-btn" class="text-xs text-sky-400 hover:underline">
+            查看全部存檔 →
+          </button>
+        </div>
+        <div id="home-recent-saves-list" class="space-y-2 text-xs">
+          <div class="text-center text-slate-500 py-3">目前尚無存檔紀錄，點擊「開啟全新局」即刻體驗！</div>
+        </div>
+      </div>
+
     </div>
 
-    <!-- 決策分支區塊 (Decisions: 固定置於故事最底部) -->
-    <section id="decisions-section" class="mt-8 pt-6 border-t border-dashed border-brand-border">
-      <div class="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
-        <svg class="w-4 h-4 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-        <span>下一步行動 (3 個預設選項 + 1 個自定義輸入)</span>
+    <!-- 📖 2. 遊戲進行視圖 (Gameplay View) -->
+    <div id="gameplay-view" class="space-y-8">
+      
+      <!-- 📜 長篇連貫小說瀑布流容器 (Continuous Novel Stream) -->
+      <div id="novel-stream-container" class="space-y-12 mb-8">
+        <!-- 先前章節與當前章節會在此處如書卷般完整連貫呈現 -->
       </div>
 
-      <!-- 3 個預設分支選項容器 -->
-      <div id="choices-container" class="space-y-3"></div>
+      <!-- 決策分支區塊 (Decisions) -->
+      <section id="decisions-section" class="mt-8 pt-6 border-t border-dashed border-brand-border">
+        <div class="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
+          <div class="flex items-center space-x-2">
+            <svg class="w-4 h-4 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            <span>下一步行動 (3 個預設選項 + 1 個自定義輸入)</span>
+          </div>
+          <button id="return-home-inline-btn" class="text-slate-400 hover:text-brand-gold transition flex items-center gap-1">
+            <span>🏠 回首頁</span>
+          </button>
+        </div>
 
-      <!-- 1 個自定義行動輸入框 -->
-      <div class="mt-4 flex gap-2">
-        <input type="text" id="custom-action-input" placeholder="或輸入自定義對話、動作或使用情報（例：使用情報：某某案）..." class="flex-1 bg-brand-surface border border-brand-border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold transition">
-        <button id="submit-custom-btn" class="bg-brand-gold hover:bg-yellow-500 text-slate-950 font-bold px-5 py-3 rounded-xl text-sm transition shadow-lg shadow-brand-gold/10 shrink-0">
-          行動
-        </button>
-      </div>
-    </section>
+        <!-- 3 個預設分支選項容器 -->
+        <div id="choices-container" class="space-y-3"></div>
+
+        <!-- 1 個自定義行動輸入框 -->
+        <div class="mt-4 flex gap-2">
+          <input type="text" id="custom-action-input" placeholder="或輸入自定義對話、動作或使用情報（例：使用情報：某某案）..." class="flex-1 bg-brand-surface border border-brand-border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold transition">
+          <button id="submit-custom-btn" class="bg-brand-gold hover:bg-yellow-500 text-slate-950 font-bold px-5 py-3 rounded-xl text-sm transition shadow-lg shadow-brand-gold/10 shrink-0">
+            行動
+          </button>
+        </div>
+      </section>
+
+    </div>
+
   </main>
 
   <!-- 📜 歷史章節紀錄對話彈窗 (History Log Modal) -->
@@ -387,6 +516,58 @@
     </div>
   </div>
 
+  
+  <!-- 💾 自訂命名無限存檔庫管理彈窗 (Save Archives Modal) -->
+  <div id="save-archive-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[85] flex items-center justify-center p-4 transition-opacity" style="display:none;">
+    <div class="bg-brand-surface border border-brand-gold/40 rounded-2xl max-w-2xl w-full max-h-[88vh] flex flex-col shadow-2xl p-5 sm:p-6 space-y-4">
+      
+      <div class="flex justify-between items-center pb-3 border-b border-brand-border">
+        <div>
+          <h3 class="font-serif font-bold text-lg text-brand-gold flex items-center gap-2">
+            <span>💾 存檔庫管理中心 (Save Archives)</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5">支援自訂命名、隨時存檔、回頭讀取、備份與跨設備匯出匯入。</p>
+        </div>
+        <button id="close-save-archive-btn" class="text-slate-400 hover:text-white p-1">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <!-- ➕ 儲存當前進度為自訂存檔 -->
+      <div class="bg-brand-card p-3.5 rounded-xl border border-brand-gold/30 space-y-2.5">
+        <div class="text-xs font-bold text-slate-200">➕ 儲存當前遊戲進度為新存檔：</div>
+        <div class="flex gap-2">
+          <input type="text" id="new-save-name-input" placeholder="輸入存檔名稱（例：楊慕璃-修羅場暴雨第3回、二爺深情暗道線...）" class="flex-1 bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
+          <button id="create-named-save-btn" class="px-4 py-2 rounded-lg bg-brand-gold text-slate-950 font-bold hover:bg-yellow-500 transition text-xs shrink-0 shadow-md">
+            💾 儲存存檔
+          </button>
+        </div>
+      </div>
+
+      <!-- 存檔搜尋與備份工具列 -->
+      <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div class="flex-1 min-w-[180px]">
+          <input type="text" id="search-save-input" placeholder="🔍 搜尋存檔名稱、角色名、攻略對象..." class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button id="export-all-saves-btn" class="px-2.5 py-1.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-brand-border transition text-[11px]" title="匯出全部存檔至 JSON 檔案">
+            📤 匯出存檔
+          </button>
+          <label class="px-2.5 py-1.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-brand-border transition text-[11px] cursor-pointer" title="從 JSON 檔案匯入存檔">
+            📥 匯入存檔
+            <input type="file" id="import-all-saves-input" accept=".json" class="hidden">
+          </label>
+        </div>
+      </div>
+
+      <!-- 存檔清單容器 -->
+      <div id="save-archives-list" class="flex-1 overflow-y-auto space-y-2.5 pr-1 text-xs">
+        <!-- 動態渲染存檔清單卡片 -->
+      </div>
+
+    </div>
+  </div>
+
   <!-- 右側滑出式狀態抽屜 (Drawer: 存檔讀檔 / 匯出小說 / 角色卡 / 好感度 / 背包 / 記憶池 / 卷末換窗) -->
   <div id="drawer-backdrop" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity opacity-0 pointer-events-none"></div>
   <aside id="side-drawer" class="fixed top-0 right-0 bottom-0 w-full sm:w-96 bg-brand-surface border-l border-brand-border z-50 p-6 overflow-y-auto transform translate-x-full transition-transform duration-300 ease-in-out shadow-2xl space-y-6">
@@ -397,6 +578,16 @@
       </h2>
       <button id="close-drawer-btn" class="text-slate-400 hover:text-white p-1">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+
+    <!-- 快捷導航：返回首頁 / 開啟存檔庫 -->
+    <div class="grid grid-cols-2 gap-2">
+      <button id="drawer-home-btn" class="w-full py-2 px-3 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold font-bold text-xs flex items-center justify-center gap-1.5 transition">
+        <span>🏠 返回首頁</span>
+      </button>
+      <button id="drawer-saves-btn" class="w-full py-2 px-3 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-slate-200 text-xs flex items-center justify-center gap-1.5 transition">
+        <span>💾 存檔庫管理</span>
       </button>
     </div>
 
@@ -529,6 +720,6 @@
     </button>
   </div>
 
-  <script src="./app.js?v=20260816_v15"></script>
+  <script src="./app.js?v=20260816_v16"></script>
 </body>
 </html>

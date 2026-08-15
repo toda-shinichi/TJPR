@@ -185,6 +185,53 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 function setupEventListeners() {
+  // 0. 🏠 首頁與存檔庫切換監聽
+  if (dom.navHomeBtn) dom.navHomeBtn.addEventListener('click', () => switchView('home'));
+  if (dom.drawerHomeBtn) dom.drawerHomeBtn.addEventListener('click', () => { closeDrawer(); switchView('home'); });
+  if (dom.returnHomeInlineBtn) dom.returnHomeInlineBtn.addEventListener('click', () => switchView('home'));
+  
+  if (dom.navSavesBtn) dom.navSavesBtn.addEventListener('click', openSaveArchiveModal);
+  if (dom.drawerSavesBtn) dom.drawerSavesBtn.addEventListener('click', () => { closeDrawer(); openSaveArchiveModal(); });
+  if (dom.closeSaveArchiveBtn) dom.closeSaveArchiveBtn.addEventListener('click', closeSaveArchiveModal);
+  if (dom.homeOpenSavesBtn) dom.homeOpenSavesBtn.addEventListener('click', openSaveArchiveModal);
+  if (dom.homeViewAllSavesBtn) dom.homeViewAllSavesBtn.addEventListener('click', openSaveArchiveModal);
+
+  // 首頁卡片按鈕
+  if (dom.homeNewGameBtn) {
+    dom.homeNewGameBtn.addEventListener('click', () => {
+      openCharacterCreationModal();
+    });
+  }
+  if (dom.homeContinueGameBtn) {
+    dom.homeContinueGameBtn.addEventListener('click', () => {
+      switchView('gameplay');
+    });
+  }
+  if (dom.homeOpenPresetsBtn) {
+    dom.homeOpenPresetsBtn.addEventListener('click', () => {
+      openCharacterCreationModal();
+    });
+  }
+  if (dom.homeSwitchAccountBtn) {
+    dom.homeSwitchAccountBtn.addEventListener('click', () => {
+      handleLogout();
+    });
+  }
+
+  // 存檔管理
+  if (dom.createNamedSaveBtn) {
+    dom.createNamedSaveBtn.addEventListener('click', () => {
+      createNamedSave(dom.newSaveNameInput.value);
+    });
+  }
+  if (dom.searchSaveInput) {
+    dom.searchSaveInput.addEventListener('input', (e) => {
+      renderSaveArchivesList(e.target.value);
+    });
+  }
+  if (dom.exportAllSavesBtn) dom.exportAllSavesBtn.addEventListener('click', exportAllSavesJson);
+  if (dom.importAllSavesInput) dom.importAllSavesInput.addEventListener('change', importAllSavesJson);
+
   // 1. 中止生成
   if (dom.abortGenerationBtn) {
     dom.abortGenerationBtn.addEventListener('click', handleAbortGeneration);
@@ -1717,6 +1764,394 @@ async function loadMockData() {
   } catch (err) {
     console.error('讀取 mock_data.json 失敗:', err);
   }
+}
+
+
+// ==========================================
+// 🏠 首頁與視圖切換系統 (Home & View Management)
+// ==========================================
+
+function switchView(targetView) {
+  if (targetView === 'home') {
+    if (dom.homeView) dom.homeView.style.display = 'block';
+    if (dom.gameplayView) dom.gameplayView.style.display = 'none';
+    updateHomeViewDisplay();
+  } else {
+    if (dom.homeView) dom.homeView.style.display = 'none';
+    if (dom.gameplayView) dom.gameplayView.style.display = 'block';
+    // 平滑滾動至故事底部
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  }
+}
+
+function updateHomeViewDisplay() {
+  const currentUsername = state.userSession ? (state.userSession.username || state.userSession.email || '已登入玩家') : '訪客玩家';
+  if (dom.homeUsernameDisplay) dom.homeUsernameDisplay.textContent = currentUsername;
+
+  // 更新繼續遊戲按鈕狀態與描述
+  const hasProgress = state.chapterHistoryList && state.chapterHistoryList.length > 0;
+  if (dom.homeContinueDesc) {
+    if (hasProgress) {
+      const lastChapter = state.chapterHistoryList[state.chapterHistoryList.length - 1];
+      const pName = state.saveState?.meta?.playerProfile?.name || '玩家';
+      const targetName = state.saveState?.meta?.playerProfile?.targetLeadName || '攻略對象';
+      dom.homeContinueDesc.textContent = `目前進行至：${lastChapter.title || '當前回合'}（女主：${pName} ｜ 攻略：${targetName}），點擊立即返回接續冒險！`;
+    } else {
+      dom.homeContinueDesc.textContent = '目前尚未有進行中的局，點擊「開啟全新局」即刻創角展開故事！';
+    }
+  }
+
+  // 渲染首頁最近存檔列表
+  renderHomeRecentSaves();
+}
+
+function renderHomeRecentSaves() {
+  if (!dom.homeRecentSavesList) return;
+  const namedSaves = getNamedSavesList();
+  
+  if (namedSaves.length === 0) {
+    dom.homeRecentSavesList.innerHTML = '<div class="text-center text-slate-500 py-3">目前尚無自訂存檔紀錄，遊戲中可隨時點擊「存檔庫」儲存專屬進度！</div>';
+    return;
+  }
+
+  const recent = namedSaves.slice(0, 3);
+  dom.homeRecentSavesList.innerHTML = recent.map(s => `
+    <div class="bg-brand-dark hover:bg-slate-900/80 p-3 rounded-xl border border-brand-border flex items-center justify-between transition gap-2">
+      <div class="min-w-0">
+        <div class="font-bold text-white truncate flex items-center gap-1.5">
+          <span class="text-brand-gold">💾</span>
+          <span>${escapeHtml(s.name)}</span>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-0.5 flex flex-wrap gap-2">
+          <span>女主：${escapeHtml(s.playerProfile?.name || '女主')}</span>
+          <span>攻略：${escapeHtml(s.playerProfile?.targetLeadName || '主線')}</span>
+          <span>第 ${s.turnCount || 1} 回</span>
+          <span class="text-slate-500">${s.timestamp || ''}</span>
+        </div>
+      </div>
+      <button class="load-named-save-btn px-3 py-1.5 rounded bg-brand-gold hover:bg-yellow-500 text-slate-950 font-bold text-xs shrink-0 transition" data-id="${s.id}">
+        讀取
+      </button>
+    </div>
+  `).join('');
+
+  dom.homeRecentSavesList.querySelectorAll('.load-named-save-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const saveId = e.currentTarget.getAttribute('data-id');
+      loadNamedSave(saveId);
+    });
+  });
+}
+
+// ==========================================
+// 💾 自訂命名存檔庫核心管理器 (Save Archive System)
+// ==========================================
+
+function getNamedSavesList() {
+  try {
+    const raw = localStorage.getItem('undercurrent_named_saves');
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.error('Failed to parse named saves:', e);
+    return [];
+  }
+}
+
+function persistNamedSavesList(saves) {
+  try {
+    localStorage.setItem('undercurrent_named_saves', JSON.stringify(saves));
+  } catch (e) {
+    console.error('Failed to persist named saves:', e);
+  }
+}
+
+function openSaveArchiveModal() {
+  if (dom.saveArchiveModal) {
+    dom.saveArchiveModal.style.display = 'flex';
+    // 自動預填建議存檔名稱
+    if (dom.newSaveNameInput) {
+      const pName = state.saveState?.meta?.playerProfile?.name || '女主';
+      const targetName = state.saveState?.meta?.playerProfile?.targetLeadName || '主線';
+      const turn = state.saveState?.turnCount || 1;
+      dom.newSaveNameInput.value = `${pName}-${targetName}第${turn}回`;
+    }
+    renderSaveArchivesList();
+  }
+}
+
+function closeSaveArchiveModal() {
+  if (dom.saveArchiveModal) dom.saveArchiveModal.style.display = 'none';
+}
+
+function createNamedSave(saveName) {
+  const name = (saveName || '').trim();
+  if (!name) {
+    alert('請輸入存檔名稱！');
+    return;
+  }
+
+  if (!state.chapterData && (!state.chapterHistoryList || state.chapterHistoryList.length === 0)) {
+    alert('當前尚未有遊戲進度可儲存！請先開局或進行回合。');
+    return;
+  }
+
+  const saves = getNamedSavesList();
+  const profile = state.saveState?.meta?.playerProfile || { name: '阮思薇', targetLeadName: '徐令謙' };
+  const lastChapter = state.chapterHistoryList[state.chapterHistoryList.length - 1] || state.chapterData;
+
+  const newSaveEntry = {
+    id: 'save_' + Date.now(),
+    name: name,
+    timestamp: new Date().toLocaleString('zh-TW', { hour12: false }),
+    turnCount: state.saveState?.turnCount || 1,
+    chapterTitle: lastChapter?.title || '第 1 回',
+    playerProfile: profile,
+    saveState: state.saveState,
+    chapterData: state.chapterData,
+    chapterHistoryList: state.chapterHistoryList || []
+  };
+
+  // 新存檔置頂
+  saves.unshift(newSaveEntry);
+  persistNamedSavesList(saves);
+  renderSaveArchivesList();
+  renderHomeRecentSaves();
+  alert(`🎉 存檔「${name}」已成功儲存至存檔庫！`);
+}
+
+function loadNamedSave(saveId) {
+  const saves = getNamedSavesList();
+  const target = saves.find(s => s.id === saveId);
+  if (!target) {
+    alert('找不到該筆存檔資料！');
+    return;
+  }
+
+  // 還原遊戲全域狀態
+  state.saveState = target.saveState;
+  state.chapterData = target.chapterData;
+  state.chapterHistoryList = target.chapterHistoryList || [];
+
+  // 渲染畫面
+  if (dom.novelStreamContainer) dom.novelStreamContainer.innerHTML = '';
+  
+  if (state.chapterHistoryList.length > 0) {
+    state.chapterHistoryList.forEach((item, idx) => {
+      const isLatest = idx === state.chapterHistoryList.length - 1;
+      const chObj = {
+        chapterTitle: item.title,
+        prose: item.prose,
+        statusPanel: item.statusPanel,
+        choices: isLatest ? (state.chapterData?.choices || []) : []
+      };
+      
+      const chapterCard = document.createElement('div');
+      chapterCard.className = 'novel-chapter-card bg-brand-surface border border-brand-border rounded-2xl p-6 sm:p-8 space-y-6 shadow-xl mb-8';
+      
+      let playerActionHtml = '';
+      if (item.actionText) {
+        playerActionHtml = `
+          <div class="player-action-pill mb-4 px-3.5 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/40 text-brand-gold text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm">
+            <span>✦ 玩家行動：</span>
+            <span>${escapeHtml(item.actionText)}</span>
+          </div>
+        `;
+      }
+
+      chapterCard.innerHTML = `
+        ${playerActionHtml}
+        ${renderChapterStatusPanelHtml(chObj.statusPanel)}
+        <div class="border-t border-brand-border/40 pt-4">
+          <h2 class="font-serif font-black text-xl sm:text-2xl text-brand-gold tracking-wide mb-4">${escapeHtml(chObj.chapterTitle)}</h2>
+          <div class="prose-text text-sm sm:text-base leading-relaxed text-slate-200 font-serif space-y-4">
+            ${renderCleanProseParagraphs(chObj.prose)}
+          </div>
+        </div>
+      `;
+      dom.novelStreamContainer.appendChild(chapterCard);
+    });
+  } else if (state.chapterData) {
+    renderStoryStream(state.chapterData);
+  }
+
+  renderChoices(state.chapterData?.choices || []);
+  renderSaveState();
+  closeSaveArchiveModal();
+  closeDrawer();
+  switchView('gameplay');
+  alert(`📖 已成功讀取存檔：「${target.name}」！`);
+}
+
+function overwriteNamedSave(saveId) {
+  const saves = getNamedSavesList();
+  const idx = saves.findIndex(s => s.id === saveId);
+  if (idx === -1) return;
+
+  if (!confirm(`確定要以當前進度覆蓋存檔「${saves[idx].name}」嗎？`)) return;
+
+  const profile = state.saveState?.meta?.playerProfile || { name: '阮思薇', targetLeadName: '徐令謙' };
+  const lastChapter = state.chapterHistoryList[state.chapterHistoryList.length - 1] || state.chapterData;
+
+  saves[idx] = {
+    ...saves[idx],
+    timestamp: new Date().toLocaleString('zh-TW', { hour12: false }),
+    turnCount: state.saveState?.turnCount || 1,
+    chapterTitle: lastChapter?.title || '第 1 回',
+    playerProfile: profile,
+    saveState: state.saveState,
+    chapterData: state.chapterData,
+    chapterHistoryList: state.chapterHistoryList || []
+  };
+
+  persistNamedSavesList(saves);
+  renderSaveArchivesList();
+  renderHomeRecentSaves();
+  alert(`💾 存檔「${saves[idx].name}」已成功覆蓋更新！`);
+}
+
+function renameNamedSave(saveId) {
+  const saves = getNamedSavesList();
+  const target = saves.find(s => s.id === saveId);
+  if (!target) return;
+
+  const newName = prompt('請輸入新的存檔名稱：', target.name);
+  if (newName && newName.trim()) {
+    target.name = newName.trim();
+    persistNamedSavesList(saves);
+    renderSaveArchivesList();
+    renderHomeRecentSaves();
+  }
+}
+
+function deleteNamedSave(saveId) {
+  const saves = getNamedSavesList();
+  const target = saves.find(s => s.id === saveId);
+  if (!target) return;
+
+  if (confirm(`確定要刪除存檔「${target.name}」嗎？刪除後無法復原。`)) {
+    const updated = saves.filter(s => s.id !== saveId);
+    persistNamedSavesList(updated);
+    renderSaveArchivesList();
+    renderHomeRecentSaves();
+  }
+}
+
+function renderSaveArchivesList(filterTerm = '') {
+  if (!dom.saveArchivesList) return;
+  const saves = getNamedSavesList();
+  
+  let filtered = saves;
+  if (filterTerm && filterTerm.trim()) {
+    const term = filterTerm.trim().toLowerCase();
+    filtered = saves.filter(s => 
+      (s.name && s.name.toLowerCase().includes(term)) ||
+      (s.playerProfile?.name && s.playerProfile.name.toLowerCase().includes(term)) ||
+      (s.playerProfile?.targetLeadName && s.playerProfile.targetLeadName.toLowerCase().includes(term)) ||
+      (s.chapterTitle && s.chapterTitle.toLowerCase().includes(term))
+    );
+  }
+
+  if (filtered.length === 0) {
+    dom.saveArchivesList.innerHTML = `
+      <div class="text-center text-slate-500 py-8 bg-brand-dark rounded-xl border border-brand-border">
+        ${filterTerm ? '找不到符合搜尋條件的存檔' : '存檔庫目前為空。您可以在上方輸入名稱，隨時儲存當前進度！'}
+      </div>
+    `;
+    return;
+  }
+
+  dom.saveArchivesList.innerHTML = filtered.map(s => `
+    <div class="bg-brand-dark p-3.5 rounded-xl border border-brand-border hover:border-brand-gold/40 transition space-y-2">
+      <div class="flex flex-wrap items-center justify-between gap-1">
+        <div class="font-bold text-white text-sm flex items-center gap-1.5">
+          <span class="text-brand-gold">💾</span>
+          <span>${escapeHtml(s.name)}</span>
+        </div>
+        <div class="text-[11px] text-slate-400 font-mono">
+          ${s.timestamp || ''}
+        </div>
+      </div>
+
+      <div class="text-xs text-slate-300 flex flex-wrap items-center gap-3 bg-brand-surface px-2.5 py-1.5 rounded-lg border border-brand-border/60">
+        <span>女主：<b class="text-brand-gold">${escapeHtml(s.playerProfile?.name || '未知')}</b></span>
+        <span>攻略：<b class="text-rose-400">${escapeHtml(s.playerProfile?.targetLeadName || '主線')}</b></span>
+        <span>進度：<b class="text-sky-300">第 ${s.turnCount || 1} 回</b></span>
+        <span class="text-slate-400 truncate max-w-[200px]">${escapeHtml(s.chapterTitle || '')}</span>
+      </div>
+
+      <div class="flex items-center justify-end gap-1.5 pt-1">
+        <button class="load-named-btn px-3 py-1 rounded bg-brand-gold hover:bg-yellow-500 text-slate-950 font-bold text-xs transition" data-id="${s.id}">
+          📖 讀取進度
+        </button>
+        <button class="overwrite-named-btn px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-brand-border text-xs transition" data-id="${s.id}" title="以當前進度覆蓋本存檔">
+          🔄 覆蓋
+        </button>
+        <button class="rename-named-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-brand-border text-xs transition" data-id="${s.id}" title="修改存檔名稱">
+          ✏️
+        </button>
+        <button class="delete-named-btn px-2 py-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-400 border border-rose-800/40 text-xs transition" data-id="${s.id}" title="刪除存檔">
+          🗑
+        </button>
+      </div>
+    </div>
+  `).join('');
+
+  // 綁定按鈕事件
+  dom.saveArchivesList.querySelectorAll('.load-named-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => loadNamedSave(e.currentTarget.getAttribute('data-id')));
+  });
+  dom.saveArchivesList.querySelectorAll('.overwrite-named-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => overwriteNamedSave(e.currentTarget.getAttribute('data-id')));
+  });
+  dom.saveArchivesList.querySelectorAll('.rename-named-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => renameNamedSave(e.currentTarget.getAttribute('data-id')));
+  });
+  dom.saveArchivesList.querySelectorAll('.delete-named-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => deleteNamedSave(e.currentTarget.getAttribute('data-id')));
+  });
+}
+
+function exportAllSavesJson() {
+  const saves = getNamedSavesList();
+  if (saves.length === 0) {
+    alert('目前存檔庫中沒有任何存檔可匯出！');
+    return;
+  }
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(saves, null, 2));
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `undercurrent_saves_backup_${Date.now()}.json`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+}
+
+function importAllSavesJson(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (!Array.isArray(imported)) {
+        alert('匯入失敗：JSON 格式不符（需為存檔陣列）。');
+        return;
+      }
+      const existing = getNamedSavesList();
+      // 合併存檔並去重
+      const existingIds = new Set(existing.map(s => s.id));
+      const newItems = imported.filter(s => !existingIds.has(s.id));
+      const merged = [...newItems, ...existing];
+      persistNamedSavesList(merged);
+      renderSaveArchivesList();
+      renderHomeRecentSaves();
+      alert(`🎉 成功匯入 ${newItems.length} 筆新存檔！`);
+    } catch (err) {
+      alert('匯入解析失敗：' + err.message);
+    }
+  };
+  reader.readAsText(file);
 }
 
 function loadMockDataWithProfile(profile) {
