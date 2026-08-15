@@ -94,6 +94,36 @@ const DEFAULT_PRESETS = {
 
 // DOM 元素快取
 const dom = {
+  // 視圖切換
+  homeView: document.getElementById('home-view'),
+  gameplayView: document.getElementById('gameplay-view'),
+  navHomeBtn: document.getElementById('nav-home-btn'),
+  navSavesBtn: document.getElementById('nav-saves-btn'),
+  drawerHomeBtn: document.getElementById('drawer-home-btn'),
+  drawerSavesBtn: document.getElementById('drawer-saves-btn'),
+  returnHomeInlineBtn: document.getElementById('return-home-inline-btn'),
+
+  // 首頁元件
+  homeUsernameDisplay: document.getElementById('home-username-display'),
+  homeSwitchAccountBtn: document.getElementById('home-switch-account-btn'),
+  homeNewGameBtn: document.getElementById('home-new-game-btn'),
+  homeContinueGameBtn: document.getElementById('home-continue-game-btn'),
+  homeContinueDesc: document.getElementById('home-continue-desc'),
+  homeOpenSavesBtn: document.getElementById('home-open-saves-btn'),
+  homeOpenPresetsBtn: document.getElementById('home-open-presets-btn'),
+  homeRecentSavesList: document.getElementById('home-recent-saves-list'),
+  homeViewAllSavesBtn: document.getElementById('home-view-all-saves-btn'),
+
+  // 自訂命名存檔庫彈窗
+  saveArchiveModal: document.getElementById('save-archive-modal'),
+  closeSaveArchiveBtn: document.getElementById('close-save-archive-btn'),
+  newSaveNameInput: document.getElementById('new-save-name-input'),
+  createNamedSaveBtn: document.getElementById('create-named-save-btn'),
+  searchSaveInput: document.getElementById('search-save-input'),
+  saveArchivesList: document.getElementById('save-archives-list'),
+  exportAllSavesBtn: document.getElementById('export-all-saves-btn'),
+  importAllSavesInput: document.getElementById('import-all-saves-input'),
+
   novelStreamContainer: document.getElementById('novel-stream-container'),
   choicesContainer: document.getElementById('choices-container'),
   customActionInput: document.getElementById('custom-action-input'),
@@ -491,13 +521,17 @@ function startServerCooldown(durationSec = 12) {
 // ==========================================
 
 function applyReadingPreferences() {
-  document.documentElement.style.setProperty('--reader-font-size', `${state.fontSizePx}px`);
+  if (document.documentElement && document.documentElement.style) {
+    document.documentElement.style.setProperty('--reader-font-size', `${state.fontSizePx}px`);
+  }
   setTheme(state.theme);
 }
 
 function adjustFontSize(delta) {
   state.fontSizePx = Math.min(26, Math.max(14, state.fontSizePx + delta * 2));
-  document.documentElement.style.setProperty('--reader-font-size', `${state.fontSizePx}px`);
+  if (document.documentElement && document.documentElement.style) {
+    document.documentElement.style.setProperty('--reader-font-size', `${state.fontSizePx}px`);
+  }
   localStorage.setItem('undercurrent_font_size', state.fontSizePx);
 }
 
@@ -1081,19 +1115,23 @@ function getCustomPresets() {
 function loadSavedProfilePresets() {
   const custom = getCustomPresets();
   const select = dom.profilePresetsSelect;
-  if (!select) return;
+  if (!select || !select.options) return;
 
   const options = Array.from(select.options);
   options.forEach(opt => {
-    if (opt.value.startsWith('custom_')) opt.remove();
+    if (opt && typeof opt.value === 'string' && opt.value.startsWith('custom_')) {
+      opt.remove();
+    }
   });
 
   Object.keys(custom).forEach(key => {
     const prof = custom[key];
-    const opt = document.createElement('option');
-    opt.value = key;
-    opt.textContent = `📁 【自訂】${prof.name}（${prof.profession.slice(0, 10)}...）`;
-    select.appendChild(opt);
+    if (prof) {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = `📁 【自訂】${prof.name || '自訂角色'}（${(prof.profession || '').slice(0, 10)}...）`;
+      select.appendChild(opt);
+    }
   });
 }
 
