@@ -47,10 +47,14 @@
   <header class="sticky top-0 z-40 bg-[#0c0d12]/95 backdrop-blur-md border-b border-brand-border/60 px-3 sm:px-6 py-2.5 flex justify-between items-center">
     <div class="flex items-center space-x-2">
       <span class="text-brand-gold font-serif font-black text-lg sm:text-xl tracking-wider">暗流 · UNDER CURRENT</span>
-      <span class="text-[11px] bg-brand-gold/10 text-brand-gold px-2 py-0.5 rounded border border-brand-gold/20 font-mono hidden md:inline" id="model-indicator">Mistral-3</span>
+      <!-- 伺服器狀態與排隊冷卻指示燈 -->
+      <span id="server-status-badge" class="text-[11px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30 px-2 py-0.5 rounded font-mono flex items-center gap-1">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="server-status-text">伺服器通暢</span>
+      </span>
     </div>
     
-    <!-- 右側功能：雨聲氛圍 / 歷史紀錄 / 閱讀排版 / 開局創角 / 狀態抽屜 -->
+    <!-- 右側功能：雨聲氛圍 / 歷史紀錄 / 登入身分 / 創角 / 狀態抽屜 -->
     <div class="flex items-center space-x-1.5 sm:space-x-2.5">
       <!-- 🌧 雨夜氛圍音效按鈕 -->
       <button id="ambience-toggle-btn" class="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-slate-400 hover:text-brand-gold transition text-xs flex items-center gap-1" title="切換雨夜氛圍音效">
@@ -117,10 +121,24 @@
     </div>
   </div>
 
+  <!-- ⚠️ 錯誤救援與重試浮動橫幅 -->
+  <div id="error-recovery-banner" class="bg-rose-950/90 border-b border-rose-700/50 px-4 py-2.5 text-xs text-rose-200 flex justify-between items-center transition" style="display:none;">
+    <div class="flex items-center gap-2">
+      <span class="text-rose-400 font-bold">⚠️ 生成異常：</span>
+      <span id="error-message-text">伺服器響應逾時或排隊中斷，已為您保留當前進度。</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="retry-turn-btn" class="px-3 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold transition">
+        🔄 重試生成
+      </button>
+      <button id="dismiss-error-btn" class="text-rose-300 hover:text-white text-xs">✕</button>
+    </div>
+  </div>
+
   <!-- 主要閱讀區容器 -->
   <main class="flex-1 max-w-3xl w-full mx-auto px-4 py-6 sm:py-8 pb-32">
-    <!-- 章節標題與幕次回合徽章 -->
-    <div class="mb-6 flex justify-between items-start">
+    <!-- 章節標題、幕次回合徽章與操控按鈕 (重擲/悔棋) -->
+    <div class="mb-6 flex justify-between items-start gap-2">
       <div>
         <div id="chapter-badge" class="inline-block font-mono text-xs text-brand-gold tracking-widest uppercase bg-brand-gold/10 border border-brand-gold/20 px-2.5 py-1 rounded mb-2">
           第 1 幕 · 第 1 回合
@@ -129,10 +147,26 @@
           載入中...
         </h1>
       </div>
-      <!-- 快速跳過按鈕 -->
-      <button id="skip-typewriter-btn" class="text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-brand-gold px-2.5 py-1 rounded-lg border border-brand-border transition hidden">
-        ⏩ 跳過動畫
-      </button>
+
+      <!-- 控制按鈕群：重新生成此回 / 悔棋修改上一回 / 跳過動畫 -->
+      <div class="flex items-center gap-1.5 shrink-0">
+        <!-- 🔄 重新生成此回 -->
+        <button id="regenerate-turn-btn" class="text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-brand-gold px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1" title="不滿意此回描寫？點此讓主筆重新演繹">
+          <span>🔄</span>
+          <span class="hidden sm:inline">重新生成</span>
+        </button>
+
+        <!-- ↩ 悔棋 / 修改上一回抉擇 -->
+        <button id="rewind-turn-btn" class="text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-amber-300 px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1" title="回退上一回合，重新調整送出的選項或文字">
+          <span>↩</span>
+          <span class="hidden sm:inline">悔棋重選</span>
+        </button>
+
+        <!-- ⏩ 跳過打字機 -->
+        <button id="skip-typewriter-btn" class="text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-brand-gold px-2.5 py-1.5 rounded-lg border border-brand-border transition hidden">
+          ⏩ 跳過
+        </button>
+      </div>
     </div>
 
     <!-- 小說長篇正文（支援打字機動態與點擊快速跳過） -->
@@ -523,10 +557,17 @@
     </div>
   </aside>
 
-  <!-- 載入中動畫遮罩 -->
-  <div id="loading-overlay" class="fixed inset-0 bg-[#0c0d12]/85 backdrop-blur-sm z-[100] flex flex-col items-center justify-center transition-opacity" style="display:none;">
+  <!-- 載入中動畫遮罩（附帶中止生成按鈕與排隊提示） -->
+  <div id="loading-overlay" class="fixed inset-0 bg-[#0c0d12]/85 backdrop-blur-sm z-[100] flex flex-col items-center justify-center p-4 transition-opacity" style="display:none;">
     <div class="w-12 h-12 border-4 border-brand-gold/20 border-t-brand-gold rounded-full animate-spin mb-4"></div>
-    <div id="loading-text" class="font-serif text-brand-gold text-sm tracking-wide">筆觸流轉中，主筆作家正在撰寫情節……</div>
+    <div id="loading-text" class="font-serif text-brand-gold text-sm tracking-wide text-center mb-2">筆觸流轉中，主筆作家正在撰寫情節……</div>
+    <div id="loading-subtext" class="text-xs text-slate-400 mb-6 text-center max-w-sm">正在依照《系統核心指令》與《情慾文學指引》構建多方博弈……</div>
+    
+    <!-- 🛑 中止本次生成按鈕 -->
+    <button id="abort-generation-btn" class="px-4 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-700/50 text-rose-200 hover:text-white transition text-xs font-bold flex items-center gap-1.5 shadow-lg">
+      <span>🛑</span>
+      <span>中止本次生成</span>
+    </button>
   </div>
 
   <script src="./app.js"></script>

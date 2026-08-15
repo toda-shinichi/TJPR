@@ -2,7 +2,13 @@
  * 《暗流》（UNDER CURRENT）- Frontend Web Client Application
  * 檔案：app.js
  * 
- * 包含：玩家身分驗證、開局創角、5大體驗優化（雨聲氛圍音效、歷史Log、全文匯出、字級主題、打字機加速跳過）、多存檔槽與 GAS 串接。
+ * 實裝：
+ * 1. 重新產出 / 重擲 (Regenerate Current Turn)
+ * 2. 截停產出 (Abort Generation via AbortController)
+ * 3. 悔棋 / 修改上一回合選項 (Rewind 1 Turn)
+ * 4. 錯誤救援與自動/手動重試機制 (Error Recovery Banner & Retry)
+ * 5. 多人排隊與 RPM=5 冷卻倒數提示 (Queue & Cooldown Indicator)
+ * 6. 5大體驗優化（雨聲音效、歷史Log、全文匯出、字級主題、打字機跳過）
  */
 
 // 全域狀態
@@ -19,15 +25,26 @@ const state = {
   skipTypewriterTriggered: false,
   typewriterTimer: null,
   
+  // 抉擇快照（供悔棋與重新生成）
+  previousStateSnapshot: null,
+  lastChoicePayload: null,
+  
+  // 中止請求控制器
+  currentAbortController: null,
+  
+  // 排隊與冷卻狀態
+  isCooldown: false,
+  cooldownTimer: null,
+  
   // 閱讀偏好
   fontSizePx: parseInt(localStorage.getItem('undercurrent_font_size') || '18', 10),
   theme: localStorage.getItem('undercurrent_theme') || 'dark',
   typeSpeed: localStorage.getItem('undercurrent_type_speed') || 'normal',
   
-  // 歷史章節累加池（供 Log 與全文下載）
+  // 歷史章節累加池
   chapterHistoryList: JSON.parse(localStorage.getItem('undercurrent_full_story_chapters') || '[]'),
   
-  // 雨聲音效實例
+  // 雨聲音效
   rainAudio: null,
   isRainPlaying: false
 };
@@ -85,6 +102,19 @@ const dom = {
   submitCustomBtn: document.getElementById('submit-custom-btn'),
   skipTypewriterBtn: document.getElementById('skip-typewriter-btn'),
   
+  // 重新生成、悔棋與中止控制
+  regenerateTurnBtn: document.getElementById('regenerate-turn-btn'),
+  rewindTurnBtn: document.getElementById('rewind-turn-btn'),
+  abortGenerationBtn: document.getElementById('abort-generation-btn'),
+  
+  // 排隊與錯誤提示
+  serverStatusBadge: document.getElementById('server-status-badge'),
+  serverStatusText: document.getElementById('server-status-text'),
+  errorRecoveryBanner: document.getElementById('error-recovery-banner'),
+  errorMessageText: document.getElementById('error-message-text'),
+  retryTurnBtn: document.getElementById('retry-turn-btn'),
+  dismissErrorBtn: document.getElementById('dismiss-error-btn'),
+  
   // 即時狀態面板
   inlineStatusPanel: document.getElementById('inline-status-panel'),
   panelTimeLocation: document.getElementById('panel-time-location'),
@@ -119,7 +149,7 @@ const dom = {
   importProfileJsonInput: document.getElementById('import-profile-json-input'),
   deleteProfilePresetBtn: document.getElementById('delete-profile-preset-btn'),
 
-  // 優化控制元件：氛圍音效、歷史 Log、字級主題、全文匯出
+  // 氛圍音效、歷史 Log、字級主題、全文匯出
   ambienceToggleBtn: document.getElementById('ambience-toggle-btn'),
   ambienceIcon: document.getElementById('ambience-icon'),
   ambienceLabel: document.getElementById('ambience-label'),
@@ -150,6 +180,7 @@ const dom = {
   
   loadingOverlay: document.getElementById('loading-overlay'),
   loadingText: document.getElementById('loading-text'),
+  loadingSubtext: document.getElementById('loading-subtext'),
   apiUrlInput: document.getElementById('api-url-input'),
   saveSettingsBtn: document.getElementById('save-settings-btn')
 };
@@ -168,18 +199,36 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 function setupEventListeners() {
-  // 1. 閱讀字級與主題切換
-  if (dom.fontIncreaseBtn) {
-    dom.fontIncreaseBtn.addEventListener('click', () => adjustFontSize(1));
+  // 1. 重新生成此回 (Regenerate)
+  if (dom.regenerateTurnBtn) {
+    dom.regenerateTurnBtn.addEventListener('click', handleRegenerateTurn);
   }
-  if (dom.fontDecreaseBtn) {
-    dom.fontDecreaseBtn.addEventListener('click', () => adjustFontSize(-1));
+
+  // 2. 悔棋 / 修改上一回抉擇 (Rewind)
+  if (dom.rewindTurnBtn) {
+    dom.rewindTurnBtn.addEventListener('click', handleRewindTurn);
   }
-  document.querySelectorAll('.theme-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const targetTheme = e.target.getAttribute('data-theme');
-      setTheme(targetTheme);
+
+  // 3. 截停產出 (Abort)
+  if (dom.abortGenerationBtn) {
+    dom.abortGenerationBtn.addEventListener('click', handleAbortGeneration);
+  }
+
+  // 4. 錯誤重試按鈕
+  if (dom.retryTurnBtn) {
+    dom.retryTurnBtn.addEventListener('click', handleRetryLastTurn);
+  }
+  if (dom.dismissErrorBtn) {
+    dom.dismissErrorBtn.addEventListener('click', () => {
+      dom.errorRecoveryBanner.style.display = 'none';
     });
+  }
+
+  // 5. 閱讀字級與主題切換
+  if (dom.fontIncreaseBtn) dom.fontIncreaseBtn.addEventListener('click', () => adjustFontSize(1));
+  if (dom.fontDecreaseBtn) dom.fontDecreaseBtn.addEventListener('click', () => adjustFontSize(-1));
+  document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => setTheme(e.target.getAttribute('data-theme')));
   });
   if (dom.typeSpeedSelect) {
     dom.typeSpeedSelect.value = state.typeSpeed;
@@ -189,33 +238,19 @@ function setupEventListeners() {
     });
   }
 
-  // 2. 雨夜氛圍音效開關 (Web Audio API Synthesizer)
-  if (dom.ambienceToggleBtn) {
-    dom.ambienceToggleBtn.addEventListener('click', toggleRainAmbience);
-  }
+  // 6. 雨夜氛圍音效開關
+  if (dom.ambienceToggleBtn) dom.ambienceToggleBtn.addEventListener('click', toggleRainAmbience);
 
-  // 3. 歷史章節紀錄 Log
-  if (dom.openHistoryBtn) {
-    dom.openHistoryBtn.addEventListener('click', openHistoryModal);
-  }
-  if (dom.closeHistoryBtn) {
-    dom.closeHistoryBtn.addEventListener('click', closeHistoryModal);
-  }
+  // 7. 歷史章節紀錄 Log & 小說匯出
+  if (dom.openHistoryBtn) dom.openHistoryBtn.addEventListener('click', openHistoryModal);
+  if (dom.closeHistoryBtn) dom.closeHistoryBtn.addEventListener('click', closeHistoryModal);
+  if (dom.exportNovelBtn) dom.exportNovelBtn.addEventListener('click', exportFullNovelText);
 
-  // 4. 小說全文匯出下載 (TXT / Markdown)
-  if (dom.exportNovelBtn) {
-    dom.exportNovelBtn.addEventListener('click', exportFullNovelText);
-  }
+  // 8. 打字機跳過
+  if (dom.proseContent) dom.proseContent.addEventListener('click', skipTypewriter);
+  if (dom.skipTypewriterBtn) dom.skipTypewriterBtn.addEventListener('click', skipTypewriter);
 
-  // 5. 點擊正文或跳過按鈕以跳過打字機
-  if (dom.proseContent) {
-    dom.proseContent.addEventListener('click', skipTypewriter);
-  }
-  if (dom.skipTypewriterBtn) {
-    dom.skipTypewriterBtn.addEventListener('click', skipTypewriter);
-  }
-
-  // 登入 / 註冊 Tab 切換
+  // 9. 登入 / 註冊 Tab 切換
   if (dom.tabLoginBtn && dom.tabRegisterBtn) {
     dom.tabLoginBtn.addEventListener('click', () => {
       dom.tabLoginBtn.className = 'flex-1 py-2 rounded-md bg-brand-gold text-slate-950 transition';
@@ -232,19 +267,8 @@ function setupEventListeners() {
     });
   }
 
-  if (dom.loginForm) {
-    dom.loginForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      await handleUserLogin();
-    });
-  }
-
-  if (dom.registerForm) {
-    dom.registerForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      await handleUserRegister();
-    });
-  }
+  if (dom.loginForm) dom.loginForm.addEventListener('submit', async (e) => { e.preventDefault(); await handleUserLogin(); });
+  if (dom.registerForm) dom.registerForm.addEventListener('submit', async (e) => { e.preventDefault(); await handleUserRegister(); });
 
   if (dom.guestPlayBtn) {
     dom.guestPlayBtn.addEventListener('click', () => {
@@ -257,43 +281,17 @@ function setupEventListeners() {
     });
   }
 
-  if (dom.logoutBtn) {
-    dom.logoutBtn.addEventListener('click', handleLogout);
-  }
+  if (dom.logoutBtn) dom.logoutBtn.addEventListener('click', handleLogout);
 
-  // 創角彈窗控制
-  if (dom.openCreateCharBtn) {
-    dom.openCreateCharBtn.addEventListener('click', () => {
-      dom.charCreationModal.style.display = 'flex';
-    });
-  }
-  if (dom.closeModalBtn) {
-    dom.closeModalBtn.addEventListener('click', () => {
-      dom.charCreationModal.style.display = 'none';
-    });
-  }
+  // 10. 創角彈窗控制與設定檔
+  if (dom.openCreateCharBtn) dom.openCreateCharBtn.addEventListener('click', () => { dom.charCreationModal.style.display = 'flex'; });
+  if (dom.closeModalBtn) dom.closeModalBtn.addEventListener('click', () => { dom.charCreationModal.style.display = 'none'; });
 
-  if (dom.profilePresetsSelect) {
-    dom.profilePresetsSelect.addEventListener('change', (e) => {
-      loadProfilePresetIntoForm(e.target.value);
-    });
-  }
-
-  if (dom.saveCurrentProfileBtn) {
-    dom.saveCurrentProfileBtn.addEventListener('click', saveCurrentFormAsPreset);
-  }
-
-  if (dom.exportProfileJsonBtn) {
-    dom.exportProfileJsonBtn.addEventListener('click', exportProfileJson);
-  }
-
-  if (dom.importProfileJsonInput) {
-    dom.importProfileJsonInput.addEventListener('change', importProfileJson);
-  }
-
-  if (dom.deleteProfilePresetBtn) {
-    dom.deleteProfilePresetBtn.addEventListener('click', deleteSelectedProfilePreset);
-  }
+  if (dom.profilePresetsSelect) dom.profilePresetsSelect.addEventListener('change', (e) => loadProfilePresetIntoForm(e.target.value));
+  if (dom.saveCurrentProfileBtn) dom.saveCurrentProfileBtn.addEventListener('click', saveCurrentFormAsPreset);
+  if (dom.exportProfileJsonBtn) dom.exportProfileJsonBtn.addEventListener('click', exportProfileJson);
+  if (dom.importProfileJsonInput) dom.importProfileJsonInput.addEventListener('change', importProfileJson);
+  if (dom.deleteProfilePresetBtn) dom.deleteProfilePresetBtn.addEventListener('click', deleteSelectedProfilePreset);
 
   document.querySelectorAll('.preset-scenario-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -310,33 +308,21 @@ function setupEventListeners() {
     });
   }
 
-  // 側邊狀態抽屜
+  // 11. 側邊狀態抽屜
   if (dom.openDrawerBtn) dom.openDrawerBtn.addEventListener('click', openDrawer);
   if (dom.closeDrawerBtn) dom.closeDrawerBtn.addEventListener('click', closeDrawer);
   if (dom.drawerBackdrop) dom.drawerBackdrop.addEventListener('click', closeDrawer);
 
-  // 遊戲存檔槽按鈕監聽 (Slot 1, 2, 3)
+  // 12. 遊戲存檔槽按鈕 (Slot 1, 2, 3)
   document.querySelectorAll('.save-slot-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const slot = e.target.getAttribute('data-slot');
-      saveGameStateToSlot(slot);
-    });
+    btn.addEventListener('click', (e) => saveGameStateToSlot(e.target.getAttribute('data-slot')));
   });
-
   document.querySelectorAll('.load-slot-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const slot = e.target.getAttribute('data-slot');
-      loadGameStateFromSlot(slot);
-    });
+    btn.addEventListener('click', (e) => loadGameStateFromSlot(e.target.getAttribute('data-slot')));
   });
+  if (dom.quickSaveBtn) dom.quickSaveBtn.addEventListener('click', () => saveGameStateToSlot('1'));
 
-  if (dom.quickSaveBtn) {
-    dom.quickSaveBtn.addEventListener('click', () => {
-      saveGameStateToSlot('1');
-    });
-  }
-
-  // 自訂行動
+  // 13. 自訂行動
   if (dom.submitCustomBtn) {
     dom.submitCustomBtn.addEventListener('click', () => {
       const customText = (dom.customActionInput.value || '').trim();
@@ -357,12 +343,10 @@ function setupEventListeners() {
     });
   }
 
-  // 卷末換窗
-  if (dom.rebaseActBtn) {
-    dom.rebaseActBtn.addEventListener('click', handleActRebase);
-  }
+  // 14. 卷末換窗
+  if (dom.rebaseActBtn) dom.rebaseActBtn.addEventListener('click', handleActRebase);
 
-  // 儲存後端 API 設定
+  // 15. 儲存後端 API 設定
   if (dom.saveSettingsBtn) {
     dom.saveSettingsBtn.addEventListener('click', () => {
       const url = (dom.apiUrlInput.value || '').trim();
@@ -374,7 +358,100 @@ function setupEventListeners() {
 }
 
 // ==========================================
-// 1. 閱讀偏好設定（字級 & 主題）
+// 1. 重新生成、悔棋與中止控制
+// ==========================================
+
+function handleAbortGeneration() {
+  if (state.currentAbortController) {
+    state.currentAbortController.abort();
+    state.currentAbortController = null;
+  }
+  hideLoading();
+  triggerHaptic([30, 20]);
+  alert('【已中止生成】已安全截停本次 API 呼叫，恢復為上一狀態。');
+}
+
+function handleRegenerateTurn() {
+  if (!state.lastChoicePayload) {
+    alert('目前沒有可重新生成的抉擇紀錄！');
+    return;
+  }
+  if (!confirm('確定要讓主筆作家重新演繹這一個回合的故事嗎？')) return;
+
+  // 恢復上一狀態快照並重新發送請求
+  if (state.previousStateSnapshot) {
+    state.saveState = JSON.parse(JSON.stringify(state.previousStateSnapshot.saveState));
+  }
+  
+  const payload = state.lastChoicePayload;
+  makeChoice(payload.choiceId, payload.customInput, true);
+}
+
+function handleRewindTurn() {
+  if (!state.previousStateSnapshot) {
+    alert('已是開局第一回，無法再向前悔棋！');
+    return;
+  }
+  if (!confirm('確定要【悔棋】回退到上一回合嗎？您可以重新輸入或調整選擇。')) return;
+
+  // 還原上一回合資料
+  state.saveState = JSON.parse(JSON.stringify(state.previousStateSnapshot.saveState));
+  state.chapterData = JSON.parse(JSON.stringify(state.previousStateSnapshot.chapterData));
+  
+  // 移除歷史記錄中的最後一筆
+  if (state.chapterHistoryList.length > 0) {
+    state.chapterHistoryList.pop();
+    localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+  }
+
+  // 填回玩家上一次的文字
+  if (state.lastChoicePayload && state.lastChoicePayload.customInput) {
+    dom.customActionInput.value = state.lastChoicePayload.customInput;
+  }
+
+  renderChapter(state.chapterData);
+  renderSaveState();
+  triggerHaptic([30, 30]);
+  alert('【悔棋成功】已為您回退至上一回合，請重新進行抉擇！');
+}
+
+function handleRetryLastTurn() {
+  dom.errorRecoveryBanner.style.display = 'none';
+  if (state.lastChoicePayload) {
+    makeChoice(state.lastChoicePayload.choiceId, state.lastChoicePayload.customInput);
+  } else {
+    initializeStory();
+  }
+}
+
+// ==========================================
+// 2. 伺服器冷卻與排隊倒數管理 (RPM=5)
+// ==========================================
+
+function startServerCooldown(durationSec = 12) {
+  state.isCooldown = true;
+  let remaining = durationSec;
+
+  if (state.cooldownTimer) clearInterval(state.cooldownTimer);
+
+  dom.serverStatusBadge.className = 'text-[11px] bg-amber-950/40 text-amber-300 border border-amber-800/30 px-2 py-0.5 rounded font-mono flex items-center gap-1';
+  dom.serverStatusText.textContent = `佇列冷卻: ${remaining}s`;
+
+  state.cooldownTimer = setInterval(() => {
+    remaining--;
+    if (remaining > 0) {
+      dom.serverStatusText.textContent = `佇列冷卻: ${remaining}s`;
+    } else {
+      clearInterval(state.cooldownTimer);
+      state.isCooldown = false;
+      dom.serverStatusBadge.className = 'text-[11px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30 px-2 py-0.5 rounded font-mono flex items-center gap-1';
+      dom.serverStatusText.textContent = '伺服器通暢';
+    }
+  }, 1000);
+}
+
+// ==========================================
+// 3. 閱讀偏好設定（字級 & 主題）
 // ==========================================
 
 function applyReadingPreferences() {
@@ -397,7 +474,7 @@ function setTheme(themeName) {
 }
 
 // ==========================================
-// 2. 雨夜氛圍音效 (Web Audio API Synthesizer)
+// 4. 雨夜氛圍音效 (Web Audio API Synthesizer)
 // ==========================================
 
 function toggleRainAmbience() {
@@ -414,7 +491,6 @@ function startRainAmbience() {
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
 
-    // 產生粉紅噪音/雨聲模擬緩衝
     const bufferSize = ctx.sampleRate * 2;
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -435,7 +511,6 @@ function startRainAmbience() {
     noiseNode.buffer = buffer;
     noiseNode.loop = true;
 
-    // 低通濾波器（模擬室內聽窗外台北暴雨聲）
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.value = 1000;
@@ -473,7 +548,6 @@ function stopRainAmbience() {
   if (dom.ambienceToggleBtn) dom.ambienceToggleBtn.classList.remove('text-brand-gold', 'border-brand-gold/60');
 }
 
-// 移動端觸覺震動
 function triggerHaptic(pattern) {
   if (navigator && navigator.vibrate) {
     try {
@@ -483,7 +557,7 @@ function triggerHaptic(pattern) {
 }
 
 // ==========================================
-// 3. 歷史章節紀錄 Log & 小說全文下載
+// 5. 歷史章節紀錄 Log & 小說全文下載
 // ==========================================
 
 function openHistoryModal() {
@@ -563,7 +637,7 @@ function exportFullNovelText() {
 }
 
 // ==========================================
-// 4. 打字機動效與快速跳過
+// 6. 打字機動效與快速跳過
 // ==========================================
 
 function skipTypewriter() {
@@ -594,7 +668,6 @@ function typewriterEffect(text, targetEl, onComplete) {
 
   if (dom.skipTypewriterBtn) dom.skipTypewriterBtn.classList.remove('hidden');
 
-  // 瞬間全顯
   if (state.typeSpeed === 'instant') {
     const paragraphs = text.split('\n\n');
     paragraphs.forEach(pText => {
@@ -648,7 +721,7 @@ function typewriterEffect(text, targetEl, onComplete) {
 }
 
 // ==========================================
-// 5. 身分驗證 (Auth Security Handlers)
+// 7. 身分驗證 (Auth Security Handlers)
 // ==========================================
 
 function checkAuthSession() {
@@ -775,7 +848,7 @@ function closeDrawer() {
 }
 
 // ==========================================
-// 角色設定檔 (Profile Presets) 存讀管理
+// 8. 角色設定檔 (Profile Presets) 存讀管理
 // ==========================================
 
 function getCustomPresets() {
@@ -939,7 +1012,7 @@ function deleteSelectedProfilePreset() {
 }
 
 // ==========================================
-// 遊戲存檔槽管理 (Game Save Slots)
+// 9. 遊戲存檔槽管理 (Game Save Slots)
 // ==========================================
 
 function updateSaveSlotsDisplay() {
@@ -1019,7 +1092,7 @@ function loadGameStateFromSlot(slotIndex) {
 }
 
 // ==========================================
-// 故事主流程與 API 連線
+// 10. 故事主流程與 API 連線
 // ==========================================
 
 async function handleCharacterCreationSubmit() {
@@ -1060,7 +1133,7 @@ async function handleCharacterCreationSubmit() {
         appendChapterToHistory(res.data.chapter, '【開局入局】');
         saveGameStateToSlot('1');
       } else {
-        alert('開局生成失敗：' + (res.error?.message || '未知錯誤'));
+        showErrorRecovery('開局生成失敗：' + (res.error?.message || '伺服器未回傳資料'));
       }
     } catch (err) {
       console.warn('連線後端失敗，使用正宗本地模式:', err);
@@ -1214,8 +1287,22 @@ function renderChoices(choices) {
   });
 }
 
-async function makeChoice(choiceId, customInput) {
-  showLoading('以太筆觸流轉中，主筆作家正在撰寫後續長篇情節...');
+async function makeChoice(choiceId, customInput, isRegenerating = false) {
+  // 記錄快照（供悔棋與重擲）
+  if (!isRegenerating) {
+    state.previousStateSnapshot = {
+      saveState: JSON.parse(JSON.stringify(state.saveState)),
+      chapterData: JSON.parse(JSON.stringify(state.chapterData))
+    };
+    state.lastChoicePayload = { choiceId, customInput };
+  }
+
+  showLoading(
+    isRegenerating ? '主筆作家正在重新構思本回演繹……' : '以太筆觸流轉中，主筆作家正在撰寫後續長篇情節……',
+    '若伺服器多人排隊中，系統將自動依序處理，請稍候……'
+  );
+
+  dom.errorRecoveryBanner.style.display = 'none';
 
   if (state.gasApiUrl) {
     try {
@@ -1231,13 +1318,17 @@ async function makeChoice(choiceId, customInput) {
         renderChapter(res.data.chapter);
         renderSaveState();
         appendChapterToHistory(res.data.chapter, customInput || choiceId);
+        startServerCooldown(12); // 啟動 RPM=5 冷卻倒數
       } else {
-        alert('生成章節失敗：' + (res.error?.message || '未知伺服器錯誤'));
+        showErrorRecovery('生成章節失敗：' + (res.error?.message || '伺服器未回傳數據'));
       }
     } catch (e) {
-      alert('無法連線後端 API：' + e.message);
+      if (e.name !== 'AbortError') {
+        showErrorRecovery('連線異常或逾時: ' + e.message);
+      }
     }
   } else {
+    // 離線展示
     setTimeout(() => {
       state.saveState.turnCount += 1;
       const targetName = state.saveState?.meta?.playerProfile?.targetLeadName || '徐令謙';
@@ -1264,10 +1355,18 @@ async function makeChoice(choiceId, customInput) {
       renderChapter(nextMock);
       renderSaveState();
       appendChapterToHistory(nextMock, customInput || choiceId);
+      startServerCooldown(12);
     }, 1200);
   }
 
   hideLoading();
+}
+
+function showErrorRecovery(msg) {
+  hideLoading();
+  dom.errorRecoveryBanner.style.display = 'flex';
+  dom.errorMessageText.textContent = msg || '生成異常，已保留您的選項。';
+  triggerHaptic([100, 50, 100]);
 }
 
 async function handleActRebase() {
@@ -1286,10 +1385,11 @@ async function handleActRebase() {
       if (res.success && res.data) {
         state.saveState = res.data.saveState;
         renderSaveState();
+        startServerCooldown(12);
         alert('【卷末換窗成功】已正式晉升至第 ' + state.saveState.meta.currentAct + ' 幕！');
       }
     } catch (e) {
-      alert('卷末換窗失敗: ' + e.message);
+      showErrorRecovery('卷末換窗失敗: ' + e.message);
     }
   } else {
     state.saveState.meta.currentAct += 1;
@@ -1352,6 +1452,8 @@ function renderSaveState() {
 }
 
 async function callBackendApi(action, payload) {
+  state.currentAbortController = new AbortController();
+
   const body = Object.assign({
     action: action,
     token: state.token,
@@ -1363,16 +1465,18 @@ async function callBackendApi(action, payload) {
     headers: {
       'Content-Type': 'text/plain;charset=utf-8'
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: state.currentAbortController.signal
   });
 
   return await response.json();
 }
 
-function showLoading(text) {
+function showLoading(text, subtext) {
   if (dom.loadingOverlay) {
     dom.loadingOverlay.style.display = 'flex';
     dom.loadingText.textContent = text || '載入中...';
+    if (dom.loadingSubtext) dom.loadingSubtext.textContent = subtext || '正在依照《系統核心指令》構建多方博弈……';
   }
 }
 
@@ -1380,4 +1484,5 @@ function hideLoading() {
   if (dom.loadingOverlay) {
     dom.loadingOverlay.style.display = 'none';
   }
+  state.currentAbortController = null;
 }
