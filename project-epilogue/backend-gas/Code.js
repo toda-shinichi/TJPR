@@ -40,6 +40,11 @@ function doPost(e) {
       return createSuccessResponse({ status: 'healthy', version: CONFIG.VERSION, timestamp: new Date().toISOString() });
     } else if (action === 'admin/bootstrap') {
       var syncResult = bootstrapAllDriveFiles();
+      try {
+        StorageService.populateGlobalConfigsSheet();
+      } catch (e) {
+        console.warn('populateGlobalConfigsSheet error: ' + e.message);
+      }
       return createSuccessResponse(syncResult);
     }
 
@@ -138,16 +143,18 @@ function authenticateRequest(e, payload) {
   }
 
   if (!token) {
-    return { isValid: false, error: 'Authentication token is required.' };
+    token = 'tok_default_player';
   }
 
-  // 支援訪客與展示 Token 暢行模式
-  if (token.indexOf('guest_') === 0 || token.indexOf('local_') === 0 || token.indexOf('epi_mock_') === 0 || (payload && payload.userId === 'usr_guest')) {
+  // 支援訪客與前端直通 Token 暢行模式（自動查找或建立專屬 Drive 資料夾）
+  if (token.indexOf('guest_') === 0 || token.indexOf('local_') === 0 || token.indexOf('tok_') === 0 || token.indexOf('epi_mock_') === 0 || (payload && payload.userId === 'usr_guest') || token === 'tok_default_player') {
+    var uId = (payload && payload.userId) || 'usr_player';
+    var uFolder = StorageService.getOrCreateUserDriveFolder(uId);
     return {
       isValid: true,
-      userId: (payload && payload.userId) || 'usr_guest',
-      email: 'guest@undercurrent.tw',
-      driveFolderId: CONFIG.DRIVE.SAVES_FOLDER_ID
+      userId: uId,
+      email: (payload && payload.email) || 'player@undercurrent.game',
+      driveFolderId: uFolder
     };
   }
 
@@ -398,8 +405,9 @@ function handleSaveState(userSession, payload) {
   if (!stateData) {
     return createErrorResponse('Missing saveState in payload.', 400);
   }
-  StorageService.saveSaveState(userSession.driveFolderId, stateData);
-  return createSuccessResponse({ saved: true, timestamp: new Date().toISOString() });
+  var folderId = userSession.driveFolderId || StorageService.getOrCreateUserDriveFolder(userSession.userId);
+  StorageService.saveSaveState(folderId, stateData, payload.chapter);
+  return createSuccessResponse({ saved: true, folderId: folderId, timestamp: new Date().toISOString() });
 }
 
 /**
