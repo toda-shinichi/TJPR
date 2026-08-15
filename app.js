@@ -98,10 +98,14 @@ const dom = {
   homeView: document.getElementById('home-view'),
   gameplayView: document.getElementById('gameplay-view'),
   navHomeBtn: document.getElementById('nav-home-btn'),
+  headerHomeBtn: document.getElementById('header-home-btn'),
+  backToHomeBtn: document.getElementById('back-to-home-btn'),
   navSavesBtn: document.getElementById('nav-saves-btn'),
   drawerHomeBtn: document.getElementById('drawer-home-btn'),
   drawerSavesBtn: document.getElementById('drawer-saves-btn'),
-  returnHomeInlineBtn: document.getElementById('return-home-inline-btn'),
+  gameplayQuickSaveBtn: document.getElementById('gameplay-quick-save-btn'),
+  gameplayDrawerBtn: document.getElementById('gameplay-drawer-btn'),
+  gameplayBreadcrumb: document.getElementById('gameplay-breadcrumb'),
 
   // 首頁元件
   homeUsernameDisplay: document.getElementById('home-username-display'),
@@ -130,6 +134,17 @@ const dom = {
   usernameDisplay: document.getElementById('username-display'),
   logoutBtn: document.getElementById('logout-btn'),
 
+  // 創角表單與設定檔管理
+  openCreateCharBtn: document.getElementById('open-create-char-btn'),
+  closeModalBtn: document.getElementById('close-modal-btn'),
+  charCreationModal: document.getElementById('character-creation-modal'),
+  charCreationForm: document.getElementById('char-creation-form'),
+  profilePresetsSelect: document.getElementById('profile-presets-select'),
+  saveCurrentProfileBtn: document.getElementById('save-current-profile-btn'),
+  exportProfileJsonBtn: document.getElementById('export-profile-json-btn'),
+  importProfileJsonInput: document.getElementById('import-profile-json-input'),
+  deleteProfilePresetBtn: document.getElementById('delete-profile-preset-btn'),
+
   // 自訂命名存檔庫彈窗
   saveArchiveModal: document.getElementById('save-archive-modal'),
   closeSaveArchiveBtn: document.getElementById('close-save-archive-btn'),
@@ -154,37 +169,11 @@ const dom = {
   retryTurnBtn: document.getElementById('retry-turn-btn'),
   dismissErrorBtn: document.getElementById('dismiss-error-btn'),
 
-  // 創角表單與設定檔管理
-  openCreateCharBtn: document.getElementById('open-create-char-btn'),
-  closeModalBtn: document.getElementById('close-modal-btn'),
-  charCreationModal: document.getElementById('character-creation-modal'),
-  charCreationForm: document.getElementById('char-creation-form'),
-  profilePresetsSelect: document.getElementById('profile-presets-select'),
-  saveCurrentProfileBtn: document.getElementById('save-current-profile-btn'),
-  exportProfileJsonBtn: document.getElementById('export-profile-json-btn'),
-  importProfileJsonInput: document.getElementById('import-profile-json-input'),
-  deleteProfilePresetBtn: document.getElementById('delete-profile-preset-btn'),
-
-  // 氛圍音效、歷史 Log、字級主題、全文匯出
-  ambienceToggleBtn: document.getElementById('ambience-toggle-btn'),
-  ambienceIcon: document.getElementById('ambience-icon'),
-  ambienceLabel: document.getElementById('ambience-label'),
-  openHistoryBtn: document.getElementById('open-history-btn'),
-  closeHistoryBtn: document.getElementById('close-history-btn'),
-  historyModal: document.getElementById('history-modal'),
-  historyLogContainer: document.getElementById('history-log-container'),
-  fontDecreaseBtn: document.getElementById('font-decrease-btn'),
-  fontIncreaseBtn: document.getElementById('font-increase-btn'),
-  typeSpeedSelect: document.getElementById('type-speed-select'),
-  exportNovelBtn: document.getElementById('export-novel-btn'),
-  abortGenerationBtn: document.getElementById('abort-generation-btn'),
-
   // 側邊狀態抽屜 & 存檔槽
   openDrawerBtn: document.getElementById('open-drawer-btn'),
   closeDrawerBtn: document.getElementById('close-drawer-btn'),
   drawerBackdrop: document.getElementById('drawer-backdrop'),
   sideDrawer: document.getElementById('side-drawer'),
-  quickSaveBtn: document.getElementById('quick-save-btn'),
   profileCardName: document.getElementById('profile-card-name'),
   profileCardLead: document.getElementById('profile-card-lead'),
   
@@ -192,15 +181,44 @@ const dom = {
   sanityDisplay: document.getElementById('sanity-display'),
   relationshipsList: document.getElementById('relationships-list'),
   inventoryList: document.getElementById('inventory-list'),
-  summaryPoolContent: document.getElementById('summary-pool-content'),
   rebaseActBtn: document.getElementById('rebase-act-btn'),
   
   loadingOverlay: document.getElementById('loading-overlay'),
   loadingText: document.getElementById('loading-text'),
   loadingSubtext: document.getElementById('loading-subtext'),
-  apiUrlInput: document.getElementById('api-url-input'),
-  saveSettingsBtn: document.getElementById('save-settings-btn')
+  abortGenerationBtn: document.getElementById('abort-generation-btn')
 };
+
+function applyReadingPreferences() {
+  if (document.documentElement && document.documentElement.style) {
+    document.documentElement.style.setProperty('--reader-font-size', `${state.fontSizePx || 18}px`);
+  }
+  setTheme(state.theme || 'dark');
+}
+
+function adjustFontSize(delta) {
+  state.fontSizePx = Math.min(26, Math.max(14, (state.fontSizePx || 18) + delta * 2));
+  if (document.documentElement && document.documentElement.style) {
+    document.documentElement.style.setProperty('--reader-font-size', `${state.fontSizePx}px`);
+  }
+  localStorage.setItem('undercurrent_font_size', state.fontSizePx);
+}
+
+function setTheme(themeName) {
+  state.theme = themeName;
+  localStorage.setItem('undercurrent_theme', themeName);
+  if (document.body && document.body.classList) {
+    document.body.classList.remove('theme-parchment', 'theme-navy');
+    if (themeName === 'parchment') document.body.classList.add('theme-parchment');
+    if (themeName === 'navy') document.body.classList.add('theme-navy');
+  }
+}
+
+function triggerHaptic(pattern) {
+  if (navigator && navigator.vibrate) {
+    try { navigator.vibrate(pattern || 30); } catch (e) {}
+  }
+}
 
 // 初始化
 window.addEventListener('DOMContentLoaded', async () => {
@@ -231,31 +249,59 @@ window.addEventListener('DOMContentLoaded', async () => {
   switchView('home');
 });
 
+function handleAbortGeneration() {
+  if (state.currentAbortController) {
+    state.currentAbortController.abort();
+    state.currentAbortController = null;
+  }
+  hideLoading();
+  alert('已中止本次生成。');
+}
+
+function handleRetryLastTurn() {
+  if (state.lastChoicePayload) {
+    makeChoice(state.lastChoicePayload.choiceId, state.lastChoicePayload.customInput, true);
+  }
+}
+
+function handleRegenerateTurn() {
+  if (state.lastChoicePayload) {
+    makeChoice(state.lastChoicePayload.choiceId, state.lastChoicePayload.customInput, true);
+  } else {
+    alert('目前尚無上一步抉擇紀錄可重新演繹。');
+  }
+}
+
+function handleUndoTurn() {
+  if (state.previousStateSnapshot) {
+    state.saveState = JSON.parse(JSON.stringify(state.previousStateSnapshot.saveState));
+    state.chapterData = JSON.parse(JSON.stringify(state.previousStateSnapshot.chapterData));
+    if (state.chapterHistoryList.length > 1) {
+      state.chapterHistoryList.pop();
+      localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+    }
+    renderStoryStream(state.chapterData);
+    renderSaveState();
+    alert('已成功悔棋回退至上一回合！');
+  } else {
+    alert('已無更早的上一動快照可回退。');
+  }
+}
+
+const handleRewindTurn = handleUndoTurn;
+
 function setupEventListeners() {
   // 0. 🏠 首頁與存檔庫切換監聽
   if (dom.navHomeBtn) dom.navHomeBtn.addEventListener('click', () => switchView('home'));
+  if (dom.headerHomeBtn) dom.headerHomeBtn.addEventListener('click', () => switchView('home'));
+  if (dom.backToHomeBtn) dom.backToHomeBtn.addEventListener('click', () => switchView('home'));
   if (dom.drawerHomeBtn) dom.drawerHomeBtn.addEventListener('click', () => { closeDrawer(); switchView('home'); });
-  if (dom.returnHomeInlineBtn) dom.returnHomeInlineBtn.addEventListener('click', () => switchView('home'));
   
   if (dom.navSavesBtn) dom.navSavesBtn.addEventListener('click', openSaveArchiveModal);
   if (dom.drawerSavesBtn) dom.drawerSavesBtn.addEventListener('click', () => { closeDrawer(); openSaveArchiveModal(); });
   if (dom.closeSaveArchiveBtn) dom.closeSaveArchiveBtn.addEventListener('click', closeSaveArchiveModal);
   if (dom.homeOpenSavesBtn) dom.homeOpenSavesBtn.addEventListener('click', openSaveArchiveModal);
   if (dom.homeViewAllSavesBtn) dom.homeViewAllSavesBtn.addEventListener('click', openSaveArchiveModal);
-
-  // 登入 / 註冊 / 清空資料 監聽
-  if (dom.headerLoginBtn) dom.headerLoginBtn.addEventListener('click', () => openAuthModal('login'));
-  if (dom.closeAuthModalBtn) dom.closeAuthModalBtn.addEventListener('click', closeAuthModal);
-  if (dom.homeAuthActionBtn) {
-    dom.homeAuthActionBtn.addEventListener('click', () => {
-      if (state.token && state.username) {
-        handleLogout();
-      } else {
-        openAuthModal('login');
-      }
-    });
-  }
-  if (dom.homeClearAllDataBtn) dom.homeClearAllDataBtn.addEventListener('click', clearAllLocalGameData);
 
   // 首頁卡片按鈕
   if (dom.homeNewGameBtn) {
@@ -265,7 +311,13 @@ function setupEventListeners() {
   }
   if (dom.homeContinueGameBtn) {
     dom.homeContinueGameBtn.addEventListener('click', () => {
-      switchView('gameplay');
+      const hasHistory = Array.isArray(state.chapterHistoryList) && state.chapterHistoryList.length > 0;
+      if (hasHistory && state.chapterData) {
+        switchView('gameplay');
+      } else {
+        alert('目前尚未有進行中的冒險存檔，為您開啟【全新創角開局】！');
+        openCharacterCreationModal();
+      }
     });
   }
   if (dom.homeOpenPresetsBtn) {
@@ -273,11 +325,12 @@ function setupEventListeners() {
       openCharacterCreationModal();
     });
   }
-  if (dom.homeSwitchAccountBtn) {
-    dom.homeSwitchAccountBtn.addEventListener('click', () => {
-      handleLogout();
-    });
-  }
+
+  // 帳號與清空本機存檔
+  if (dom.logoutBtn) dom.logoutBtn.addEventListener('click', handleLogout);
+  if (dom.homeLogoutBtn) dom.homeLogoutBtn.addEventListener('click', handleLogout);
+  if (dom.homeDeleteAccountBtn) dom.homeDeleteAccountBtn.addEventListener('click', handleDeleteAccount);
+  if (dom.homeClearAllDataBtn) dom.homeClearAllDataBtn.addEventListener('click', clearAllLocalGameData);
 
   // 存檔管理
   if (dom.createNamedSaveBtn) {
@@ -293,56 +346,18 @@ function setupEventListeners() {
   if (dom.exportAllSavesBtn) dom.exportAllSavesBtn.addEventListener('click', exportAllSavesJson);
   if (dom.importAllSavesInput) dom.importAllSavesInput.addEventListener('change', importAllSavesJson);
 
-  // 1. 中止生成
-  if (dom.abortGenerationBtn) {
-    dom.abortGenerationBtn.addEventListener('click', handleAbortGeneration);
-  }
-
-  // 2. 錯誤重試按鈕
-  if (dom.retryTurnBtn) {
-    dom.retryTurnBtn.addEventListener('click', handleRetryLastTurn);
-  }
-  if (dom.dismissErrorBtn) {
-    dom.dismissErrorBtn.addEventListener('click', () => {
-      dom.errorRecoveryBanner.style.display = 'none';
-    });
-  }
-
-  // 3. 閱讀字級與主題切換
-  if (dom.fontIncreaseBtn) dom.fontIncreaseBtn.addEventListener('click', () => adjustFontSize(1));
-  if (dom.fontDecreaseBtn) dom.fontDecreaseBtn.addEventListener('click', () => adjustFontSize(-1));
-  document.querySelectorAll('.theme-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => setTheme(e.target.getAttribute('data-theme')));
-  });
-  if (dom.typeSpeedSelect) {
-    dom.typeSpeedSelect.value = state.typeSpeed;
-    dom.typeSpeedSelect.addEventListener('change', (e) => {
-      state.typeSpeed = e.target.value;
-      localStorage.setItem('undercurrent_type_speed', state.typeSpeed);
-    });
-  }
-
-  // 4. 雨夜氛圍音效開關
-  if (dom.ambienceToggleBtn) dom.ambienceToggleBtn.addEventListener('click', toggleRainAmbience);
-
-  // 5. 歷史章節紀錄 Log & 小說匯出
-  if (dom.openHistoryBtn) dom.openHistoryBtn.addEventListener('click', openHistoryModal);
-  if (dom.closeHistoryBtn) dom.closeHistoryBtn.addEventListener('click', closeHistoryModal);
-  if (dom.exportNovelBtn) dom.exportNovelBtn.addEventListener('click', exportFullNovelText);
-
-  
   // 登入 / 註冊 Tab 切換
   if (dom.tabLoginBtn && dom.tabRegisterBtn) {
     dom.tabLoginBtn.addEventListener('click', () => {
-      dom.tabLoginBtn.className = 'flex-1 py-2.5 rounded-md bg-brand-gold text-slate-950 transition font-bold';
-      dom.tabRegisterBtn.className = 'flex-1 py-2.5 rounded-md text-slate-400 hover:text-white transition font-bold';
+      dom.tabLoginBtn.className = 'flex-1 py-2.5 rounded-md bg-brand-gold text-slate-950 transition font-bold cursor-pointer';
+      dom.tabRegisterBtn.className = 'flex-1 py-2.5 rounded-md text-slate-400 hover:text-white transition font-bold cursor-pointer';
       if (dom.loginForm) dom.loginForm.style.display = 'block';
       if (dom.registerForm) dom.registerForm.style.display = 'none';
     });
 
     dom.tabRegisterBtn.addEventListener('click', () => {
-      dom.tabRegisterBtn.className = 'flex-1 py-2.5 rounded-md bg-brand-gold text-slate-950 transition font-bold';
-      dom.tabLoginBtn.className = 'flex-1 py-2.5 rounded-md text-slate-400 hover:text-white transition font-bold';
+      dom.tabRegisterBtn.className = 'flex-1 py-2.5 rounded-md bg-brand-gold text-slate-950 transition font-bold cursor-pointer';
+      dom.tabLoginBtn.className = 'flex-1 py-2.5 rounded-md text-slate-400 hover:text-white transition font-bold cursor-pointer';
       if (dom.registerForm) dom.registerForm.style.display = 'block';
       if (dom.loginForm) dom.loginForm.style.display = 'none';
     });
@@ -362,14 +377,8 @@ function setupEventListeners() {
     });
   }
 
-  if (dom.logoutBtn) dom.logoutBtn.addEventListener('click', handleLogout);
-  if (dom.homeLogoutBtn) dom.homeLogoutBtn.addEventListener('click', handleLogout);
-  if (dom.homeDeleteAccountBtn) dom.homeDeleteAccountBtn.addEventListener('click', handleDeleteAccount);
-  if (dom.homeClearAllDataBtn) dom.homeClearAllDataBtn.addEventListener('click', clearAllLocalGameData);
-
-
-  // 7. 創角彈窗控制與設定檔
-  if (dom.openCreateCharBtn) dom.openCreateCharBtn.addEventListener('click', () => { dom.charCreationModal.style.display = 'flex'; });
+  // 創角彈窗控制與設定檔
+  if (dom.openCreateCharBtn) dom.openCreateCharBtn.addEventListener('click', openCharacterCreationModal);
   if (dom.closeModalBtn) dom.closeModalBtn.addEventListener('click', () => { dom.charCreationModal.style.display = 'none'; });
 
   if (dom.profilePresetsSelect) dom.profilePresetsSelect.addEventListener('change', (e) => loadProfilePresetIntoForm(e.target.value));
@@ -378,14 +387,6 @@ function setupEventListeners() {
   if (dom.importProfileJsonInput) dom.importProfileJsonInput.addEventListener('change', importProfileJson);
   if (dom.deleteProfilePresetBtn) dom.deleteProfilePresetBtn.addEventListener('click', deleteSelectedProfilePreset);
 
-  document.querySelectorAll('.preset-scenario-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const text = e.target.getAttribute('data-text');
-      const textarea = document.getElementById('form-custom-scenario');
-      if (textarea) textarea.value = text;
-    });
-  });
-
   if (dom.charCreationForm) {
     dom.charCreationForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -393,21 +394,22 @@ function setupEventListeners() {
     });
   }
 
-  // 8. 側邊狀態抽屜
+  // 側邊狀態抽屜
   if (dom.openDrawerBtn) dom.openDrawerBtn.addEventListener('click', openDrawer);
   if (dom.closeDrawerBtn) dom.closeDrawerBtn.addEventListener('click', closeDrawer);
   if (dom.drawerBackdrop) dom.drawerBackdrop.addEventListener('click', closeDrawer);
+  if (dom.gameplayDrawerBtn) dom.gameplayDrawerBtn.addEventListener('click', openDrawer);
+  if (dom.gameplayQuickSaveBtn) dom.gameplayQuickSaveBtn.addEventListener('click', () => saveGameStateToSlot('1'));
 
-  // 9. 遊戲存檔槽按鈕 (Slot 1, 2, 3)
-  document.querySelectorAll('.save-slot-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => saveGameStateToSlot(e.target.getAttribute('data-slot')));
-  });
-  document.querySelectorAll('.load-slot-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => loadGameStateFromSlot(e.target.getAttribute('data-slot')));
-  });
-  if (dom.quickSaveBtn) dom.quickSaveBtn.addEventListener('click', () => saveGameStateToSlot('1'));
+  // 中止與重試
+  if (dom.abortGenerationBtn) dom.abortGenerationBtn.addEventListener('click', handleAbortGeneration);
+  if (dom.retryTurnBtn) dom.retryTurnBtn.addEventListener('click', handleRetryLastTurn);
+  if (dom.dismissErrorBtn) dom.dismissErrorBtn.addEventListener('click', () => { dom.errorRecoveryBanner.style.display = 'none'; });
 
-  // 10. 自訂行動
+  // 卷末換窗
+  if (dom.rebaseActBtn) dom.rebaseActBtn.addEventListener('click', handleActRebase);
+
+  // 自訂行動
   if (dom.submitCustomBtn) {
     dom.submitCustomBtn.addEventListener('click', () => {
       const customText = (dom.customActionInput.value || '').trim();
@@ -419,8 +421,7 @@ function setupEventListeners() {
 
   if (dom.customActionInput) {
     dom.customActionInput.addEventListener('keydown', (e) => {
-      // 避免中文輸入法選字確認時按 Enter 誤觸送出 (isComposing / keyCode 229)
-      if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
         e.preventDefault();
         const customText = (dom.customActionInput.value || '').trim();
         if (!customText) return;
@@ -428,221 +429,6 @@ function setupEventListeners() {
         dom.customActionInput.value = '';
       }
     });
-  }
-
-  // 11. 卷末換窗
-  if (dom.rebaseActBtn) dom.rebaseActBtn.addEventListener('click', handleActRebase);
-
-  // 12. 儲存後端 API 設定
-  if (dom.saveSettingsBtn) {
-    dom.saveSettingsBtn.addEventListener('click', () => {
-      const url = (dom.apiUrlInput.value || '').trim();
-      state.gasApiUrl = url;
-      localStorage.setItem('epilogue_gas_url', url);
-      alert('已更新 Google Apps Script 後端網址！');
-    });
-  }
-}
-
-// ==========================================
-// 1. 重新生成、悔棋與中止控制
-// ==========================================
-
-function handleAbortGeneration() {
-  if (state.currentAbortController) {
-    state.currentAbortController.abort();
-    state.currentAbortController = null;
-  }
-  hideLoading();
-  triggerHaptic([30, 20]);
-  alert('【已中止生成】已安全截停本次 API 呼叫，恢復為上一狀態。');
-}
-
-function handleRegenerateTurn() {
-  if (!state.lastChoicePayload) {
-    alert('目前沒有可重新生成的抉擇紀錄！');
-    return;
-  }
-  if (!confirm('確定要讓主筆作家重新演繹這一個回合的故事嗎？')) return;
-
-  if (state.previousStateSnapshot) {
-    state.saveState = JSON.parse(JSON.stringify(state.previousStateSnapshot.saveState));
-  }
-  
-  if (state.chapterHistoryList.length > 0) {
-    state.chapterHistoryList.pop();
-    localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
-  }
-
-  const payload = state.lastChoicePayload;
-  makeChoice(payload.choiceId, payload.customInput, true);
-}
-
-function handleRewindTurn() {
-  if (!state.previousStateSnapshot || state.chapterHistoryList.length <= 1) {
-    alert('已是開局第一回，無法再向前悔棋！');
-    return;
-  }
-  if (!confirm('確定要【悔棋】回退到上一回合嗎？您可以重新輸入或調整選擇。')) return;
-
-  state.saveState = JSON.parse(JSON.stringify(state.previousStateSnapshot.saveState));
-  state.chapterData = JSON.parse(JSON.stringify(state.previousStateSnapshot.chapterData));
-  
-  state.chapterHistoryList.pop();
-  localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
-
-  if (state.lastChoicePayload && state.lastChoicePayload.customInput) {
-    dom.customActionInput.value = state.lastChoicePayload.customInput;
-  }
-
-  renderStoryStream(state.chapterData);
-  renderSaveState();
-  triggerHaptic([30, 30]);
-  alert('【悔棋成功】已為您回退至上一回合，請重新進行抉擇！');
-}
-
-function handleRetryLastTurn() {
-  dom.errorRecoveryBanner.style.display = 'none';
-  if (state.lastChoicePayload) {
-    makeChoice(state.lastChoicePayload.choiceId, state.lastChoicePayload.customInput);
-  } else {
-    initializeStory();
-  }
-}
-
-// ==========================================
-// 2. 伺服器冷卻與排隊倒數管理 (RPM=5)
-// ==========================================
-
-function startServerCooldown(durationSec = 12) {
-  state.isCooldown = true;
-  let remaining = durationSec;
-
-  if (state.cooldownTimer) clearInterval(state.cooldownTimer);
-
-  dom.serverStatusBadge.className = 'text-[11px] bg-amber-950/40 text-amber-300 border border-amber-800/30 px-2 py-0.5 rounded font-mono flex items-center gap-1';
-  dom.serverStatusText.textContent = `佇列冷卻: ${remaining}s`;
-
-  state.cooldownTimer = setInterval(() => {
-    remaining--;
-    if (remaining > 0) {
-      dom.serverStatusText.textContent = `佇列冷卻: ${remaining}s`;
-    } else {
-      clearInterval(state.cooldownTimer);
-      state.isCooldown = false;
-      dom.serverStatusBadge.className = 'text-[11px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30 px-2 py-0.5 rounded font-mono flex items-center gap-1';
-      dom.serverStatusText.textContent = '伺服器通暢';
-    }
-  }, 1000);
-}
-
-// ==========================================
-// 3. 閱讀偏好設定（字級 & 主題）
-// ==========================================
-
-function applyReadingPreferences() {
-  if (document.documentElement && document.documentElement.style) {
-    document.documentElement.style.setProperty('--reader-font-size', `${state.fontSizePx}px`);
-  }
-  setTheme(state.theme);
-}
-
-function adjustFontSize(delta) {
-  state.fontSizePx = Math.min(26, Math.max(14, state.fontSizePx + delta * 2));
-  if (document.documentElement && document.documentElement.style) {
-    document.documentElement.style.setProperty('--reader-font-size', `${state.fontSizePx}px`);
-  }
-  localStorage.setItem('undercurrent_font_size', state.fontSizePx);
-}
-
-function setTheme(themeName) {
-  state.theme = themeName;
-  localStorage.setItem('undercurrent_theme', themeName);
-  document.body.classList.remove('theme-parchment', 'theme-navy');
-  if (themeName === 'parchment') document.body.classList.add('theme-parchment');
-  if (themeName === 'navy') document.body.classList.add('theme-navy');
-}
-
-// ==========================================
-// 4. 雨夜氛圍音效 (Web Audio API Synthesizer)
-// ==========================================
-
-function toggleRainAmbience() {
-  if (state.isRainPlaying) {
-    stopRainAmbience();
-  } else {
-    startRainAmbience();
-  }
-}
-
-function startRainAmbience() {
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-
-    const bufferSize = ctx.sampleRate * 2;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      b0 = 0.99886 * b0 + white * 0.0555179;
-      b1 = 0.99332 * b1 + white * 0.0750759;
-      b2 = 0.96900 * b2 + white * 0.1538520;
-      b3 = 0.86650 * b3 + white * 0.3104856;
-      b4 = 0.55000 * b4 + white * 0.5329522;
-      b5 = -0.7616 * b5 - white * 0.0168980;
-      data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.04;
-      b6 = white * 0.115926;
-    }
-
-    const noiseNode = ctx.createBufferSource();
-    noiseNode.buffer = buffer;
-    noiseNode.loop = true;
-
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 1000;
-
-    const gainNode = ctx.createGain();
-    gainNode.gain.setValueAtTime(0.35, ctx.currentTime);
-
-    noiseNode.connect(filter);
-    filter.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    noiseNode.start();
-    state.rainAudio = { ctx, noiseNode, gainNode };
-    state.isRainPlaying = true;
-
-    if (dom.ambienceIcon) dom.ambienceIcon.textContent = '🌧️';
-    if (dom.ambienceLabel) dom.ambienceLabel.textContent = '雨聲: 開';
-    if (dom.ambienceToggleBtn) dom.ambienceToggleBtn.classList.add('text-brand-gold', 'border-brand-gold/60');
-  } catch (e) {
-    console.warn('音效啟動提示:', e);
-  }
-}
-
-function stopRainAmbience() {
-  if (state.rainAudio) {
-    try {
-      state.rainAudio.noiseNode.stop();
-      state.rainAudio.ctx.close();
-    } catch (e) {}
-    state.rainAudio = null;
-  }
-  state.isRainPlaying = false;
-  if (dom.ambienceIcon) dom.ambienceIcon.textContent = '🌧';
-  if (dom.ambienceLabel) dom.ambienceLabel.textContent = '雨聲: 關';
-  if (dom.ambienceToggleBtn) dom.ambienceToggleBtn.classList.remove('text-brand-gold', 'border-brand-gold/60');
-}
-
-function triggerHaptic(pattern) {
-  if (navigator && navigator.vibrate) {
-    try {
-      navigator.vibrate(pattern || [30, 20, 40]);
-    } catch (e) {}
   }
 }
 
@@ -876,7 +662,9 @@ function renderStoryStream(activeChapter) {
 
   // 平滑滾動至最新章節頂部
   setTimeout(() => {
-    activeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (activeSection && typeof activeSection.scrollIntoView === 'function') {
+      activeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }, 100);
 }
 
@@ -1304,51 +1092,6 @@ function getCustomPresets() {
   }
 }
 
-
-function openCharacterCreationModal() {
-  if (dom.charCreationModal) {
-    dom.charCreationModal.style.display = 'flex';
-    loadSavedProfilePresets();
-    // Default preset selection if empty
-    const currentProfile = getActivePlayerProfile();
-    if (currentProfile && currentProfile.name) {
-      document.getElementById('form-player-name').value = currentProfile.name;
-      document.getElementById('form-player-gender').value = currentProfile.gender || '女';
-      document.getElementById('form-player-age').value = currentProfile.age || '24';
-      document.getElementById('form-player-profession').value = currentProfile.profession || '';
-      document.getElementById('form-player-background').value = currentProfile.background || '';
-      document.getElementById('form-player-appearance').value = currentProfile.appearance || '';
-      document.getElementById('form-player-taboos').value = currentProfile.taboos || '無';
-      document.getElementById('form-target-lead').value = currentProfile.targetLead || '修羅場';
-      document.getElementById('form-allow-r18').checked = !!currentProfile.allowR18;
-      document.getElementById('form-custom-scenario').value = currentProfile.customScenario || '';
-    }
-  }
-}
-
-function getActivePlayerProfile() {
-  if (state.saveState?.meta?.playerProfile?.name) {
-    return state.saveState.meta.playerProfile;
-  }
-  try {
-    const raw = localStorage.getItem('undercurrent_current_player_profile');
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
-  return {
-    name: '楊慕璃',
-    gender: '女',
-    age: '24',
-    profession: '弘楊集團公關總監 · 瑾和基金會執行長',
-    background: '身為楊家三房獨生女，在權謀風暴中憑藉智慧與魅力遊走於各方勢力之間',
-    appearance: '素雅長裙、微濕自然捲髮、清甜體香',
-    taboos: '無特定雷區',
-    targetLead: '修羅場',
-    targetLeadName: '修羅場',
-    allowR18: true,
-    customScenario: ''
-  };
-}
-
 function loadSavedProfilePresets() {
   const custom = getCustomPresets();
   const select = dom.profilePresetsSelect;
@@ -1372,6 +1115,64 @@ function loadSavedProfilePresets() {
   });
 }
 
+
+
+function getActivePlayerProfile() {
+  if (state.saveState?.meta?.playerProfile?.name) {
+    return state.saveState.meta.playerProfile;
+  }
+  try {
+    const raw = localStorage.getItem('undercurrent_current_player_profile');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return {
+    name: '楊慕璃',
+    gender: '女',
+    age: '24',
+    profession: '弘楊集團公關總監 · 瑾和文教基金會執行長',
+    background: '台大法律/北大犯罪所畢業。身為楊家三房獨生女，在權謀風暴中憑藉智慧與魅力遊走於各方勢力之間。',
+    appearance: '及肩黑髮帶自然捲，美麗杏眼，白皙皮膚，精緻體態與若有似無的清甜體香，常著淡雅長裙或素雅洋裝',
+    taboos: '禁止暴力侮辱，無特定雷區',
+    targetLead: '修羅場',
+    targetLeadName: '修羅場',
+    allowR18: true,
+    customScenario: '深夜德行法律事務所頂層制策室，暴雨傾盆，我代表弘楊集團前來與徐令謙商討併購暗帳，豈料士林地檢署檢察官韓正寰反手封門步步逼近……'
+  };
+}
+
+function setFormValue(id, val) {
+  const el = document.getElementById(id);
+  if (el) {
+    if (el.type === 'checkbox') {
+      el.checked = !!val;
+    } else {
+      el.value = val !== undefined && val !== null ? val : '';
+    }
+  }
+}
+
+function openCharacterCreationModal() {
+  if (dom.charCreationModal) {
+    dom.charCreationModal.style.display = 'flex';
+    loadSavedProfilePresets();
+    
+    // 載入當前角色設定
+    const profile = getActivePlayerProfile();
+    if (profile) {
+      setFormValue('form-player-name', profile.name || '楊慕璃');
+      setFormValue('form-player-gender', profile.gender || '女');
+      setFormValue('form-player-age', profile.age || '24');
+      setFormValue('form-player-profession', profile.profession || '弘楊集團公關總監 · 瑾和文教基金會執行長');
+      setFormValue('form-player-background', profile.background || '台大法律/北大犯罪所畢業。身為楊家三房獨生女，在權謀風暴中憑藉智慧與魅力遊走於各方勢力之間。');
+      setFormValue('form-player-appearance', profile.appearance || '及肩黑髮帶自然捲，美麗杏眼，白皙皮膚，精緻體態與若有似無的清甜體香，常著淡雅長裙或素雅洋裝');
+      setFormValue('form-player-taboos', profile.taboos || '禁止暴力侮辱，無特定雷區');
+      setFormValue('form-target-lead', profile.targetLead || '修羅場');
+      setFormValue('form-allow-r18', profile.allowR18 !== false);
+      setFormValue('form-custom-scenario', profile.customScenario || '深夜德行法律事務所頂層制策室，暴雨傾盆，我代表弘楊集團前來與徐令謙商討併購暗帳，豈料士林地檢署檢察官韓正寰反手封門步步逼近……');
+    }
+  }
+}
+
 function loadProfilePresetIntoForm(presetKey) {
   let profile = DEFAULT_PRESETS[presetKey];
   if (!profile) {
@@ -1380,17 +1181,18 @@ function loadProfilePresetIntoForm(presetKey) {
   }
   if (!profile) return;
 
-  document.getElementById('form-player-name').value = profile.name || '';
-  document.getElementById('form-player-gender').value = profile.gender || '女';
-  document.getElementById('form-player-age').value = profile.age || '25';
-  document.getElementById('form-player-profession').value = profile.profession || '';
-  document.getElementById('form-player-background').value = profile.background || '';
-  document.getElementById('form-player-appearance').value = profile.appearance || '';
-  document.getElementById('form-player-taboos').value = profile.taboos || '無';
-  document.getElementById('form-target-lead').value = profile.targetLead || '01_徐令謙';
-  document.getElementById('form-allow-r18').checked = !!profile.allowR18;
-  document.getElementById('form-custom-scenario').value = profile.customScenario || '';
+  setFormValue('form-player-name', profile.name);
+  setFormValue('form-player-gender', profile.gender || '女');
+  setFormValue('form-player-age', profile.age || '24');
+  setFormValue('form-player-profession', profile.profession);
+  setFormValue('form-player-background', profile.background);
+  setFormValue('form-player-appearance', profile.appearance);
+  setFormValue('form-player-taboos', profile.taboos || '無');
+  setFormValue('form-target-lead', profile.targetLead || '01_徐令謙');
+  setFormValue('form-allow-r18', profile.allowR18 !== false);
+  setFormValue('form-custom-scenario', profile.customScenario || '');
 }
+
 
 function saveCurrentFormAsPreset() {
   const name = document.getElementById('form-player-name').value.trim();
@@ -2718,7 +2520,13 @@ async function callBackendApi(action, payload) {
     signal: state.currentAbortController.signal
   });
 
-  return await response.json();
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (parseErr) {
+    console.warn(`[GAS API] 後端回傳非 JSON 資料 (可能需要授權或部署更新):`, text.slice(0, 150));
+    throw new Error('伺服器需要授權或正在維護中');
+  }
 }
 
 function showLoading(text, subtext) {
