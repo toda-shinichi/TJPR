@@ -2368,56 +2368,60 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     '若伺服器多人排隊中，系統將自動依序處理，請稍候……'
   );
 
-  dom.errorRecoveryBanner.style.display = 'none';
+  if (dom.errorRecoveryBanner) dom.errorRecoveryBanner.style.display = 'none';
   let generatedSuccessfully = false;
 
-  if (state.gasApiUrl) {
-    try {
-      const res = await callBackendApi('novel/next-turn', {
-        choiceId: choiceId,
-        customInput: customInput,
-        saveState: state.saveState
-      });
+  try {
+    if (state.gasApiUrl) {
+      try {
+        const res = await callBackendApi('novel/next-turn', {
+          choiceId: choiceId,
+          customInput: customInput,
+          saveState: state.saveState
+        });
 
-      if (res && res.success && res.data && res.data.chapter) {
-        state.chapterData = res.data.chapter;
-        state.saveState = res.data.saveState || state.saveState;
-        appendChapterToHistory(res.data.chapter, customInput || choiceId);
-        renderStoryStream(res.data.chapter);
-        renderSaveState();
-        startServerCooldown(12);
-        generatedSuccessfully = true;
+        if (res && res.success && res.data && res.data.chapter) {
+          state.chapterData = res.data.chapter;
+          state.saveState = res.data.saveState || state.saveState;
+          appendChapterToHistory(res.data.chapter, customInput || choiceId);
+          renderStoryStream(res.data.chapter);
+          renderSaveState();
+          startServerCooldown(12);
+          generatedSuccessfully = true;
+        }
+      } catch (e) {
+        console.warn('雲端伺服器請求超時或離線，無縫轉入本地全動態引擎:', e);
       }
-    } catch (e) {
-      console.warn('後端請求處理中轉入動態引擎:', e);
     }
+
+    if (!generatedSuccessfully) {
+      state.saveState = state.saveState || {};
+      state.saveState.turnCount = (state.saveState.turnCount || 1) + 1;
+      
+      const profile = getActivePlayerProfile();
+      state.saveState.meta = state.saveState.meta || {};
+      state.saveState.meta.playerProfile = profile;
+      localStorage.setItem('undercurrent_current_save_state', JSON.stringify(state.saveState));
+
+      const nextStory = generateDynamicTurnChapter(
+        state.saveState.turnCount,
+        choiceId,
+        customInput,
+        profile
+      );
+
+      state.chapterData = nextStory;
+      appendChapterToHistory(nextStory, customInput || choiceId);
+      renderStoryStream(nextStory);
+      renderSaveState();
+      startServerCooldown(12);
+    }
+  } catch (err) {
+    console.error('makeChoice execution error:', err);
+    alert('推進章節時發生錯誤: ' + err.message);
+  } finally {
+    hideLoading();
   }
-
-  if (!generatedSuccessfully) {
-    state.saveState = state.saveState || {};
-    state.saveState.turnCount = (state.saveState.turnCount || 1) + 1;
-    
-    // 嚴格確保玩家身分一致（絕不跳針或混淆）
-    const profile = getActivePlayerProfile();
-    state.saveState.meta = state.saveState.meta || {};
-    state.saveState.meta.playerProfile = profile;
-    localStorage.setItem('undercurrent_current_save_state', JSON.stringify(state.saveState));
-
-    const nextStory = generateDynamicTurnChapter(
-      state.saveState.turnCount,
-      choiceId,
-      customInput,
-      profile
-    );
-
-    state.chapterData = nextStory;
-    appendChapterToHistory(nextStory, customInput || choiceId);
-    renderStoryStream(nextStory);
-    renderSaveState();
-    startServerCooldown(12);
-  }
-
-  hideLoading();
 }
 
 async function handleActRebase() {
@@ -2504,6 +2508,11 @@ function renderSaveState() {
 
 async function callBackendApi(action, payload) {
   state.currentAbortController = new AbortController();
+  
+  // 設置 8 秒超時保護，避免網路緩慢時轉圈卡死
+  const timeoutId = setTimeout(() => {
+    if (state.currentAbortController) state.currentAbortController.abort();
+  }, 8000);
 
   const body = Object.assign({
     action: action,
@@ -2511,21 +2520,22 @@ async function callBackendApi(action, payload) {
     userId: state.userId
   }, payload);
 
-  const response = await fetch(state.gasApiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/plain;charset=utf-8'
-    },
-    body: JSON.stringify(body),
-    signal: state.currentAbortController.signal
-  });
-
-  const text = await response.text();
   try {
+    const response = await fetch(state.gasApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
+      body: JSON.stringify(body),
+      signal: state.currentAbortController.signal
+    });
+
+    clearTimeout(timeoutId);
+    const text = await response.text();
     return JSON.parse(text);
-  } catch (parseErr) {
-    console.warn(`[GAS API] 後端回傳非 JSON 資料 (可能需要授權或部署更新):`, text.slice(0, 150));
-    throw new Error('伺服器需要授權或正在維護中');
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
   }
 }
 
