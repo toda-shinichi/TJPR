@@ -598,8 +598,8 @@ function updateUserBadgeUI() {
 const LLM_CONFIG = {
   API_URL: 'https://api.banana2556.com/v1/chat/completions',
   API_KEY: 'sk-TcKczU9MQ5abSWYrF51eU85aQjZV6IzPqeypYYn9zVDoSram',
-  PRIMARY_MODEL: 'gemini-3.6-flash',
-  FALLBACK_MODEL: 'aion-3.0',
+  PRIMARY_MODEL: 'aion-rp-1.0',
+  FALLBACK_MODEL: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
   TEMPERATURE: 0.88
 };
 
@@ -662,11 +662,10 @@ async function waitForRpmCooldown() {
  */
 async function generateStoryFromLLM(systemPrompt, userPrompt) {
   const models = [
-    'gemini-3.6-flash',
-    'aion-3.0',
-    'gemini-3.6-flash-lite',
-    'mercury-2',
-    'mistral-large-3'
+    'aion-rp-1.0',
+    'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+    'gpt-5.6-luna',
+    'aion-3.0'
   ];
 
   await waitForRpmCooldown();
@@ -763,32 +762,32 @@ function buildFirstTurnPrompt(profile) {
     targetLeadPrompt = `【攻略男主】${profile.targetLeadName || '徐令謙'}`;
   }
 
-  const systemPrompt = `你是一位頂級華語長篇懸疑權謀與浪漫互動小說家與RPG核心引擎。
-請遵守以下文學創作指引：
+  const systemPrompt = `你是一位專精成人女性情感小說與權謀黑幫的頂級角色扮演敘事者與RPG核心引擎。
+請遵守《情慾文學指引》與《系統核心指令》：
 1. 【嚴格身分防火牆】：
    - 徐令謙是「黑道玄辰幫二把手 · 天裕會中樞 · 幕後制策者」，絕對不是檢察官或警察！（士林地檢署檢察官是韓正寰）。
    - 韓正寰是「士林地檢署主任檢察官 · 白日判官」。
    - 徐承勳是「中華民國副總統」。
    絕不可混淆男主身分！
-2. 風格：極致心理張力、高位推拉、五感具象描寫（體溫微熱、香氣、眼神壓迫、近身肢體接觸、氣息交纏）、權謀殺伐、多方博弈，使用純台灣繁體中文。
+2. 風格與成人情慾（R-18）：極致性張力、高位推拉、寫實直白描寫肉體交纏、支配與臣服、五感具象（體溫、喘息、香氣、眼神壓迫、肢體撫摸）、權謀殺伐與多方博弈，使用純台灣繁體中文。
 3. 每一次生成完全原創、字數達 1,000~1,500 字，絕不套用固定模板。
 4. 輸出必須為合法純 JSON 格式（不要包含任何 markdown 代碼標記）：
 {
   "chapterTitle": "第 1 回．【原創吸睛標題】",
-  "prose": "【1000~1500字極具張力與權謀拉扯的長篇小說正文】",
+  "prose": "【1000~1500字極具性張力、權謀拉扯與成人情慾描寫的長篇小說正文】",
   "statusPanel": {
     "timeLocation": "具體時空地點（如：2026年5月12日 21:30 台北市士林區...）",
-    "tension": "張力值 [80%]",
-    "intoxication": "微醺度 [25%]",
+    "tension": "張力值 [85%]",
+    "intoxication": "微醺度 [35%]",
     "outfit": "角色著裝神態（若玩家寫隨機，請依職業為女主原創專屬高級迷人穿搭、體香與神態）",
-    "interaction": "肢體與眼神互動狀態（包含極限物理距離、微表情與觸摸）",
+    "interaction": "肢體與眼神互動狀態（包含極限物理距離、微表情、體溫與觸摸）",
     "inventory": "隨身攜帶之關鍵底牌或隨身碟",
     "rumors": "台北政媒黑白兩道最新暗流傳聞"
   },
   "choices": [
     { "id": "A", "label": "[A] 【選項A完整行動與對白描述】", "risk": "low", "hint": "策略提示" },
     { "id": "B", "label": "[B] 【選項B完整行動與對白描述】", "risk": "medium", "hint": "策略提示" },
-    { "id": "C", "label": "[C] 【選項C完整行動與對白描述】", "risk": "high", "hint": "策略提示" }
+    { "id": "C", "label": "[C] 【選項C情慾暗示/主動靠近/破局點】", "risk": "high", "hint": "策略提示" }
   ]
 }`;
 
@@ -800,6 +799,7 @@ function buildFirstTurnPrompt(profile) {
 - 身世背景：${profile.background || '遊走於台北政商黑白兩道'}
 - 外貌特徵：${profile.appearance || '隨機（請替我原創專屬高級迷人穿搭、體香與神態）'}
 - 禁忌標籤：${profile.taboos || '無'}
+- 成人情慾模式 (R-18)：開啟（包含露骨細緻的體溫、喘息、支配與肢體性張力）
 
 ${targetLeadPrompt}
 
@@ -814,10 +814,10 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
   const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
   const recentHistory = (historyList || []).slice(-2).map((h, i) => `【第 ${h.turn || (i + 1)} 回：${h.chapterTitle || '前篇'}】\n玩家抉擇：${h.chosenLabel || '無'}\n情節摘要：${(h.prose || '').slice(0, 300)}...`).join('\n\n');
 
-  const systemPrompt = `你是一位頂級華語長篇懸疑權謀與浪漫互動小說家與RPG核心引擎。
-請遵守以下文學創作指引：
+  const systemPrompt = `你是一位專精成人女性情感小說與權謀黑幫的頂級角色扮演敘事者與RPG核心引擎。
+請遵守《情慾文學指引》與《系統核心指令》：
 1. 嚴格依據玩家剛才執行的最新行動/抉擇，即時推進後續 1,000~1,500 字長篇小說正文。
-2. 描寫要求：極致心理張力、上位者男性佔有欲、五感溫度、氣息交纏、細節肢體碰觸、權謀博弈，使用純台灣繁體中文。
+2. 描寫要求：極致性張力、上位者男性佔有欲、五感溫度、喘息、支配與臣服、細節肢體碰觸、成人情慾拉扯與權謀博弈，使用純台灣繁體中文。
 3. 絕不重複前篇標題與對話，每次推進都是全新事件與衝突升級！
 4. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼標記）：
 {
@@ -835,11 +835,12 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
   "choices": [
     { "id": "A", "label": "[A] 【選項A完整行動與對白描述】", "risk": "low", "hint": "提示" },
     { "id": "B", "label": "[B] 【選項B完整行動與對白描述】", "risk": "medium", "hint": "提示" },
-    { "id": "C", "label": "[C] 【選項C完整行動與對白描述】", "risk": "high", "hint": "提示" }
+    { "id": "C", "label": "[C] 【選項C情慾暗示/破局點】", "risk": "high", "hint": "提示" }
   ]
 }`;
 
   const userPrompt = `【玩家角色】姓名：${profile.name}，職業：${profile.profession}，攻略模式：${isShura ? '全勢力修羅場' : profile.targetLeadName}
+- 成人情慾模式 (R-18)：開啟
 【前情脈絡】
 ${recentHistory || '正處於首次交鋒對峙中'}
 

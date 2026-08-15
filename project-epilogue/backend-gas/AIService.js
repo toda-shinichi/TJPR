@@ -198,9 +198,9 @@ var AIService = (function() {
     ];
 
     var narratorModels = [
-      CONFIG.MODELS.NARRATOR.PRIMARY || 'mistral-large-3',
-      CONFIG.MODELS.NARRATOR.FALLBACK || 'gemini-3.6-flash',
-      CONFIG.MODELS.NARRATOR.FALLBACK_2 || 'deepseek-v4-pro',
+      CONFIG.MODELS.NARRATOR.PRIMARY || 'aion-rp-1.0',
+      CONFIG.MODELS.NARRATOR.FALLBACK || 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+      CONFIG.MODELS.NARRATOR.FALLBACK_2 || 'gpt-5.6-luna',
       CONFIG.MODELS.NARRATOR.FALLBACK_3 || 'aion-3.0'
     ];
 
@@ -260,10 +260,8 @@ var AIService = (function() {
     ];
 
     var auditorModels = [
-      CONFIG.MODELS.AUDITOR.PRIMARY || 'gemini-3.6-flash',
-      CONFIG.MODELS.AUDITOR.FALLBACK_1 || 'gemini-3.6-flash-lite',
-      CONFIG.MODELS.AUDITOR.FALLBACK_2 || 'deepseek-v4-flash',
-      CONFIG.MODELS.AUDITOR.FALLBACK_3 || 'mercury-2'
+      CONFIG.MODELS.AUDITOR.PRIMARY || 'aion-3.0-mini',
+      CONFIG.MODELS.AUDITOR.FALLBACK_1 || 'mistral-nemo'
     ];
 
     var lastError = null;
