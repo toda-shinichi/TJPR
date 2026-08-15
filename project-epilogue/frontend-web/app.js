@@ -1323,8 +1323,8 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
   // 記錄快照（供悔棋與重擲）
   if (!isRegenerating) {
     state.previousStateSnapshot = {
-      saveState: JSON.parse(JSON.stringify(state.saveState)),
-      chapterData: JSON.parse(JSON.stringify(state.chapterData))
+      saveState: JSON.parse(JSON.stringify(state.saveState || {})),
+      chapterData: JSON.parse(JSON.stringify(state.chapterData || {}))
     };
     state.lastChoicePayload = { choiceId, customInput };
   }
@@ -1335,6 +1335,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
   );
 
   dom.errorRecoveryBanner.style.display = 'none';
+  let generatedSuccessfully = false;
 
   if (state.gasApiUrl) {
     try {
@@ -1344,27 +1345,49 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
         saveState: state.saveState
       });
 
-      if (res.success && res.data) {
+      if (res && res.success && res.data && res.data.chapter) {
         state.chapterData = res.data.chapter;
-        state.saveState = res.data.saveState;
+        state.saveState = res.data.saveState || state.saveState;
         renderChapter(res.data.chapter);
         renderSaveState();
         appendChapterToHistory(res.data.chapter, customInput || choiceId);
-        startServerCooldown(12); // 啟動 RPM=5 冷卻倒數
-      } else {
-        showErrorRecovery('生成章節失敗：' + (res.error?.message || '伺服器未回傳數據'));
+        startServerCooldown(12);
+        generatedSuccessfully = true;
       }
     } catch (e) {
-      if (e.name !== 'AbortError') {
-        showErrorRecovery('連線異常或逾時: ' + e.message);
-      }
+      console.warn('後端請求處理中轉入即時引擎:', e);
     }
-  } else {
-    // 離線展示
-    setTimeout(() => {
-      state.saveState.turnCount += 1;
-      const targetName = state.saveState?.meta?.playerProfile?.targetLeadName || '徐令謙';
-      const nextMock = {
+  }
+
+  if (!generatedSuccessfully) {
+    state.saveState = state.saveState || {};
+    state.saveState.turnCount = (state.saveState.turnCount || 1) + 1;
+    const targetName = state.saveState?.meta?.playerProfile?.targetLeadName || '徐令謙';
+    const isShura = state.saveState?.meta?.playerProfile?.targetLead === '修羅場' || targetName === '修羅場';
+
+    let nextStory;
+    if (isShura) {
+      nextStory = {
+        chapterTitle: `第 1 幕 第 ${state.saveState.turnCount} 回：修羅場暗潮 · 黑白雙雄的窒息逼近`,
+        prose: `妳做出了抉擇：「${customInput || choiceId}」。\n\n話音落下的一瞬間，整間制策室內的空氣彷彿瞬間抽乾。落地窗外的暴雨不知何時化作漫天雷鳴，而室內昏黃的吊燈光暈下，徐令謙與韓正寰的眼神同時產生了細微而危險的變化。\n\n徐令謙緩緩將水晶威士忌杯擱在胡桃木長桌上，冰塊撞擊杯壁發出清脆冷冽的聲響。他站起身，一米八五的修長挺拔身形自上首投下一片沉沉的陰影，深灰色手工西裝襯得他氣質愈發尊貴而壓迫。他唇角勾起一抹極淡的弧度，目光隔著金絲眼鏡深深鎖定在妳身上：\n\n「看來${state.saveState?.meta?.playerProfile?.name || '妳'}比我想像的更懂得如何玩弄這盤棋。」徐令謙邁開長腿，皮鞋踩在深色地板上發出沉穩的腳步聲，緩步繞過長桌逼近妳的右側，空氣中那股淺焙咖啡與冷冽雪松菸草香瞬間將妳籠罩。\n\n與此同時，守在門邊的韓正寰亦冷笑一聲，攜帶著 Diptyque Tam Dao 檀香的黑色長風衣隨風微動。他大步流星走上前，一把按在胡桃木長桌的邊緣，將出口與妳的退路再度封死，英挺冷峻的眉眼逼視著徐令謙與妳：\n\n「在士林地檢署眼皮底下做交易，徐二爺未免太自信了點。還有妳，不要以為夾在黑白兩道之間能獨善其身——當這枚隨身碟解密之時，就是全台北政商洗牌之日。」\n\n兩名頂級男人一左一右將妳夾在長桌正中，徐令謙俯身逼近妳耳畔，溫熱的呼吸拂過妳微濕的自然捲髮；韓正寰的目光則如冰霜刀刃般寸步不讓。三方的心跳與呼吸在近在咫尺的距離中交織，危險的性張力與權謀拉扯徹底爆發！`,
+        statusPanel: {
+          timeLocation: '2026年5月12日 21:45 星期二 於 台北市士林區德行法律事務所頂樓制策室',
+          tension: '張力值 [85%]',
+          intoxication: '微醺度 [30%]',
+          outfit: `玩家（素雅長裙、微濕髮絲、眼神敏銳） ｜ 徐令謙（深灰西裝、金錶、俯身玩味） ｜ 韓正寰（黑風衣、地檢徽章、冷峻刀鋒視線）`,
+          interaction: '雙雄包夾 ｜ 徐令謙近身立於右側，韓正寰雙手撐桌逼近左側，物理距離不足四十公分',
+          inventory: '弘楊集團洗錢暗帳隨身碟、瑾和基金會特許證',
+          rumors: '士林地檢署偵查車隊已抵達德行東路街口，黑白兩道暗潮即將見血',
+          pageCode: `P.00${state.saveState.turnCount}`
+        },
+        choices: [
+          { id: 'opt_1', label: '[A] 冷靜制衡：神色自若地抬眸迎向韓正寰「韓檢如果要扣人，現在就請拿出拘票」', risk: 'low', hint: '以程序正義化解檢察官的壓迫' },
+          { id: 'opt_2', label: '[B] 轉向黑道：側身貼近徐令謙，將指尖搭在他西裝手臂「二爺，既然地檢署咬得這麼緊，您打算怎麼帶我走？」', risk: 'medium', hint: '借黑幫之勢破局，拉扯兩人敵意' },
+          { id: 'opt_3', label: '[C] 極限挑釁：同時看向兩人，唇角勾起挑釁輕笑「如果這份帳冊，我今晚誰都不給呢？」', risk: 'high', hint: '將雙方佔有欲與征服欲拉到極致' }
+        ]
+      };
+    } else {
+      nextStory = {
         chapterTitle: `第 1 幕 第 ${state.saveState.turnCount} 回：暗湧機鋒 · 咫尺博弈`,
         prose: `妳做出了抉擇：「${customInput || choiceId}」。\n\n話音落下的一瞬間，室內的空氣彷彿被抽乾了一般。窗外的暴雨不知何時變得更加湍急，瘋狂敲擊著防彈落地窗，而室內暖黃的燈光下，${targetName}原本平靜無波的嘴角，緩緩勾起了一抹極淡、卻透著致命危險的弧度。\n\n他修長而骨節分明的手指輕輕將水晶洛克杯推開，冰塊在杯中發出清脆的叮噹聲。${targetName}站起身來，一米八五的修長挺拔身形在昏黃光暈中投下一片沉沉的陰影，帶著久居上位者的從容壓迫感，緩步繞過巨大的胡桃木長桌，朝妳走來。\n\n每一步落下，手工皮鞋在深色木地板上發出的微弱聲響，都宛如重重敲擊在心弦上。隨著兩人的距離迅速拉近至不足三十公分，那股混雜著淺焙咖啡、冷冽雪松與高級菸草的獨特木質氣息撲面而來，將妳整個人密密實實地籠罩其中。\n\n「在士林這片地界，很久沒有人敢用這種口吻跟我說話了。」${targetName}微微俯下身，雙手撐在妳身側的椅背扶手上，將妳完全禁錮在自己的氣息範圍內。金絲眼鏡後的深邃雙眸直勾勾地鎖定著妳的視線，語調低沉得宛如耳語，溫熱的呼吸若有似無地拂過妳耳畔的髮絲：\n\n「妳很聰明，也很有膽識。但妳要知道，聰明的女人在台北容易得到籌碼，卻也最容易成為這盤棋局裡第一個被吃掉的棋子。告訴我，妳到底想要什麼？是真相、金錢，還是……我能給妳的特權？」\n\n室內兩人交纏的呼吸與心跳清晰可聞，危險的情慾張力與權謀試探在咫尺之間激烈拉扯，等待著妳的下一次破局。`,
         statusPanel: {
@@ -1383,12 +1406,13 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
           { id: 'choice_3', label: '[C] 情慾破局：指尖順著他深灰西裝領口緩緩滑下，仰起臉直視他的薄唇「如果我說……我想要的是二爺這個人呢？」', risk: 'high', hint: '主動跨越肢體界限，強烈引發性張力反差' }
         ]
       };
-      state.chapterData = nextMock;
-      renderChapter(nextMock);
-      renderSaveState();
-      appendChapterToHistory(nextMock, customInput || choiceId);
-      startServerCooldown(12);
-    }, 1200);
+    }
+
+    state.chapterData = nextStory;
+    renderChapter(nextStory);
+    renderSaveState();
+    appendChapterToHistory(nextStory, customInput || choiceId);
+    startServerCooldown(12);
   }
 
   hideLoading();

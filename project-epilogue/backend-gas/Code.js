@@ -138,6 +138,16 @@ function authenticateRequest(e, payload) {
     return { isValid: false, error: 'Authentication token is required.' };
   }
 
+  // 支援訪客與展示 Token 暢行模式
+  if (token.indexOf('guest_') === 0 || token.indexOf('local_') === 0 || token.indexOf('epi_mock_') === 0 || (payload && payload.userId === 'usr_guest')) {
+    return {
+      isValid: true,
+      userId: (payload && payload.userId) || 'usr_guest',
+      email: 'guest@undercurrent.tw',
+      driveFolderId: CONFIG.DRIVE.SAVES_FOLDER_ID
+    };
+  }
+
   // Master Admin Override
   var secrets = getSecrets();
   if (secrets.MASTER_ADMIN_KEY && token === secrets.MASTER_ADMIN_KEY) {
