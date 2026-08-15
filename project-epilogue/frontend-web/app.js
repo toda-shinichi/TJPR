@@ -633,14 +633,54 @@ function parseJsonSafely(rawText) {
   }
 }
 
-async function generateStoryFromLLM(systemPrompt, userPrompt) {
-  const models = [LLM_CONFIG.PRIMARY_MODEL, LLM_CONFIG.FALLBACK_MODEL];
-  let lastError = null;
+let lastRequestTimestamp = 0;
+const MIN_REQUEST_GAP_MS = 12000; // 5 RPM: 60s / 5 = 12s
 
-  for (const model of models) {
+/**
+ * ⚡ 伺服器頻率守衛（Rate Limit Cooldown Protector）
+ */
+async function waitForRpmCooldown() {
+  const now = Date.now();
+  const elapsed = now - lastRequestTimestamp;
+  if (elapsed < MIN_REQUEST_GAP_MS) {
+    let remainingSec = Math.ceil((MIN_REQUEST_GAP_MS - elapsed) / 1000);
+    while (remainingSec > 0) {
+      if (dom.loadingText) {
+        dom.loadingText.textContent = `⚡ 伺服器頻率保護冷卻中（剩餘 ${remainingSec} 秒）……`;
+      }
+      if (dom.loadingSubtext) {
+        dom.loadingSubtext.textContent = '官方 API 限制每分鐘 5 次請求，系統正為您自動排隊，即將於倒數結束後極速生成……';
+      }
+      await new Promise(r => setTimeout(r, 1000));
+      remainingSec--;
+    }
+  }
+}
+
+/**
+ * 核心大模型直接呼叫函數 (極速雙模型 + 429 自癒機制)
+ */
+async function generateStoryFromLLM(systemPrompt, userPrompt) {
+  const models = [
+    LLM_CONFIG.PRIMARY_MODEL || 'mistral-large-3',
+    'gemini-3.6-flash',
+    'deepseek-v4-flash'
+  ];
+
+  await waitForRpmCooldown();
+
+  for (let mIdx = 0; mIdx < models.length; mIdx++) {
+    const model = models[mIdx];
     try {
+      if (dom.loadingText) {
+        dom.loadingText.textContent = `以太筆觸流轉中，AI 主筆作家正在為您現場創作……`;
+      }
+      if (dom.loadingSubtext) {
+        dom.loadingSubtext.textContent = `正由高速模型 [${model}] 現場即時生成 1000~1500 字沉浸式長篇……`;
+      }
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 65000);
+      const timeoutId = setTimeout(() => controller.abort(), 18000); // 18 秒極速容錯
 
       const response = await fetch(LLM_CONFIG.API_URL, {
         method: 'POST',
@@ -650,38 +690,56 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
         },
         body: JSON.stringify({
           model: model,
-          temperature: LLM_CONFIG.TEMPERATURE,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
-          ]
+          ],
+          temperature: LLM_CONFIG.TEMPERATURE,
+          max_tokens: 3500
         }),
         signal: controller.signal
       });
 
       clearTimeout(timeoutId);
+      lastRequestTimestamp = Date.now();
 
-      if (!response.ok) throw new Error(`API status ${response.status}`);
-
-      const resJson = await response.json();
-      if (!resJson.choices || !resJson.choices[0] || !resJson.choices[0].message) {
-        throw new Error('Invalid LLM response body');
+      if (response.status === 429) {
+        console.warn(`[Pure AI] Model ${model} returned 429 Rate Limit. Waiting 12s cooldown...`);
+        let cd = 12;
+        while (cd > 0) {
+          if (dom.loadingText) dom.loadingText.textContent = `⚡ 伺服器頻率冷卻中（剩餘 ${cd} 秒）……`;
+          if (dom.loadingSubtext) dom.loadingSubtext.textContent = '正在為您自動重試，請稍候……';
+          await new Promise(r => setTimeout(r, 1000));
+          cd--;
+        }
+        lastRequestTimestamp = Date.now();
+        continue;
       }
 
-      const rawContent = resJson.choices[0].message.content;
-      const parsedChapter = parseJsonSafely(rawContent);
-
-      if (parsedChapter && parsedChapter.prose && Array.isArray(parsedChapter.choices)) {
-        return parsedChapter;
+      if (!response.ok) {
+        const errText = await response.text();
+        console.warn(`[Pure AI] Model ${model} HTTP ${response.status}: ${errText.slice(0, 100)}`);
+        continue;
       }
-      throw new Error('Parsed JSON missing prose or choices array');
+
+      const data = await response.json();
+      const rawContent = data.choices?.[0]?.message?.content;
+      if (!rawContent) {
+        console.warn(`[Pure AI] Model ${model} returned empty content.`);
+        continue;
+      }
+
+      const parsed = parseJsonSafely(rawContent);
+      if (parsed && parsed.prose) {
+        console.log(`[Pure AI] Successfully generated with model: ${model} (${parsed.prose.length} chars)`);
+        return parsed;
+      }
     } catch (err) {
-      console.warn(`[Pure AI] Model ${model} attempt failed:`, err.message);
-      lastError = err;
+      console.warn(`[Pure AI] Model ${model} attempt error:`, err.message);
     }
   }
 
-  throw lastError || new Error('All LLM generation models failed');
+  throw new Error('所有 AI 創作模型生成逾時或回傳格式異常，請檢查網路連線。');
 }
 
 function buildFirstTurnPrompt(profile) {
