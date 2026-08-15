@@ -614,6 +614,12 @@ function exportFullNovelText() {
 // 6. 📜 連貫長篇小說瀑布流渲染 (Continuous Novel Stream)
 // ==========================================
 
+function cleanProseText(rawProse) {
+  if (!rawProse) return '';
+  // 徹底過濾開頭可能混入的系統破梗語，確保正文 100% 為純文學敘事
+  return rawProse.replace(/^(妳做出了抉擇|你做出了抉擇|妳選擇了|你選擇了)[：:「].*?[」」]\s*(\n\n|\n)?/g, '').trim();
+}
+
 function renderStoryStream(activeChapter) {
   if (!dom.novelStreamContainer) return;
   dom.novelStreamContainer.innerHTML = '';
@@ -627,8 +633,9 @@ function renderStoryStream(activeChapter) {
     const section = document.createElement('section');
     section.className = 'bg-brand-surface/50 border border-brand-border/60 rounded-2xl p-5 sm:p-7 space-y-4 shadow-lg backdrop-blur-sm transition';
 
+    const cleanedProse = cleanProseText(past.prose);
     let paragraphsHtml = '';
-    past.prose.split('\n\n').forEach(pText => {
+    cleanedProse.split('\n\n').forEach(pText => {
       paragraphsHtml += `<p class="mb-4 indent-8 text-slate-300 leading-relaxed">${pText}</p>`;
     });
 
@@ -643,23 +650,25 @@ function renderStoryStream(activeChapter) {
     }
 
     let decisionPill = past.chosenLabel ? `
-      <div class="pt-2 flex items-center gap-2 text-xs">
-        <span class="px-3 py-1 rounded-lg bg-brand-gold/15 text-brand-gold border border-brand-gold/30 font-bold font-serif">
-          👉 關鍵抉擇：${past.chosenLabel}
-        </span>
+      <div class="mb-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-brand-gold/15 text-brand-gold border border-brand-gold/30 text-xs font-bold font-serif">
+        <span>✦ 玩家行動：</span>
+        <span class="text-amber-200 font-sans">${past.chosenLabel}</span>
       </div>
     ` : '';
 
     section.innerHTML = `
       <div class="border-b border-brand-border/40 pb-3">
-        <div class="font-mono text-xs text-brand-gold tracking-widest uppercase bg-brand-gold/10 inline-block px-2 py-0.5 rounded border border-brand-gold/20 mb-1">
-          第 ${past.act || 1} 幕 · 第 ${past.turn || (i + 1)} 回合
+        <div class="flex justify-between items-center mb-1">
+          <div class="font-mono text-xs text-brand-gold tracking-widest uppercase bg-brand-gold/10 inline-block px-2 py-0.5 rounded border border-brand-gold/20">
+            第 ${past.act || 1} 幕 · 第 ${past.turn || (i + 1)} 回合
+          </div>
+          ${past.timestamp ? `<span class="font-mono text-[11px] text-slate-500">${new Date(past.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>` : ''}
         </div>
         <h2 class="font-serif text-xl sm:text-2xl font-black text-slate-100">${past.chapterTitle}</h2>
       </div>
+      ${decisionPill}
       <article class="font-serif text-base sm:text-lg prose-tc select-text">${paragraphsHtml}</article>
       ${statusSummaryHtml}
-      ${decisionPill}
     `;
 
     dom.novelStreamContainer.appendChild(section);
@@ -672,6 +681,13 @@ function renderStoryStream(activeChapter) {
 
   const currentTurnNum = state.saveState?.turnCount || count;
   const currentActNum = state.saveState?.meta?.currentAct || 1;
+  const activeRecord = chapters[count - 1] || activeChapter;
+  const activeActionPill = activeRecord && activeRecord.chosenLabel && activeRecord.chosenLabel !== '【開局入局】' ? `
+    <div class="mb-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-brand-gold/15 text-brand-gold border border-brand-gold/30 text-xs font-bold font-serif">
+      <span>✦ 玩家行動：</span>
+      <span class="text-amber-200 font-sans">${activeRecord.chosenLabel}</span>
+    </div>
+  ` : '';
 
   activeSection.innerHTML = `
     <div class="flex justify-between items-start gap-2 border-b border-brand-border pb-4">
@@ -700,6 +716,8 @@ function renderStoryStream(activeChapter) {
       </div>
     </div>
 
+    ${activeActionPill}
+
     <!-- 打字機正文容器 -->
     <article id="stream-prose-content" class="font-serif text-lg sm:text-[1.18rem] leading-[2.2] text-[#d8dbe6] tracking-wide prose-tc cursor-pointer select-text" title="打字中點擊可直接顯示全文">
       故事載入中……
@@ -726,14 +744,39 @@ function renderStoryStream(activeChapter) {
   
   const skipBtn = document.getElementById('stream-skip-btn');
   const proseEl = document.getElementById('stream-prose-content');
+  const cleanProse = cleanProseText(activeChapter.prose);
 
-  skipBtn?.addEventListener('click', () => skipStreamTypewriter(activeChapter, proseEl, skipBtn));
-  proseEl?.addEventListener('click', () => skipStreamTypewriter(activeChapter, proseEl, skipBtn));
+  skipBtn?.addEventListener('click', () => skipStreamTypewriter(cleanProse, activeChapter, proseEl, skipBtn));
+  proseEl?.addEventListener('click', () => skipStreamTypewriter(cleanProse, activeChapter, proseEl, skipBtn));
 
   // 執行打字機動畫並滾動至最新章節
-  streamTypewriterEffect(activeChapter.prose, proseEl, skipBtn, () => {
+  streamTypewriterEffect(cleanProse, proseEl, skipBtn, () => {
     renderChoices(activeChapter.choices || []);
   });
+
+  // 平滑滾動至最新章節頂部
+  setTimeout(() => {
+    activeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
+}
+
+function skipStreamTypewriter(proseText, chapter, targetEl, skipBtn) {
+  if (!state.isTyping) return;
+  state.skipTypewriterTriggered = true;
+  if (state.typewriterTimer) clearTimeout(state.typewriterTimer);
+  
+  targetEl.innerHTML = '';
+  const paragraphs = proseText.split('\n\n');
+  paragraphs.forEach(pText => {
+    const p = document.createElement('p');
+    p.className = 'mb-6 indent-8';
+    p.textContent = pText;
+    targetEl.appendChild(p);
+  });
+  state.isTyping = false;
+  if (skipBtn) skipBtn.classList.add('hidden');
+  renderChoices(chapter.choices || []);
+}
 
   // 平滑滾動至最新章節頂部
   setTimeout(() => {
@@ -1420,7 +1463,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     if (isShura) {
       nextStory = {
         chapterTitle: `第 1 幕 第 ${state.saveState.turnCount} 回：修羅場暗潮 · 黑白雙雄的窒息逼近`,
-        prose: `妳做出了抉擇：「${customInput || choiceId}」。\n\n話音落下的一瞬間，整間制策室內的空氣彷彿瞬間抽乾。落地窗外的暴雨不知何時化作漫天雷鳴，而室內昏黃的吊燈光暈下，徐令謙與韓正寰的眼神同時產生了細微而危險的變化。\n\n徐令謙緩緩將水晶威士忌杯擱在胡桃木長桌上，冰塊撞擊杯壁發出清脆冷冽的聲響。他站起身，一米八五的修長挺拔身形自上首投下一片沉沉的陰影，深灰色手工西裝襯得他氣質愈發尊貴而壓迫。他唇角勾起一抹極淡的弧度，目光隔著金絲眼鏡深深鎖定在妳身上：\n\n「看來${state.saveState?.meta?.playerProfile?.name || '妳'}比我想像的更懂得如何玩弄這盤棋。」徐令謙邁開長腿，皮鞋踩在深色地板上發出沉穩的腳步聲，緩步繞過長桌逼近妳的右側，空氣中那股淺焙咖啡與冷冽雪松菸草香瞬間將妳籠罩。\n\n與此同時，守在門邊的韓正寰亦冷笑一聲，攜帶著 Diptyque Tam Dao 檀香的黑色長風衣隨風微動。他大步流星走上前，一把按在胡桃木長桌的邊緣，將出口與妳的退路再度封死，英挺冷峻的眉眼逼視著徐令謙與妳：\n\n「在士林地檢署眼皮底下做交易，徐二爺未免太自信了點。還有妳，不要以為夾在黑白兩道之間能獨善其身——當這枚隨身碟解密之時，就是全台北政商洗牌之日。」\n\n兩名頂級男人一左一右將妳夾在長桌正中，徐令謙俯身逼近妳耳畔，溫熱的呼吸拂過妳微濕的自然捲髮；韓正寰的目光則如冰霜刀刃般寸步不讓。三方的心跳與呼吸在近在咫尺的距離中交織，危險的性張力與權謀拉扯徹底爆發！`,
+        prose: `整間制策室內的空氣在這一瞬間彷彿被徹底抽乾。落地窗外的暴雨不知何時化作漫天雷鳴，而室內昏黃的吊燈光暈下，徐令謙與韓正寰的眼神同時產生了細微而危險的變化。\n\n徐令謙緩緩將水晶威士忌杯擱在胡桃木長桌上，冰塊撞擊杯壁發出清脆冷冽的聲響。他站起身，一米八五的修長挺拔身形自上首投下一片沉沉的陰影，深灰色手工西裝襯得他氣質愈發尊貴而壓迫。他唇角勾起一抹極淡的弧度，目光隔著金絲眼鏡深深鎖定在妳身上：\n\n「看來${state.saveState?.meta?.playerProfile?.name || '妳'}比我想像的更懂得如何玩弄這盤棋。」徐令謙邁開長腿，皮鞋踩在深色地板上發出沉穩的腳步聲，緩步繞過長桌逼近妳的右側，空氣中那股淺焙咖啡與冷冽雪松菸草香瞬間將妳籠罩。\n\n與此同時，守在門邊的韓正寰亦冷笑一聲，攜帶著 Diptyque Tam Dao 檀香的黑色長風衣隨風微動。他大步流星走上前，一把按在胡桃木長桌的邊緣，將出口與妳的退路再度封死，英挺冷峻的眉眼逼視著徐令謙與妳：\n\n「在士林地檢署眼皮底下做交易，徐二爺未免太自信了點。還有妳，不要以為夾在黑白兩道之間能獨善其身——當這枚隨身碟解密之時，就是全台北政商洗牌之日。」\n\n兩名頂級男人一左一右將妳夾在長桌正中，徐令謙俯身逼近妳耳畔，溫熱的呼吸拂過妳微濕的自然捲髮；韓正寰的目光則如冰霜刀刃般寸步不讓。三方的心跳與呼吸在近在咫尺的距離中交織，危險的性張力與權謀拉扯徹底爆發！`,
         statusPanel: {
           timeLocation: '2026年5月12日 21:45 星期二 於 台北市士林區德行法律事務所頂樓制策室',
           tension: '張力值 [85%]',
@@ -1440,7 +1483,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     } else {
       nextStory = {
         chapterTitle: `第 1 幕 第 ${state.saveState.turnCount} 回：暗湧機鋒 · 咫尺博弈`,
-        prose: `妳做出了抉擇：「${customInput || choiceId}」。\n\n話音落下的一瞬間，室內的空氣彷彿被抽乾了一般。窗外的暴雨不知何時變得更加湍急，瘋狂敲擊著防彈落地窗，而室內暖黃的燈光下，${targetName}原本平靜無波的嘴角，緩緩勾起了一抹極淡、卻透著致命危險的弧度。\n\n他修長而骨節分明的手指輕輕將水晶洛克杯推開，冰塊在杯中發出清脆的叮噹聲。${targetName}站起身來，一米八五的修長挺拔身形在昏黃光暈中投下一片沉沉的陰影，帶著久居上位者的從容壓迫感，緩步繞過巨大的胡桃木長桌，朝妳走來。\n\n每一步落下，手工皮鞋在深色木地板上發出的微弱聲響，都宛如重重敲擊在心弦上。隨著兩人的距離迅速拉近至不足三十公分，那股混雜著淺焙咖啡、冷冽雪松與高級菸草的獨特木質氣息撲面而來，將妳整個人密密實實地籠罩其中。\n\n「在士林這片地界，很久沒有人敢用這種口吻跟我說話了。」${targetName}微微俯下身，雙手撐在妳身側的椅背扶手上，將妳完全禁錮在自己的氣息範圍內。金絲眼鏡後的深邃雙眸直勾勾地鎖定著妳的視線，語調低沉得宛如耳語，溫熱的呼吸若有似無地拂過妳耳畔的髮絲：\n\n「妳很聰明，也很有膽識。但妳要知道，聰明的女人在台北容易得到籌碼，卻也最容易成為這盤棋局裡第一個被吃掉的棋子。告訴我，妳到底想要什麼？是真相、金錢，還是……我能給妳的特權？」\n\n室內兩人交纏的呼吸與心跳清晰可聞，危險的情慾張力與權謀試探在咫尺之間激烈拉扯，等待著妳的下一次破局。`,
+        prose: `室內的空氣在這一瞬間彷彿凝固了幾分。窗外的暴雨不知何時變得更加湍急，瘋狂敲擊著防彈落地窗，而室內暖黃的燈光下，${targetName}原本平靜無波的嘴角，緩緩勾起了一抹極淡、卻透著致命危險的弧度。\n\n他修長而骨節分明的手指輕輕將水晶洛克杯推開，冰塊在杯中發出清脆的叮噹聲。${targetName}站起身來，一米八五的修長挺拔身形在昏黃光暈中投下一片沉沉的陰影，帶著久居上位者的從容壓迫感，緩步繞過巨大的胡桃木長桌，朝妳走來。\n\n每一步落下，手工皮鞋在深色木地板上發出的微弱聲響，都宛如重重敲擊在心弦上。隨著兩人的距離迅速拉近至不足三十公分，那股混雜著淺焙咖啡、冷冽雪松與高級菸草的獨特木質氣息撲面而來，將妳整個人密密實實地籠罩其中。\n\n「在士林這片地界，很久沒有人敢用這種口吻跟我說話了。」${targetName}微微俯下身，雙手撐在妳身側的椅背扶手上，將妳完全禁錮在自己的氣息範圍內。金絲眼鏡後的深邃雙眸直勾勾地鎖定著妳的視線，語調低沉得宛如耳語，溫熱的呼吸若有似無地拂過妳耳畔的髮絲：\n\n「妳很聰明，也很有膽識。但妳要知道，聰明的女人在台北容易得到籌碼，卻也最容易成為這盤棋局裡第一個被吃掉的棋子。告訴我，妳到底想要什麼？是真相、金錢，還是……我能給妳的特權？」\n\n室內兩人交纏的呼吸與心跳清晰可聞，危險的情慾張力與權謀試探在咫尺之間激烈拉扯，等待著妳的下一次破局。`,
         statusPanel: {
           timeLocation: '2026年5月12日 21:45 星期二 於 台北市士林區德行法律事務所頂樓制策室',
           tension: '張力值 [75%]',
