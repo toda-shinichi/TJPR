@@ -1,8 +1,8 @@
 /**
- * Project Epilogue - Frontend Web Client Application
+ * 《暗流》（UNDER CURRENT）- Frontend Web Client Application
  * 檔案：app.js
  * 
- * 管理讀者端狀態、開局創建角色表單、打字機動效、狀態抽屜與 Google Apps Script API 串接。
+ * 管理讀者端狀態、角色設定檔範本管理、多存檔槽管理器 (Save Slots)、打字機動效與 GAS API 串接。
  */
 
 // 全域狀態
@@ -16,6 +16,49 @@ const state = {
   saveState: null,
   isTyping: false,
   isDrawerOpen: false
+};
+
+// 官方與自訂角色範本庫
+const DEFAULT_PRESETS = {
+  preset_ruan: {
+    name: '阮思薇',
+    gender: '女',
+    age: '26',
+    profession: '司法政經調查記者（兼獨立自媒體主筆）',
+    background: '追查三年前未結的洗錢弊案，手中掌握一份殘缺的帳冊底牌',
+    appearance: '深黑合身西裝大衣，珍珠耳釘，神情冷靜敏銳',
+    taboos: '無特定雷區，禁止酒駕',
+    targetLead: '01_徐令謙',
+    targetLeadName: '徐令謙',
+    allowR18: true,
+    customScenario: ''
+  },
+  preset_yang: {
+    name: '楊慕璃',
+    gender: '女',
+    age: '24',
+    profession: '弘楊集團公關總監 · 瑾和文教基金會執行長',
+    background: '台大法律/北大犯罪所畢業。身為楊家三房獨生女，在權謀風暴中憑藉智慧與魅力遊走於各方勢力之間',
+    appearance: '及肩黑髮帶自然捲，美麗杏眼，白皙皮膚，精緻體態與若有似無的清甜體香，常著淡雅長裙或素雅洋裝',
+    taboos: '禁止暴力侮辱，無特定雷區',
+    targetLead: '01_徐令謙',
+    targetLeadName: '徐令謙',
+    allowR18: true,
+    customScenario: '深夜德行法律事務所頂層，我代表弘楊集團前來與徐令謙商討併購案暗帳，兩人在微醺酒香中展開言語與肢體的試探……'
+  },
+  preset_custom: {
+    name: '',
+    gender: '女',
+    age: '25',
+    profession: '',
+    background: '',
+    appearance: '',
+    taboos: '無',
+    targetLead: '01_徐令謙',
+    targetLeadName: '徐令謙',
+    allowR18: true,
+    customScenario: ''
+  }
 };
 
 // DOM 元素快取
@@ -35,17 +78,23 @@ const dom = {
   panelInteraction: document.getElementById('panel-interaction'),
   panelRumors: document.getElementById('panel-rumors'),
 
-  // 創角表單彈窗
+  // 創角表單與設定檔管理
   openCreateCharBtn: document.getElementById('open-create-char-btn'),
   closeModalBtn: document.getElementById('close-modal-btn'),
   charCreationModal: document.getElementById('character-creation-modal'),
   charCreationForm: document.getElementById('char-creation-form'),
-  
-  // 側邊狀態抽屜
+  profilePresetsSelect: document.getElementById('profile-presets-select'),
+  saveCurrentProfileBtn: document.getElementById('save-current-profile-btn'),
+  exportProfileJsonBtn: document.getElementById('export-profile-json-btn'),
+  importProfileJsonInput: document.getElementById('import-profile-json-input'),
+  deleteProfilePresetBtn: document.getElementById('delete-profile-preset-btn'),
+
+  // 側邊狀態抽屜 & 存檔槽
   openDrawerBtn: document.getElementById('open-drawer-btn'),
   closeDrawerBtn: document.getElementById('close-drawer-btn'),
   drawerBackdrop: document.getElementById('drawer-backdrop'),
   sideDrawer: document.getElementById('side-drawer'),
+  quickSaveBtn: document.getElementById('quick-save-btn'),
   profileCardName: document.getElementById('profile-card-name'),
   profileCardLead: document.getElementById('profile-card-lead'),
   
@@ -65,16 +114,19 @@ const dom = {
 // 初始化
 window.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
+  loadSavedProfilePresets();
+  updateSaveSlotsDisplay();
+
   if (dom.apiUrlInput) {
     dom.apiUrlInput.value = state.gasApiUrl;
   }
 
-  // 載入遊戲狀態（連線後端或本地降級）
+  // 載入故事狀態
   await initializeStory();
 });
 
 function setupEventListeners() {
-  // 創角表單彈窗控制
+  // 創角彈窗控制
   if (dom.openCreateCharBtn) {
     dom.openCreateCharBtn.addEventListener('click', () => {
       dom.charCreationModal.style.display = 'flex';
@@ -86,7 +138,34 @@ function setupEventListeners() {
     });
   }
 
-  // 快捷情境建議填入
+  // 設定檔範本切換
+  if (dom.profilePresetsSelect) {
+    dom.profilePresetsSelect.addEventListener('change', (e) => {
+      loadProfilePresetIntoForm(e.target.value);
+    });
+  }
+
+  // 儲存目前角色為自訂範本
+  if (dom.saveCurrentProfileBtn) {
+    dom.saveCurrentProfileBtn.addEventListener('click', saveCurrentFormAsPreset);
+  }
+
+  // 匯出角色卡 JSON
+  if (dom.exportProfileJsonBtn) {
+    dom.exportProfileJsonBtn.addEventListener('click', exportProfileJson);
+  }
+
+  // 匯入角色卡 JSON
+  if (dom.importProfileJsonInput) {
+    dom.importProfileJsonInput.addEventListener('change', importProfileJson);
+  }
+
+  // 刪除自訂範本
+  if (dom.deleteProfilePresetBtn) {
+    dom.deleteProfilePresetBtn.addEventListener('click', deleteSelectedProfilePreset);
+  }
+
+  // 快捷情境按鈕
   document.querySelectorAll('.preset-scenario-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const text = e.target.getAttribute('data-text');
@@ -103,18 +182,33 @@ function setupEventListeners() {
     });
   }
 
-  // 右上角側邊抽屜開關
-  if (dom.openDrawerBtn) {
-    dom.openDrawerBtn.addEventListener('click', openDrawer);
-  }
-  if (dom.closeDrawerBtn) {
-    dom.closeDrawerBtn.addEventListener('click', closeDrawer);
-  }
-  if (dom.drawerBackdrop) {
-    dom.drawerBackdrop.addEventListener('click', closeDrawer);
+  // 側邊狀態抽屜
+  if (dom.openDrawerBtn) dom.openDrawerBtn.addEventListener('click', openDrawer);
+  if (dom.closeDrawerBtn) dom.closeDrawerBtn.addEventListener('click', closeDrawer);
+  if (dom.drawerBackdrop) dom.drawerBackdrop.addEventListener('click', closeDrawer);
+
+  // 遊戲存檔槽按鈕監聽 (Slot 1, 2, 3)
+  document.querySelectorAll('.save-slot-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const slot = e.target.getAttribute('data-slot');
+      saveGameStateToSlot(slot);
+    });
+  });
+
+  document.querySelectorAll('.load-slot-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const slot = e.target.getAttribute('data-slot');
+      loadGameStateFromSlot(slot);
+    });
+  });
+
+  if (dom.quickSaveBtn) {
+    dom.quickSaveBtn.addEventListener('click', () => {
+      saveGameStateToSlot('1');
+    });
   }
 
-  // 自訂行動送出按鈕
+  // 自訂行動
   if (dom.submitCustomBtn) {
     dom.submitCustomBtn.addEventListener('click', () => {
       const customText = (dom.customActionInput.value || '').trim();
@@ -124,7 +218,6 @@ function setupEventListeners() {
     });
   }
 
-  // 自訂行動按下 Enter 鍵送出
   if (dom.customActionInput) {
     dom.customActionInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -136,7 +229,7 @@ function setupEventListeners() {
     });
   }
 
-  // 『卷末換窗』(Act Rebase) 按鈕
+  // 卷末換窗
   if (dom.rebaseActBtn) {
     dom.rebaseActBtn.addEventListener('click', handleActRebase);
   }
@@ -157,6 +250,7 @@ function openDrawer() {
   dom.sideDrawer.classList.remove('translate-x-full');
   dom.drawerBackdrop.classList.remove('opacity-0', 'pointer-events-none');
   dom.drawerBackdrop.classList.add('opacity-100');
+  updateSaveSlotsDisplay();
 }
 
 function closeDrawer() {
@@ -166,9 +260,253 @@ function closeDrawer() {
   dom.drawerBackdrop.classList.add('opacity-0', 'pointer-events-none');
 }
 
-/**
- * 處理玩家創角表單送出 -> 呼叫 novel/init
- */
+// ==========================================
+// 角色設定檔 (Profile Presets) 存讀管理
+// ==========================================
+
+function getCustomPresets() {
+  try {
+    return JSON.parse(localStorage.getItem('undercurrent_custom_profiles') || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+
+function loadSavedProfilePresets() {
+  const custom = getCustomPresets();
+  const select = dom.profilePresetsSelect;
+  if (!select) return;
+
+  // 清除自訂選項
+  const options = Array.from(select.options);
+  options.forEach(opt => {
+    if (opt.value.startsWith('custom_')) opt.remove();
+  });
+
+  // 加入自訂選項
+  Object.keys(custom).forEach(key => {
+    const prof = custom[key];
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = `📁 【自訂】${prof.name}（${prof.profession.slice(0, 10)}...）`;
+    select.appendChild(opt);
+  });
+}
+
+function loadProfilePresetIntoForm(presetKey) {
+  let profile = DEFAULT_PRESETS[presetKey];
+  if (!profile) {
+    const custom = getCustomPresets();
+    profile = custom[presetKey];
+  }
+  if (!profile) return;
+
+  document.getElementById('form-player-name').value = profile.name || '';
+  document.getElementById('form-player-gender').value = profile.gender || '女';
+  document.getElementById('form-player-age').value = profile.age || '25';
+  document.getElementById('form-player-profession').value = profile.profession || '';
+  document.getElementById('form-player-background').value = profile.background || '';
+  document.getElementById('form-player-appearance').value = profile.appearance || '';
+  document.getElementById('form-player-taboos').value = profile.taboos || '無';
+  document.getElementById('form-target-lead').value = profile.targetLead || '01_徐令謙';
+  document.getElementById('form-allow-r18').checked = !!profile.allowR18;
+  document.getElementById('form-custom-scenario').value = profile.customScenario || '';
+}
+
+function saveCurrentFormAsPreset() {
+  const name = document.getElementById('form-player-name').value.trim();
+  if (!name) {
+    alert('請先輸入角色姓名！');
+    return;
+  }
+
+  const targetSelect = document.getElementById('form-target-lead');
+  const selectedOption = targetSelect.options[targetSelect.selectedIndex];
+
+  const profile = {
+    name: name,
+    gender: document.getElementById('form-player-gender').value,
+    age: document.getElementById('form-player-age').value.trim(),
+    profession: document.getElementById('form-player-profession').value.trim(),
+    background: document.getElementById('form-player-background').value.trim(),
+    appearance: document.getElementById('form-player-appearance').value.trim(),
+    taboos: document.getElementById('form-player-taboos').value.trim(),
+    targetLead: targetSelect.value,
+    targetLeadName: selectedOption.getAttribute('data-name') || '徐令謙',
+    allowR18: document.getElementById('form-allow-r18').checked,
+    customScenario: document.getElementById('form-custom-scenario').value.trim()
+  };
+
+  const key = 'custom_' + Date.now();
+  const custom = getCustomPresets();
+  custom[key] = profile;
+  localStorage.setItem('undercurrent_custom_profiles', JSON.stringify(custom));
+
+  loadSavedProfilePresets();
+  dom.profilePresetsSelect.value = key;
+  alert(`已將【${profile.name}】成功儲存為角色範本！`);
+}
+
+function exportProfileJson() {
+  const targetSelect = document.getElementById('form-target-lead');
+  const selectedOption = targetSelect.options[targetSelect.selectedIndex];
+
+  const profile = {
+    name: document.getElementById('form-player-name').value.trim(),
+    gender: document.getElementById('form-player-gender').value,
+    age: document.getElementById('form-player-age').value.trim(),
+    profession: document.getElementById('form-player-profession').value.trim(),
+    background: document.getElementById('form-player-background').value.trim(),
+    appearance: document.getElementById('form-player-appearance').value.trim(),
+    taboos: document.getElementById('form-player-taboos').value.trim(),
+    targetLead: targetSelect.value,
+    targetLeadName: selectedOption.getAttribute('data-name') || '徐令謙',
+    allowR18: document.getElementById('form-allow-r18').checked,
+    customScenario: document.getElementById('form-custom-scenario').value.trim()
+  };
+
+  const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(profile, null, 2));
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.setAttribute('href', dataStr);
+  downloadAnchor.setAttribute('download', `暗流_角色卡_${profile.name || '自訂'}.json`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+}
+
+function importProfileJson(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const profile = JSON.parse(e.target.result);
+      if (profile.name) {
+        document.getElementById('form-player-name').value = profile.name || '';
+        document.getElementById('form-player-gender').value = profile.gender || '女';
+        document.getElementById('form-player-age').value = profile.age || '25';
+        document.getElementById('form-player-profession').value = profile.profession || '';
+        document.getElementById('form-player-background').value = profile.background || '';
+        document.getElementById('form-player-appearance').value = profile.appearance || '';
+        document.getElementById('form-player-taboos').value = profile.taboos || '無';
+        if (profile.targetLead) document.getElementById('form-target-lead').value = profile.targetLead;
+        document.getElementById('form-allow-r18').checked = profile.allowR18 !== false;
+        document.getElementById('form-custom-scenario').value = profile.customScenario || '';
+
+        // 存入自訂範本庫
+        const key = 'custom_' + Date.now();
+        const custom = getCustomPresets();
+        custom[key] = profile;
+        localStorage.setItem('undercurrent_custom_profiles', JSON.stringify(custom));
+        loadSavedProfilePresets();
+        dom.profilePresetsSelect.value = key;
+
+        alert(`成功匯入角色卡【${profile.name}】！`);
+      }
+    } catch (err) {
+      alert('解析 JSON 角色卡失敗: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function deleteSelectedProfilePreset() {
+  const key = dom.profilePresetsSelect.value;
+  if (!key.startsWith('custom_')) {
+    alert('無法刪除官方預設範本！');
+    return;
+  }
+  if (!confirm('確定要刪除這個自訂角色範本嗎？')) return;
+
+  const custom = getCustomPresets();
+  delete custom[key];
+  localStorage.setItem('undercurrent_custom_profiles', JSON.stringify(custom));
+  loadSavedProfilePresets();
+  dom.profilePresetsSelect.value = 'preset_ruan';
+  loadProfilePresetIntoForm('preset_ruan');
+}
+
+// ==========================================
+// 遊戲存檔槽管理 (Game Save Slots)
+// ==========================================
+
+function updateSaveSlotsDisplay() {
+  for (let i = 1; i <= 3; i++) {
+    const raw = localStorage.getItem(`undercurrent_saveslot_${i}`);
+    const titleEl = document.getElementById(`slot-${i}-title`);
+    const infoEl = document.getElementById(`slot-${i}-info`);
+
+    if (raw) {
+      try {
+        const slotData = JSON.parse(raw);
+        const pName = slotData.saveState?.meta?.playerProfile?.name || slotData.saveState?.protagonist?.name || '玩家';
+        const targetLead = slotData.saveState?.meta?.playerProfile?.targetLeadName || '男主';
+        const act = slotData.saveState?.meta?.currentAct || 1;
+        const turn = slotData.saveState?.turnCount || 1;
+        const timeStr = slotData.timestamp ? new Date(slotData.timestamp).toLocaleString('zh-TW', { hour12: false }) : '';
+
+        if (titleEl) titleEl.textContent = `【存檔 ${i}】第 ${act} 幕·第 ${turn} 回（${pName} × ${targetLead}）`;
+        if (infoEl) infoEl.textContent = `${slotData.chapterTitle || '未命名章節'} ｜ ${timeStr}`;
+      } catch (e) {
+        if (titleEl) titleEl.textContent = `【存檔 ${i}】空欄位`;
+        if (infoEl) infoEl.textContent = '尚無存檔資料';
+      }
+    } else {
+      if (titleEl) titleEl.textContent = `【存檔 ${i}】空欄位`;
+      if (infoEl) infoEl.textContent = '尚無存檔資料';
+    }
+  }
+}
+
+function saveGameStateToSlot(slotIndex) {
+  if (!state.saveState) {
+    alert('目前尚無遊戲進度可儲存！');
+    return;
+  }
+
+  const slotData = {
+    timestamp: new Date().toISOString(),
+    chapterTitle: state.chapterData?.chapterTitle || '第 1 回',
+    chapter: state.chapterData,
+    saveState: state.saveState
+  };
+
+  localStorage.setItem(`undercurrent_saveslot_${slotIndex}`, JSON.stringify(slotData));
+  updateSaveSlotsDisplay();
+
+  // 同步備份到雲端 GAS
+  if (state.gasApiUrl) {
+    callBackendApi('novel/save-state', { saveState: state.saveState }).catch(console.warn);
+  }
+
+  alert(`【存檔成功】進度已儲存至存檔欄位 ${slotIndex}！`);
+}
+
+function loadGameStateFromSlot(slotIndex) {
+  const raw = localStorage.getItem(`undercurrent_saveslot_${slotIndex}`);
+  if (!raw) {
+    alert(`存檔欄位 ${slotIndex} 目前沒有任何存檔資料！`);
+    return;
+  }
+
+  try {
+    const slotData = JSON.parse(raw);
+    state.chapterData = slotData.chapter;
+    state.saveState = slotData.saveState;
+    renderChapter(slotData.chapter);
+    renderSaveState();
+    closeDrawer();
+    alert(`【讀檔成功】已載入存檔欄位 ${slotIndex}！`);
+  } catch (err) {
+    alert('讀取存檔失敗: ' + err.message);
+  }
+}
+
+// ==========================================
+// 故事主流程與 API 連線
+// ==========================================
+
 async function handleCharacterCreationSubmit() {
   const targetSelect = document.getElementById('form-target-lead');
   const selectedOption = targetSelect.options[targetSelect.selectedIndex];
@@ -201,11 +539,12 @@ async function handleCharacterCreationSubmit() {
         state.saveState = res.data.saveState;
         renderChapter(res.data.chapter);
         renderSaveState();
+        saveGameStateToSlot('1'); // 開局自動備份至 Slot 1
       } else {
         alert('開局生成失敗：' + (res.error?.message || '未知錯誤'));
       }
     } catch (err) {
-      alert('連線後端失敗：' + err.message);
+      console.warn('連線後端失敗，使用正宗本地模式:', err);
       loadMockDataWithProfile(playerProfile);
     }
   } else {
@@ -215,13 +554,10 @@ async function handleCharacterCreationSubmit() {
   hideLoading();
 }
 
-/**
- * 載入或初始化小說
- */
 async function initializeStory() {
   showLoading('正在連接世界線，讀取故事進度...');
 
-  await loadMockData(); // 先載入正宗台灣權謀世界開場
+  await loadMockData();
 
   if (state.gasApiUrl) {
     try {
@@ -230,7 +566,6 @@ async function initializeStory() {
         state.saveState = res.data.saveState;
         renderSaveState();
       } else {
-        // 無存檔時主動彈出創角表單
         dom.charCreationModal.style.display = 'flex';
       }
     } catch (e) {
@@ -244,9 +579,6 @@ async function initializeStory() {
   hideLoading();
 }
 
-/**
- * 載入本機測試假資料
- */
 async function loadMockData() {
   try {
     const res = await fetch('./mock_data.json');
@@ -276,35 +608,35 @@ function loadMockDataWithProfile(profile) {
       sanity: 100
     },
     inventory: [
-      { id: 'item_press', name: '特許採訪證 / 密錄隨身碟', count: 1, desc: '隨身攜帶的關鍵調查底牌。' }
+      { id: 'item_card', name: '調查記者證 / 隨身底牌', count: 1, desc: '隨身攜帶的關鍵身分與線索。' }
     ],
     relationships: {
-      [profile.targetLeadName]: 15
+      [profile.targetLeadName]: 20
     },
     questFlags: {
       main_quest: `初會：與 ${profile.targetLeadName} 的交鋒`
     },
-    summaryPool: `玩家 ${profile.name} 正式入局，與 ${profile.targetLeadName} 於雨夜展開首次交鋒。`,
+    summaryPool: `玩家 ${profile.name} 正式入局，與 ${profile.targetLeadName} 展開首次交鋒。`,
     turnHistory: []
   };
 
   const initialMockChapter = {
     chapterTitle: `第 1 回．初會 ${profile.targetLeadName}`,
-    prose: `士林思慕咖啡的二樓VIP室，暴雨正以一種近乎狂暴的節奏敲打著落地窗。\n\n${profile.name}拉平了西裝領口，指尖觸碰到口袋中那枚冰冷的密錄隨身碟。室內瀰漫著淺焙耶加雪菲與雪松木質調香水的氣息。\n\n桌子對面，${profile.targetLeadName}優雅地將水晶威士忌杯擱在深色胡桃木桌上，鏡片後那雙深邃的眸子微微抬起，目光精準如手術刀般落在她身上。\n\n「阮小姐，在台北敢把這份帳冊直接帶到我面前的人，妳是第一個。」男人的聲音低沉磁性，語調中帶著一種上位者特有的從容與審視。`,
+    prose: `五月的台北士林，窗外暴雨如注，瘋狂敲打著德行法律事務所頂層制策室的防彈落地窗。\n\n${profile.name}將大衣下擺稍稍攏起，指尖觸碰到手提包內層那枚冰冷而沉重的密錄隨身碟。室內空氣中瀰漫著淺焙手沖咖啡的微酸香氣——那是從三峽思慕咖啡專程送達、由主人親自烘焙磨製的豆子——以及對面男人身上那股若有似無的柑橘木質菸草香。\n\n${profile.targetLeadName}坐在深色胡桃木長桌的另一端，戴著金邊眼鏡，修長而骨節分明的手指輕輕搖晃著水晶杯，目光精準如手術刀般落在她身上。\n\n「${profile.name}，在台北敢帶著這份帳冊底牌直接找進來的人，妳是第一個。」`,
     statusPanel: {
-      timeLocation: '2026年5月12日 21:30 星期二 於 台北士林思慕咖啡VIP室',
+      timeLocation: '2026年5月12日 21:30 星期二 於 台北市士林區德行法律事務所頂樓制策室',
       tension: '張力值 [45%]',
       intoxication: '微醺度 [20%]',
-      interaction: '初次會面 ｜ 隔著胡桃木長桌對坐，目光交鋒',
-      outfit: `${profile.name}（深黑西裝大衣） ｜ ${profile.targetLeadName}（手工深灰西裝）`,
-      inventory: '特許採訪證、密錄隨身碟',
-      rumors: '政壇傳言特偵組正秘密調查天裕會金流',
+      interaction: `初次交鋒 ｜ 與 ${profile.targetLeadName} 隔著長桌對坐，目光交鋒`,
+      outfit: `${profile.name}（${profile.appearance || '深黑大衣'}） ｜ ${profile.targetLeadName}（手工深灰西裝、金錶）`,
+      inventory: '調查記者證、洗錢弊案密錄隨身碟',
+      rumors: '政壇傳言士林地檢署韓正寰正秘密盯梢天裕會金流，黑白兩道暗潮洶湧',
       pageCode: 'P.001'
     },
     choices: [
       { id: 'opt_a', label: '[A] 順應節奏：神情自若地拉開椅子坐下，將隨身碟推向桌心', risk: 'low', hint: '展現職業從容，以籌碼換取信任' },
-      { id: 'opt_b', label: '[B] 反向推拉：冷靜反詰「看來二爺很清楚這份帳冊能掀起多大風浪」', risk: 'medium', hint: '言語機鋒試探底線' },
-      { id: 'opt_c', label: '[C] 情慾暗示：迎著他的視線傾身靠近，壓低聲音「那二爺打算怎麼處置我？」', risk: 'high', hint: '主動拉近物理距離，挑動危險氛圍' }
+      { id: 'opt_b', label: `[B] 反向推拉：冷靜反詰「看來你很清楚這份帳冊能掀起多大風浪」`, risk: 'medium', hint: '言語機鋒試探底線' },
+      { id: 'opt_c', label: `[C] 情慾暗示：迎著他的視線傾身靠近，壓低聲音「那您打算怎麼處置我？」`, risk: 'high', hint: '主動拉近物理距離，挑動危險氛圍' }
     ]
   };
 
@@ -313,15 +645,11 @@ function loadMockDataWithProfile(profile) {
   renderSaveState();
 }
 
-/**
- * 渲染章節內文與分支選項（打字機效果）
- */
 function renderChapter(chapter) {
   if (!chapter) return;
   dom.chapterBadge.textContent = `第 ${state.saveState?.meta?.currentAct || 1} 幕 · 第 ${state.saveState?.turnCount || 1} 回合`;
   dom.chapterTitle.textContent = chapter.chapterTitle || '未命名章節';
 
-  // 渲染狀態面板
   if (chapter.statusPanel && dom.inlineStatusPanel) {
     dom.inlineStatusPanel.style.display = 'block';
     dom.panelTimeLocation.textContent = chapter.statusPanel.timeLocation || '-';
@@ -331,15 +659,11 @@ function renderChapter(chapter) {
     dom.panelRumors.textContent = chapter.statusPanel.rumors || '-';
   }
 
-  // 執行打字機動畫
   typewriterEffect(chapter.prose, dom.proseContent, () => {
     renderChoices(chapter.choices || []);
   });
 }
 
-/**
- * 打字機逐字動態呈現
- */
 function typewriterEffect(text, targetEl, onComplete) {
   targetEl.innerHTML = '';
   state.isTyping = true;
@@ -381,12 +705,9 @@ function typewriterEffect(text, targetEl, onComplete) {
   typeNextChar();
 }
 
-/**
- * 渲染 3 個預設互動決策選項
- */
 function renderChoices(choices) {
   dom.choicesContainer.innerHTML = '';
-  choices.forEach((choice, index) => {
+  choices.forEach((choice) => {
     const card = document.createElement('div');
     card.className = 'bg-brand-card hover:bg-[#202538] border border-brand-border hover:border-brand-gold/40 rounded-xl p-4 cursor-pointer transition transform hover:-translate-y-0.5 shadow-md';
 
@@ -410,9 +731,6 @@ function renderChoices(choices) {
   });
 }
 
-/**
- * 玩家做成分支選擇或送出自訂行動
- */
 async function makeChoice(choiceId, customInput) {
   showLoading('以太筆觸流轉中，主筆作家正在撰寫後續長篇情節...');
 
@@ -436,7 +754,6 @@ async function makeChoice(choiceId, customInput) {
       alert('無法連線後端 API：' + e.message);
     }
   } else {
-    // 離線展示
     setTimeout(() => {
       state.saveState.turnCount += 1;
       const targetName = state.saveState?.meta?.playerProfile?.targetLeadName || '徐令謙';
@@ -444,7 +761,7 @@ async function makeChoice(choiceId, customInput) {
         chapterTitle: `第 1 幕 第 ${state.saveState.turnCount} 回：暗湧與博弈`,
         prose: `妳選擇了「${customInput || choiceId}」。\n\n${targetName}的嘴角勾起一抹極淡的弧度，指尖輕扣桌面。室內的空氣彷彿瞬間凝固了幾分，那股若有似無的木質雪松香氣在兩人近距離的呼吸間蔓延開來。\n\n「在士林，很少有人敢用這種語氣跟我說話。」他站起身，修長挺拔的身影投下一片優雅的陰影，目光深沉地注視著妳……`,
         statusPanel: {
-          timeLocation: '2026年5月12日 21:45 星期二 於 台北士林思慕咖啡VIP室',
+          timeLocation: '2026年5月12日 21:45 星期二 於 台北市士林區德行法律事務所頂樓制策室',
           tension: '張力值 [60%]',
           intoxication: '微醺度 [25%]',
           interaction: '氣氛升溫 ｜ 男主起身靠近，距離不足三十公分',
@@ -468,9 +785,6 @@ async function makeChoice(choiceId, customInput) {
   hideLoading();
 }
 
-/**
- * 執行『卷末換窗』(Act Rebase)
- */
 async function handleActRebase() {
   if (!confirm('確定要執行【卷末換窗 (Act Rebase)】嗎？\n這將把本幕所有章節濃縮為 800 字檔案並歸零對話視窗，但會保留當前數值與道具。')) {
     return;
@@ -502,23 +816,18 @@ async function handleActRebase() {
   hideLoading();
 }
 
-/**
- * 渲染狀態抽屜數據 (HP / SAN / 角色卡 / 好感度 / 背包 / 摘要池)
- */
 function renderSaveState() {
   if (!state.saveState) return;
   const p = state.saveState.protagonist || { hp: 100, sanity: 100 };
   if (dom.hpDisplay) dom.hpDisplay.textContent = p.hp;
   if (dom.sanityDisplay) dom.sanityDisplay.textContent = p.sanity;
 
-  // 玩家角色卡簡介
   const prof = state.saveState?.meta?.playerProfile;
   if (prof && dom.profileCardName && dom.profileCardLead) {
     dom.profileCardName.textContent = `${prof.name}（${prof.profession || '調查者'}）`;
     dom.profileCardLead.textContent = `攻略對象：${prof.targetLeadName || '徐令謙'} ｜ R-18：${prof.allowR18 ? '開啟' : '關閉'}`;
   }
 
-  // 1. 人物好感度
   if (dom.relationshipsList) {
     dom.relationshipsList.innerHTML = '';
     const rels = state.saveState.relationships || {};
@@ -536,7 +845,6 @@ function renderSaveState() {
     }
   }
 
-  // 2. 物品背包清單
   if (dom.inventoryList) {
     dom.inventoryList.innerHTML = '';
     const items = state.saveState.inventory || [];
@@ -552,15 +860,11 @@ function renderSaveState() {
     }
   }
 
-  // 3. 高密度記憶摘要池
   if (dom.summaryPoolContent) {
     dom.summaryPoolContent.textContent = state.saveState.summaryPool || '（尚無記憶摘要，將於第 5 回合自動生成）';
   }
 }
 
-/**
- * 發送請求至 Google Apps Script Web App
- */
 async function callBackendApi(action, payload) {
   const body = Object.assign({
     action: action,

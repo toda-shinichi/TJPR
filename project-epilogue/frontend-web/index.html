@@ -67,10 +67,10 @@
         </span>
       </div>
 
-      <!-- 右上角狀態抽屜開關 (好感度 / 背包 / 記憶池 / 卷末換窗) -->
-      <button id="open-drawer-btn" class="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-brand-gold hover:text-white transition flex items-center gap-1.5 text-xs font-semibold" title="查看狀態與背包">
+      <!-- 右上角狀態抽屜開關 (存檔 / 讀檔 / 好感度 / 背包 / 記憶池 / 卷末換窗) -->
+      <button id="open-drawer-btn" class="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-brand-gold hover:text-white transition flex items-center gap-1.5 text-xs font-semibold" title="查看狀態、存檔與背包">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-        <span class="hidden md:inline">狀態欄</span>
+        <span class="hidden md:inline">狀態 / 存檔</span>
       </button>
     </div>
   </header>
@@ -124,16 +124,50 @@
 
   <!-- 🌟 開局創建玩家角色與人物設定表單彈窗 (Character Creation Modal) -->
   <div id="character-creation-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[80] flex items-center justify-center p-4 overflow-y-auto transition-opacity" style="display:none;">
-    <div class="bg-brand-surface border border-brand-gold/40 rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl shadow-black/80 space-y-6">
+    <div class="bg-brand-surface border border-brand-gold/40 rounded-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-7 shadow-2xl shadow-black/80 space-y-5">
       
-      <div class="border-b border-brand-border pb-4 flex justify-between items-center">
+      <div class="border-b border-brand-border pb-3 flex justify-between items-center">
         <div>
           <h2 class="font-serif font-black text-xl sm:text-2xl text-brand-gold tracking-wide">《暗流》開局角色與情境設定</h2>
-          <p class="text-xs text-slate-400 mt-1">填寫您的身分背景、選擇主要攻略對象與劇情尺度，主筆將為您量身定制開場篇章。</p>
+          <p class="text-xs text-slate-400 mt-0.5">填寫身分背景、選擇攻略對象與尺度，支援多套角色範本存檔與隨時讀取切換。</p>
         </div>
         <button id="close-modal-btn" class="text-slate-400 hover:text-white p-1">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
+      </div>
+
+      <!-- 🌟 設定檔快速存取與預設範本管理專區 -->
+      <div class="bg-brand-card p-3.5 rounded-xl border border-brand-gold/30 space-y-2.5">
+        <div class="flex flex-wrap justify-between items-center gap-2">
+          <span class="text-xs font-bold text-brand-gold flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+            角色設定檔 (Profile Presets)
+          </span>
+          <div class="flex items-center gap-1.5 text-xs">
+            <button type="button" id="save-current-profile-btn" class="px-2.5 py-1 rounded bg-brand-gold text-slate-950 font-bold hover:bg-yellow-500 transition text-[11px]">
+              💾 儲存為我的設定檔
+            </button>
+            <button type="button" id="export-profile-json-btn" class="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white border border-brand-border transition text-[11px]">
+              📤 匯出 JSON
+            </button>
+            <label class="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white border border-brand-border transition text-[11px] cursor-pointer">
+              📥 匯入 JSON
+              <input type="file" id="import-profile-json-input" accept=".json" class="hidden">
+            </label>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2 items-center">
+          <label class="text-xs text-slate-400 shrink-0">快速載入範本：</label>
+          <select id="profile-presets-select" class="flex-1 bg-brand-dark border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-brand-gold focus:outline-none">
+            <option value="preset_yang">🌟 【官方範本】楊慕璃（弘楊集團公關總監 · 瑾和基金會執行長）</option>
+            <option value="preset_ruan" selected>🌟 【官方範本】阮思薇（司法政經獨立調查記者）</option>
+            <option value="preset_custom">✏️ 【自訂空角色】全新自訂</option>
+          </select>
+          <button type="button" id="delete-profile-preset-btn" class="text-rose-400 hover:text-rose-300 text-xs px-2 py-1" title="刪除選中的自訂範本">
+            🗑
+          </button>
+        </div>
       </div>
 
       <form id="char-creation-form" class="space-y-4 text-xs sm:text-sm">
@@ -180,7 +214,7 @@
           </div>
         </div>
 
-        <!-- 4. 主要攻略對象 (十三男主 + 楊慕璃 下拉) -->
+        <!-- 4. 主要攻略對象 (包含 14 位角色與修羅場) -->
         <div>
           <label class="block font-bold text-brand-gold mb-1">主要攻略對象 (角色選擇) *</label>
           <select id="form-target-lead" class="w-full bg-brand-dark border border-brand-gold/60 rounded-lg px-3 py-2.5 text-white font-semibold focus:border-brand-gold focus:outline-none">
@@ -197,7 +231,7 @@
             <option value="11_徐耀南" data-name="徐耀南">11 · 徐耀南（榮南營造集團董事長 · 台中七期豪宅）</option>
             <option value="12_徐若宸" data-name="徐若宸">12 · 徐若宸（榮南集團少東 · UBC商學院 · 莫蘭迪綠T-Roc）</option>
             <option value="13_徐予澈" data-name="徐予澈">13 · 徐予澈（藝名徐泰希 / 化名Hans · 台北大安區文化演藝名流）</option>
-            <option value="14_楊慕璃" data-name="楊慕璃">14 · 楊慕璃（弘楊集團公關總監 · 瑾和基金會執行長）</option>
+            <option value="14_楊慕璃" data-name="楊慕璃">14 · 楊慕璃（弘楊集團公關總監 · 瑾和基金會執行長 · 杏眼自然捲）</option>
             <option value="修羅場" data-name="修羅場">⚡ 【修羅場模式】全員交鋒 · 多方權力與情慾推拉</option>
           </select>
         </div>
@@ -221,10 +255,11 @@
           
           <!-- 快捷情境建議 -->
           <div class="flex flex-wrap gap-1.5 mt-2 text-[11px]">
-            <span class="text-slate-400">快捷模板：</span>
+            <span class="text-slate-400">快捷情境：</span>
             <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="深夜士林德行法律事務所頂層制策室，我帶著洗錢帳冊底牌前來與徐令謙談判。">【德行事務所暴雨密會】</button>
             <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="三峽老街溪畔的思慕咖啡館，在手沖香氣與晨霧中，我與前來靜心研磨咖啡豆的徐令謙四目相接。">【三峽思慕咖啡清晨偶遇】</button>
             <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="士林地檢署走廊外，暴雨滂沱，我與檢察官韓正寰在電梯口狹路相逢。">【地檢署走廊交鋒】</button>
+            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="弘楊集團頂樓晚宴，我身著素雅長裙，在暗潮洶湧的酒會上與楊紹宸、楊慕璃不期而遇。">【弘楊集團晚宴修羅場】</button>
           </div>
         </div>
 
@@ -237,27 +272,75 @@
     </div>
   </div>
 
-  <!-- 右側滑出式狀態抽屜 (Drawer: 好感度 / 背包 / 記憶池 / 卷末換窗) -->
+  <!-- 右側滑出式狀態抽屜 (Drawer: 存檔讀檔 / 角色卡 / 好感度 / 背包 / 記憶池 / 卷末換窗) -->
   <div id="drawer-backdrop" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity opacity-0 pointer-events-none"></div>
-  <aside id="side-drawer" class="fixed top-0 right-0 bottom-0 w-full sm:w-96 bg-brand-surface border-l border-brand-border z-50 p-6 overflow-y-auto transform translate-x-full transition-transform duration-300 ease-in-out shadow-2xl">
-    <div class="flex justify-between items-center pb-4 border-b border-brand-border mb-6">
+  <aside id="side-drawer" class="fixed top-0 right-0 bottom-0 w-full sm:w-96 bg-brand-surface border-l border-brand-border z-50 p-6 overflow-y-auto transform translate-x-full transition-transform duration-300 ease-in-out shadow-2xl space-y-6">
+    <div class="flex justify-between items-center pb-4 border-b border-brand-border">
       <h2 class="font-serif font-bold text-lg text-white flex items-center gap-2">
         <svg class="w-5 h-5 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-        角色狀態與系統
+        角色狀態與存檔管理
       </h2>
       <button id="close-drawer-btn" class="text-slate-400 hover:text-white p-1">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
       </button>
     </div>
 
-    <!-- 0. 玩家角色設定卡預覽 -->
-    <div id="player-profile-card" class="mb-6 bg-brand-card p-3.5 rounded-xl border border-brand-border text-xs space-y-1">
+    <!-- 🌟 0. 多存檔欄位管理器 (Save Slots Management) -->
+    <div class="bg-brand-card p-3.5 rounded-xl border border-brand-gold/30 space-y-3">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold flex items-center justify-between">
+        <span>💾 故事進度存檔與讀檔 (Save Slots)</span>
+        <button id="quick-save-btn" class="text-[11px] bg-brand-gold/15 text-brand-gold px-2 py-0.5 rounded border border-brand-gold/30 hover:bg-brand-gold/25">
+          快速存檔
+        </button>
+      </h3>
+
+      <div class="space-y-2 text-xs" id="save-slots-container">
+        <!-- Slot 1 -->
+        <div class="bg-brand-dark p-2.5 rounded-lg border border-brand-border flex items-center justify-between">
+          <div>
+            <div class="font-bold text-white" id="slot-1-title">【存檔 1】空欄位</div>
+            <div class="text-[11px] text-slate-400" id="slot-1-info">尚無存檔資料</div>
+          </div>
+          <div class="flex gap-1">
+            <button class="save-slot-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-brand-gold text-[11px] border border-brand-border" data-slot="1">儲存</button>
+            <button class="load-slot-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 text-[11px] border border-brand-border" data-slot="1">讀取</button>
+          </div>
+        </div>
+
+        <!-- Slot 2 -->
+        <div class="bg-brand-dark p-2.5 rounded-lg border border-brand-border flex items-center justify-between">
+          <div>
+            <div class="font-bold text-white" id="slot-2-title">【存檔 2】空欄位</div>
+            <div class="text-[11px] text-slate-400" id="slot-2-info">尚無存檔資料</div>
+          </div>
+          <div class="flex gap-1">
+            <button class="save-slot-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-brand-gold text-[11px] border border-brand-border" data-slot="2">儲存</button>
+            <button class="load-slot-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 text-[11px] border border-brand-border" data-slot="2">讀取</button>
+          </div>
+        </div>
+
+        <!-- Slot 3 -->
+        <div class="bg-brand-dark p-2.5 rounded-lg border border-brand-border flex items-center justify-between">
+          <div>
+            <div class="font-bold text-white" id="slot-3-title">【存檔 3】空欄位</div>
+            <div class="text-[11px] text-slate-400" id="slot-3-info">尚無存檔資料</div>
+          </div>
+          <div class="flex gap-1">
+            <button class="save-slot-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-brand-gold text-[11px] border border-brand-border" data-slot="3">儲存</button>
+            <button class="load-slot-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 text-[11px] border border-brand-border" data-slot="3">讀取</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1. 玩家角色設定卡預覽 -->
+    <div id="player-profile-card" class="bg-brand-card p-3.5 rounded-xl border border-brand-border text-xs space-y-1">
       <div class="font-bold text-brand-gold" id="profile-card-name">阮思薇（獨立調查記者）</div>
       <div class="text-slate-400" id="profile-card-lead">攻略對象：徐令謙 ｜ R-18：允許</div>
     </div>
 
-    <!-- 1. 角色關係與好感度 -->
-    <div class="mb-6">
+    <!-- 2. 角色關係與好感度 -->
+    <div>
       <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
         <span>♥ 人物好感度 / 關係網絡</span>
       </h3>
@@ -266,24 +349,24 @@
       </div>
     </div>
 
-    <!-- 2. 物品背包清單 -->
-    <div class="mb-6">
+    <!-- 3. 物品背包清單 -->
+    <div>
       <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
         <span>🎒 掌握道具與關鍵情報 (Inventory)</span>
       </h3>
       <div id="inventory-list" class="space-y-2"></div>
     </div>
 
-    <!-- 3. 高密度記憶池 -->
-    <div class="mb-6">
+    <!-- 4. 高密度記憶池 -->
+    <div>
       <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
         <span>🧠 滾動記憶摘要池 (Summary Pool)</span>
       </h3>
       <div id="summary-pool-content" class="bg-black/40 border border-brand-border/60 rounded-xl p-3.5 text-xs text-slate-300 leading-relaxed font-sans"></div>
     </div>
 
-    <!-- 4. 『卷末換窗』(Act Rebase) 按鈕 -->
-    <div class="pt-4 border-t border-brand-border mb-6">
+    <!-- 5. 『卷末換窗』(Act Rebase) 按鈕 -->
+    <div class="pt-4 border-t border-brand-border">
       <div class="mb-2">
         <div class="font-bold text-sm text-white">卷末換窗 (Act Rebase)</div>
         <div class="text-xs text-slate-400 leading-normal">
@@ -295,7 +378,7 @@
       </button>
     </div>
 
-    <!-- 5. 後端 API 設定 -->
+    <!-- 6. 後端 API 設定 -->
     <div class="pt-4 border-t border-brand-border">
       <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">GAS 後端 Web App URL</h3>
       <div class="space-y-2">
