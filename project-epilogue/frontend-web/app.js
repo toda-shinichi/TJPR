@@ -2,7 +2,7 @@
  * 《暗流》（UNDER CURRENT）- Frontend Web Client Application
  * 檔案：app.js
  * 
- * 管理玩家身分驗證（登入/註冊/隱私隔離）、角色設定檔範本、多存檔槽管理器 (Save Slots)、打字機動效與 GAS API 串接。
+ * 包含：玩家身分驗證、開局創角、5大體驗優化（雨聲氛圍音效、歷史Log、全文匯出、字級主題、打字機加速跳過）、多存檔槽與 GAS 串接。
  */
 
 // 全域狀態
@@ -16,7 +16,20 @@ const state = {
   chapterData: null,
   saveState: null,
   isTyping: false,
-  isDrawerOpen: false
+  skipTypewriterTriggered: false,
+  typewriterTimer: null,
+  
+  // 閱讀偏好
+  fontSizePx: parseInt(localStorage.getItem('undercurrent_font_size') || '18', 10),
+  theme: localStorage.getItem('undercurrent_theme') || 'dark',
+  typeSpeed: localStorage.getItem('undercurrent_type_speed') || 'normal',
+  
+  // 歷史章節累加池（供 Log 與全文下載）
+  chapterHistoryList: JSON.parse(localStorage.getItem('undercurrent_full_story_chapters') || '[]'),
+  
+  // 雨聲音效實例
+  rainAudio: null,
+  isRainPlaying: false
 };
 
 // 官方與自訂角色範本庫
@@ -70,6 +83,7 @@ const dom = {
   choicesContainer: document.getElementById('choices-container'),
   customActionInput: document.getElementById('custom-action-input'),
   submitCustomBtn: document.getElementById('submit-custom-btn'),
+  skipTypewriterBtn: document.getElementById('skip-typewriter-btn'),
   
   // 即時狀態面板
   inlineStatusPanel: document.getElementById('inline-status-panel'),
@@ -105,6 +119,19 @@ const dom = {
   importProfileJsonInput: document.getElementById('import-profile-json-input'),
   deleteProfilePresetBtn: document.getElementById('delete-profile-preset-btn'),
 
+  // 優化控制元件：氛圍音效、歷史 Log、字級主題、全文匯出
+  ambienceToggleBtn: document.getElementById('ambience-toggle-btn'),
+  ambienceIcon: document.getElementById('ambience-icon'),
+  ambienceLabel: document.getElementById('ambience-label'),
+  openHistoryBtn: document.getElementById('open-history-btn'),
+  closeHistoryBtn: document.getElementById('close-history-btn'),
+  historyModal: document.getElementById('history-modal'),
+  historyLogContainer: document.getElementById('history-log-container'),
+  fontDecreaseBtn: document.getElementById('font-decrease-btn'),
+  fontIncreaseBtn: document.getElementById('font-increase-btn'),
+  typeSpeedSelect: document.getElementById('type-speed-select'),
+  exportNovelBtn: document.getElementById('export-novel-btn'),
+
   // 側邊狀態抽屜 & 存檔槽
   openDrawerBtn: document.getElementById('open-drawer-btn'),
   closeDrawerBtn: document.getElementById('close-drawer-btn'),
@@ -131,16 +158,63 @@ const dom = {
 window.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   loadSavedProfilePresets();
+  applyReadingPreferences();
 
   if (dom.apiUrlInput) {
     dom.apiUrlInput.value = state.gasApiUrl;
   }
 
-  // 檢查是否已登入，未登入則彈出身分驗證鎖定視窗
   checkAuthSession();
 });
 
 function setupEventListeners() {
+  // 1. 閱讀字級與主題切換
+  if (dom.fontIncreaseBtn) {
+    dom.fontIncreaseBtn.addEventListener('click', () => adjustFontSize(1));
+  }
+  if (dom.fontDecreaseBtn) {
+    dom.fontDecreaseBtn.addEventListener('click', () => adjustFontSize(-1));
+  }
+  document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const targetTheme = e.target.getAttribute('data-theme');
+      setTheme(targetTheme);
+    });
+  });
+  if (dom.typeSpeedSelect) {
+    dom.typeSpeedSelect.value = state.typeSpeed;
+    dom.typeSpeedSelect.addEventListener('change', (e) => {
+      state.typeSpeed = e.target.value;
+      localStorage.setItem('undercurrent_type_speed', state.typeSpeed);
+    });
+  }
+
+  // 2. 雨夜氛圍音效開關 (Web Audio API Synthesizer)
+  if (dom.ambienceToggleBtn) {
+    dom.ambienceToggleBtn.addEventListener('click', toggleRainAmbience);
+  }
+
+  // 3. 歷史章節紀錄 Log
+  if (dom.openHistoryBtn) {
+    dom.openHistoryBtn.addEventListener('click', openHistoryModal);
+  }
+  if (dom.closeHistoryBtn) {
+    dom.closeHistoryBtn.addEventListener('click', closeHistoryModal);
+  }
+
+  // 4. 小說全文匯出下載 (TXT / Markdown)
+  if (dom.exportNovelBtn) {
+    dom.exportNovelBtn.addEventListener('click', exportFullNovelText);
+  }
+
+  // 5. 點擊正文或跳過按鈕以跳過打字機
+  if (dom.proseContent) {
+    dom.proseContent.addEventListener('click', skipTypewriter);
+  }
+  if (dom.skipTypewriterBtn) {
+    dom.skipTypewriterBtn.addEventListener('click', skipTypewriter);
+  }
+
   // 登入 / 註冊 Tab 切換
   if (dom.tabLoginBtn && dom.tabRegisterBtn) {
     dom.tabLoginBtn.addEventListener('click', () => {
@@ -158,7 +232,6 @@ function setupEventListeners() {
     });
   }
 
-  // 送出登入表單
   if (dom.loginForm) {
     dom.loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -166,7 +239,6 @@ function setupEventListeners() {
     });
   }
 
-  // 送出註冊表單
   if (dom.registerForm) {
     dom.registerForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -174,7 +246,6 @@ function setupEventListeners() {
     });
   }
 
-  // 訪客試玩
   if (dom.guestPlayBtn) {
     dom.guestPlayBtn.addEventListener('click', () => {
       state.token = 'guest_temp_' + Date.now();
@@ -186,7 +257,6 @@ function setupEventListeners() {
     });
   }
 
-  // 登出
   if (dom.logoutBtn) {
     dom.logoutBtn.addEventListener('click', handleLogout);
   }
@@ -203,7 +273,6 @@ function setupEventListeners() {
     });
   }
 
-  // 設定檔範本切換
   if (dom.profilePresetsSelect) {
     dom.profilePresetsSelect.addEventListener('change', (e) => {
       loadProfilePresetIntoForm(e.target.value);
@@ -226,7 +295,6 @@ function setupEventListeners() {
     dom.deleteProfilePresetBtn.addEventListener('click', deleteSelectedProfilePreset);
   }
 
-  // 快捷情境按鈕
   document.querySelectorAll('.preset-scenario-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const text = e.target.getAttribute('data-text');
@@ -235,7 +303,6 @@ function setupEventListeners() {
     });
   });
 
-  // 提交開局創角表單
   if (dom.charCreationForm) {
     dom.charCreationForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -307,7 +374,281 @@ function setupEventListeners() {
 }
 
 // ==========================================
-// 使用者身分驗證 (Auth Security Handlers)
+// 1. 閱讀偏好設定（字級 & 主題）
+// ==========================================
+
+function applyReadingPreferences() {
+  document.documentElement.style.setProperty('--reader-font-size', `${state.fontSizePx}px`);
+  setTheme(state.theme);
+}
+
+function adjustFontSize(delta) {
+  state.fontSizePx = Math.min(26, Math.max(14, state.fontSizePx + delta * 2));
+  document.documentElement.style.setProperty('--reader-font-size', `${state.fontSizePx}px`);
+  localStorage.setItem('undercurrent_font_size', state.fontSizePx);
+}
+
+function setTheme(themeName) {
+  state.theme = themeName;
+  localStorage.setItem('undercurrent_theme', themeName);
+  document.body.classList.remove('theme-parchment', 'theme-navy');
+  if (themeName === 'parchment') document.body.classList.add('theme-parchment');
+  if (themeName === 'navy') document.body.classList.add('theme-navy');
+}
+
+// ==========================================
+// 2. 雨夜氛圍音效 (Web Audio API Synthesizer)
+// ==========================================
+
+function toggleRainAmbience() {
+  if (state.isRainPlaying) {
+    stopRainAmbience();
+  } else {
+    startRainAmbience();
+  }
+}
+
+function startRainAmbience() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+
+    // 產生粉紅噪音/雨聲模擬緩衝
+    const bufferSize = ctx.sampleRate * 2;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      b0 = 0.99886 * b0 + white * 0.0555179;
+      b1 = 0.99332 * b1 + white * 0.0750759;
+      b2 = 0.96900 * b2 + white * 0.1538520;
+      b3 = 0.86650 * b3 + white * 0.3104856;
+      b4 = 0.55000 * b4 + white * 0.5329522;
+      b5 = -0.7616 * b5 - white * 0.0168980;
+      data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.04;
+      b6 = white * 0.115926;
+    }
+
+    const noiseNode = ctx.createBufferSource();
+    noiseNode.buffer = buffer;
+    noiseNode.loop = true;
+
+    // 低通濾波器（模擬室內聽窗外台北暴雨聲）
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1000;
+
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(0.35, ctx.currentTime);
+
+    noiseNode.connect(filter);
+    filter.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    noiseNode.start();
+    state.rainAudio = { ctx, noiseNode, gainNode };
+    state.isRainPlaying = true;
+
+    if (dom.ambienceIcon) dom.ambienceIcon.textContent = '🌧️';
+    if (dom.ambienceLabel) dom.ambienceLabel.textContent = '雨聲: 開';
+    if (dom.ambienceToggleBtn) dom.ambienceToggleBtn.classList.add('text-brand-gold', 'border-brand-gold/60');
+  } catch (e) {
+    console.warn('音效啟動提示:', e);
+  }
+}
+
+function stopRainAmbience() {
+  if (state.rainAudio) {
+    try {
+      state.rainAudio.noiseNode.stop();
+      state.rainAudio.ctx.close();
+    } catch (e) {}
+    state.rainAudio = null;
+  }
+  state.isRainPlaying = false;
+  if (dom.ambienceIcon) dom.ambienceIcon.textContent = '🌧';
+  if (dom.ambienceLabel) dom.ambienceLabel.textContent = '雨聲: 關';
+  if (dom.ambienceToggleBtn) dom.ambienceToggleBtn.classList.remove('text-brand-gold', 'border-brand-gold/60');
+}
+
+// 移動端觸覺震動
+function triggerHaptic(pattern) {
+  if (navigator && navigator.vibrate) {
+    try {
+      navigator.vibrate(pattern || [30, 20, 40]);
+    } catch (e) {}
+  }
+}
+
+// ==========================================
+// 3. 歷史章節紀錄 Log & 小說全文下載
+// ==========================================
+
+function openHistoryModal() {
+  dom.historyModal.style.display = 'flex';
+  dom.historyLogContainer.innerHTML = '';
+
+  const chapters = state.chapterHistoryList;
+  if (!chapters || chapters.length === 0) {
+    dom.historyLogContainer.innerHTML = '<div class="text-center text-slate-500 py-8">尚無前導回合紀錄</div>';
+    return;
+  }
+
+  chapters.forEach((item, idx) => {
+    const card = document.createElement('div');
+    card.className = 'bg-brand-dark border border-brand-border rounded-xl p-4 space-y-2';
+    card.innerHTML = `
+      <div class="flex justify-between items-center border-b border-brand-border/40 pb-2">
+        <span class="font-serif font-bold text-brand-gold text-sm">${item.chapterTitle || `第 ${idx + 1} 回`}</span>
+        <span class="text-[11px] font-mono text-slate-400">${item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : ''}</span>
+      </div>
+      <div class="text-xs text-slate-300 leading-relaxed max-h-40 overflow-y-auto whitespace-pre-line prose-tc">${item.prose || ''}</div>
+      ${item.chosenLabel ? `<div class="text-[11px] text-amber-300/90 pt-1 font-bold">👉 玩家抉擇：${item.chosenLabel}</div>` : ''}
+    `;
+    dom.historyLogContainer.appendChild(card);
+  });
+}
+
+function closeHistoryModal() {
+  dom.historyModal.style.display = 'none';
+}
+
+function appendChapterToHistory(chapter, chosenLabel) {
+  const record = {
+    timestamp: new Date().toISOString(),
+    chapterTitle: chapter.chapterTitle || '未命名章節',
+    prose: chapter.prose || '',
+    chosenLabel: chosenLabel || '',
+    statusPanel: chapter.statusPanel || null
+  };
+  state.chapterHistoryList.push(record);
+  localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+}
+
+function exportFullNovelText() {
+  const pName = state.saveState?.meta?.playerProfile?.name || '玩家';
+  const targetLead = state.saveState?.meta?.playerProfile?.targetLeadName || '男主';
+  const act = state.saveState?.meta?.currentAct || 1;
+
+  let novelMd = `# 《暗流》（UNDER CURRENT）— 完整篇章紀錄\n\n`;
+  novelMd += `* 主角玩家：${pName}（${state.saveState?.meta?.playerProfile?.profession || ''}）\n`;
+  novelMd += `* 攻略對象：${targetLead}\n`;
+  novelMd += `* 篇章進度：第 ${act} 幕 · 總計 ${state.chapterHistoryList.length} 回合\n`;
+  novelMd += `* 匯出時間：${new Date().toLocaleString('zh-TW')}\n\n`;
+  novelMd += `---\n\n`;
+
+  state.chapterHistoryList.forEach((c, idx) => {
+    novelMd += `## ${c.chapterTitle || `第 ${idx + 1} 回`}\n\n`;
+    novelMd += `${c.prose}\n\n`;
+    if (c.statusPanel && c.statusPanel.timeLocation) {
+      novelMd += `> 🕰 ${c.statusPanel.timeLocation} ｜ 🌡 ${c.statusPanel.tension || ''} ${c.statusPanel.intoxication || ''}\n\n`;
+    }
+    if (c.chosenLabel) {
+      novelMd += `**【關鍵抉擇】**：${c.chosenLabel}\n\n`;
+    }
+    novelMd += `---\n\n`;
+  });
+
+  const dataStr = 'data:text/markdown;charset=utf-8,' + encodeURIComponent(novelMd);
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.setAttribute('href', dataStr);
+  downloadAnchor.setAttribute('download', `暗流_${pName}_與_${targetLead}_小說全集.md`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+
+  alert(`已為您成功下載【${pName} × ${targetLead}】的小說全集！`);
+}
+
+// ==========================================
+// 4. 打字機動效與快速跳過
+// ==========================================
+
+function skipTypewriter() {
+  if (!state.isTyping) return;
+  state.skipTypewriterTriggered = true;
+  if (state.typewriterTimer) clearTimeout(state.typewriterTimer);
+  
+  if (state.chapterData) {
+    dom.proseContent.innerHTML = '';
+    const paragraphs = state.chapterData.prose.split('\n\n');
+    paragraphs.forEach(pText => {
+      const p = document.createElement('p');
+      p.className = 'mb-6 indent-8';
+      p.textContent = pText;
+      dom.proseContent.appendChild(p);
+    });
+    state.isTyping = false;
+    if (dom.skipTypewriterBtn) dom.skipTypewriterBtn.classList.add('hidden');
+    renderChoices(state.chapterData.choices || []);
+  }
+}
+
+function typewriterEffect(text, targetEl, onComplete) {
+  targetEl.innerHTML = '';
+  state.isTyping = true;
+  state.skipTypewriterTriggered = false;
+  dom.choicesContainer.innerHTML = '';
+
+  if (dom.skipTypewriterBtn) dom.skipTypewriterBtn.classList.remove('hidden');
+
+  // 瞬間全顯
+  if (state.typeSpeed === 'instant') {
+    const paragraphs = text.split('\n\n');
+    paragraphs.forEach(pText => {
+      const p = document.createElement('p');
+      p.className = 'mb-6 indent-8';
+      p.textContent = pText;
+      targetEl.appendChild(p);
+    });
+    state.isTyping = false;
+    if (dom.skipTypewriterBtn) dom.skipTypewriterBtn.classList.add('hidden');
+    if (onComplete) onComplete();
+    return;
+  }
+
+  const speed = state.typeSpeed === 'fast' ? 3 : 10;
+  const paragraphs = text.split('\n\n');
+  let pIndex = 0;
+  let charIndex = 0;
+
+  let currentP = document.createElement('p');
+  currentP.className = 'mb-6 indent-8';
+  targetEl.appendChild(currentP);
+
+  function typeNextChar() {
+    if (state.skipTypewriterTriggered) return;
+
+    if (pIndex < paragraphs.length) {
+      const pText = paragraphs[pIndex];
+      if (charIndex < pText.length) {
+        currentP.textContent += pText.charAt(charIndex);
+        charIndex++;
+        state.typewriterTimer = setTimeout(typeNextChar, speed);
+      } else {
+        pIndex++;
+        charIndex = 0;
+        if (pIndex < paragraphs.length) {
+          currentP = document.createElement('p');
+          currentP.className = 'mb-6 indent-8';
+          targetEl.appendChild(currentP);
+          state.typewriterTimer = setTimeout(typeNextChar, speed * 2);
+        } else {
+          state.isTyping = false;
+          if (dom.skipTypewriterBtn) dom.skipTypewriterBtn.classList.add('hidden');
+          if (onComplete) onComplete();
+        }
+      }
+    }
+  }
+
+  typeNextChar();
+}
+
+// ==========================================
+// 5. 身分驗證 (Auth Security Handlers)
 // ==========================================
 
 function checkAuthSession() {
@@ -360,7 +701,6 @@ async function handleUserLogin() {
       alert('登入失敗：' + (res.error?.message || '帳號或密碼錯誤'));
     }
   } catch (err) {
-    // 降級本地登入
     setSession('local_token_' + Date.now(), 'usr_local', username);
     dom.authModal.style.display = 'none';
     alert(`【本地模式登入】歡迎玩家【${username}】！`);
@@ -647,6 +987,7 @@ function saveGameStateToSlot(slotIndex) {
   const userPrefix = state.username || 'user';
   localStorage.setItem(`undercurrent_${userPrefix}_saveslot_${slotIndex}`, JSON.stringify(slotData));
   updateSaveSlotsDisplay();
+  triggerHaptic([40, 20]);
 
   if (state.gasApiUrl) {
     callBackendApi('novel/save-state', { saveState: state.saveState }).catch(console.warn);
@@ -670,6 +1011,7 @@ function loadGameStateFromSlot(slotIndex) {
     renderChapter(slotData.chapter);
     renderSaveState();
     closeDrawer();
+    triggerHaptic([30, 30]);
     alert(`【讀檔成功】已載入存檔欄位 ${slotIndex}！`);
   } catch (err) {
     alert('讀取存檔失敗: ' + err.message);
@@ -701,6 +1043,9 @@ async function handleCharacterCreationSubmit() {
   dom.charCreationModal.style.display = 'none';
   showLoading(`正在為【${playerProfile.name}】構建與【${playerProfile.targetLeadName}】的專屬開場命運篇章……`);
 
+  state.chapterHistoryList = [];
+  localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify([]));
+
   if (state.gasApiUrl) {
     try {
       const res = await callBackendApi('novel/init', {
@@ -712,6 +1057,7 @@ async function handleCharacterCreationSubmit() {
         state.saveState = res.data.saveState;
         renderChapter(res.data.chapter);
         renderSaveState();
+        appendChapterToHistory(res.data.chapter, '【開局入局】');
         saveGameStateToSlot('1');
       } else {
         alert('開局生成失敗：' + (res.error?.message || '未知錯誤'));
@@ -816,6 +1162,7 @@ function loadMockDataWithProfile(profile) {
   state.chapterData = initialMockChapter;
   renderChapter(initialMockChapter);
   renderSaveState();
+  appendChapterToHistory(initialMockChapter, '【開局入局】');
 }
 
 function renderChapter(chapter) {
@@ -837,47 +1184,6 @@ function renderChapter(chapter) {
   });
 }
 
-function typewriterEffect(text, targetEl, onComplete) {
-  targetEl.innerHTML = '';
-  state.isTyping = true;
-  dom.choicesContainer.innerHTML = '';
-
-  const paragraphs = text.split('\n\n');
-  let pIndex = 0;
-  let charIndex = 0;
-
-  let currentP = document.createElement('p');
-  currentP.className = 'mb-6 indent-8';
-  targetEl.appendChild(currentP);
-
-  const speed = 10;
-
-  function typeNextChar() {
-    if (pIndex < paragraphs.length) {
-      const pText = paragraphs[pIndex];
-      if (charIndex < pText.length) {
-        currentP.textContent += pText.charAt(charIndex);
-        charIndex++;
-        setTimeout(typeNextChar, speed);
-      } else {
-        pIndex++;
-        charIndex = 0;
-        if (pIndex < paragraphs.length) {
-          currentP = document.createElement('p');
-          currentP.className = 'mb-6 indent-8';
-          targetEl.appendChild(currentP);
-          setTimeout(typeNextChar, speed * 2);
-        } else {
-          state.isTyping = false;
-          if (onComplete) onComplete();
-        }
-      }
-    }
-  }
-
-  typeNextChar();
-}
-
 function renderChoices(choices) {
   dom.choicesContainer.innerHTML = '';
   choices.forEach((choice) => {
@@ -885,7 +1191,7 @@ function renderChoices(choices) {
     card.className = 'bg-brand-card hover:bg-[#202538] border border-brand-border hover:border-brand-gold/40 rounded-xl p-4 cursor-pointer transition transform hover:-translate-y-0.5 shadow-md';
 
     const riskColor = choice.risk === 'high' ? 'text-rose-400 bg-rose-950/40 border-rose-800/30' : (choice.risk === 'medium' ? 'text-amber-300 bg-amber-950/40 border-amber-800/30' : 'text-emerald-400 bg-emerald-950/40 border-emerald-800/30');
-    const riskLabel = choice.risk === 'high' ? '高風險' : (choice.risk === 'medium' ? '推拉' : '穩健');
+    const riskLabel = choice.risk === 'high' ? '情慾張力' : (choice.risk === 'medium' ? '推拉' : '穩健');
 
     card.innerHTML = `
       <div class="font-serif font-bold text-white text-base leading-snug flex items-start gap-2">
@@ -896,7 +1202,11 @@ function renderChoices(choices) {
     `;
 
     card.addEventListener('click', () => {
-      if (state.isTyping) return;
+      if (state.isTyping) {
+        skipTypewriter();
+        return;
+      }
+      if (choice.risk === 'high') triggerHaptic([50, 30, 80]);
       makeChoice(choice.id, choice.label);
     });
 
@@ -920,6 +1230,7 @@ async function makeChoice(choiceId, customInput) {
         state.saveState = res.data.saveState;
         renderChapter(res.data.chapter);
         renderSaveState();
+        appendChapterToHistory(res.data.chapter, customInput || choiceId);
       } else {
         alert('生成章節失敗：' + (res.error?.message || '未知伺服器錯誤'));
       }
@@ -952,6 +1263,7 @@ async function makeChoice(choiceId, customInput) {
       state.chapterData = nextMock;
       renderChapter(nextMock);
       renderSaveState();
+      appendChapterToHistory(nextMock, customInput || choiceId);
     }, 1200);
   }
 
@@ -964,6 +1276,7 @@ async function handleActRebase() {
   }
 
   showLoading('正在執行卷末換窗，編年史記錄官正在生成幕篇檔案 (Act Dossier)...');
+  triggerHaptic([60, 40, 60]);
 
   if (state.gasApiUrl) {
     try {
