@@ -232,9 +232,9 @@ var StorageService = (function() {
   }
 
   /**
-   * 寫入或更新使用者的存檔與五大資料檔案
+   * 寫入或更新使用者的存檔與五大資料檔案（接收真實前端資料）
    */
-  function saveSaveState(userFolderIdOrUserId, saveStateObj, chapterObj) {
+  function saveSaveState(userFolderIdOrUserId, saveStateObj, chapterObj, playerProfileObj, chapterHistoryArr) {
     try {
       var folderId = userFolderIdOrUserId;
       if (!folderId || folderId.indexOf('usr_') === 0 || folderId === 'usr_guest') {
@@ -251,9 +251,10 @@ var StorageService = (function() {
         folder.createFile(CONFIG.STORAGE.SAVE_FILE_NAME, jsonContent, MimeType.PLAIN_TEXT);
       }
 
-      // 2. 寫入 / 更新 Player_Profile.json
-      if (saveStateObj.meta && saveStateObj.meta.playerProfile) {
-        var profJson = JSON.stringify(saveStateObj.meta.playerProfile, null, 2);
+      // 2. 寫入 / 更新 Player_Profile.json (真實玩家人設)
+      var pProfile = playerProfileObj || (saveStateObj.meta && saveStateObj.meta.playerProfile) || saveStateObj.playerProfile;
+      if (pProfile) {
+        var profJson = JSON.stringify(pProfile, null, 2);
         var profFiles = folder.getFilesByName('Player_Profile.json');
         if (profFiles.hasNext()) {
           profFiles.next().setContent(profJson);
@@ -262,9 +263,10 @@ var StorageService = (function() {
         }
       }
 
-      // 3. 寫入 / 更新 Summary_Pool.md (長期記憶摘要池)
-      if (saveStateObj.summaryPool) {
-        var summaryContent = '# 長期劇情滾動摘要池 (Summary Pool)\n*更新時間：' + new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) + '*\n\n' + saveStateObj.summaryPool;
+      // 3. 寫入 / 更新 Summary_Pool.md (真實長期記憶摘要池)
+      var summaryText = saveStateObj.summaryPool || '';
+      if (summaryText) {
+        var summaryContent = '# 長期劇情滾動摘要池 (Summary Pool)\n*最後同步時間：' + new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) + '*\n\n' + summaryText;
         var summaryFiles = folder.getFilesByName('Summary_Pool.md');
         if (summaryFiles.hasNext()) {
           summaryFiles.next().setContent(summaryContent);
@@ -273,13 +275,15 @@ var StorageService = (function() {
         }
       }
 
-      // 4. 寫入 / 更新 Memory_Archive.json (好感度與關鍵事件標記)
+      // 4. 寫入 / 更新 Memory_Archive.json (真實好感度、數值與關鍵事件標記)
       var memoryArchive = {
         turnCount: saveStateObj.turnCount || 1,
+        targetLead: pProfile ? (pProfile.targetLeadName || pProfile.targetLead) : '主線',
         relationships: saveStateObj.relationships || {},
         questFlags: saveStateObj.questFlags || {},
         inventory: saveStateObj.inventory || [],
-        protagonist: saveStateObj.protagonist || {},
+        tension: saveStateObj.tension || (saveStateObj.status && saveStateObj.status.tension) || 0,
+        tipsy: saveStateObj.tipsy || (saveStateObj.status && saveStateObj.status.tipsy) || 0,
         lastUpdated: new Date().toISOString()
       };
       var memFiles = folder.getFilesByName('Memory_Archive.json');
@@ -289,12 +293,27 @@ var StorageService = (function() {
         folder.createFile('Memory_Archive.json', JSON.stringify(memoryArchive, null, 2), MimeType.PLAIN_TEXT);
       }
 
-      // 5. 追加章節至 Full_Novel.md (若有提供 chapterObj)
-      if (chapterObj && chapterObj.prose) {
+      // 5. 寫入 / 更新 Full_Novel.md (真實連續小說對話與章節正文)
+      if (chapterHistoryArr && chapterHistoryArr.length > 0) {
+        var novelHeader = '# Project Epilogue — 完整小說故事紀錄\n*最後同步時間：' + new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) + '*\n\n---\n';
+        var novelBody = chapterHistoryArr.map(function(ch, idx) {
+          var title = ch.chapterTitle || ('第 ' + (ch.turnNumber || (idx + 1)) + ' 回');
+          var prose = ch.prose || ch.content || '';
+          return '## ' + title + '\n\n' + prose;
+        }).join('\n\n---\n\n');
+        
+        var fullNovelContent = novelHeader + novelBody + '\n\n---\n';
+        var novelFiles = folder.getFilesByName(CONFIG.STORAGE.NOVEL_FILE_NAME);
+        if (novelFiles.hasNext()) {
+          novelFiles.next().setContent(fullNovelContent);
+        } else {
+          folder.createFile(CONFIG.STORAGE.NOVEL_FILE_NAME, fullNovelContent, MimeType.PLAIN_TEXT);
+        }
+      } else if (chapterObj && chapterObj.prose) {
         appendChapterToNovel(folderId, saveStateObj.turnCount || 1, chapterObj.chapterTitle || '最新回', chapterObj.prose);
       }
 
-      console.log('成功寫入 Drive 存檔資料夾 (' + folderId + ') 五大核心檔案。');
+      console.log('成功寫入真實遊戲資料至 Drive 存檔資料夾 (' + folderId + ')。');
       return true;
     } catch (err) {
       console.error('saveSaveState 寫入 Drive 失敗: ' + err.message);

@@ -585,6 +585,10 @@
           <input type="text" id="search-save-input" placeholder="🔍 搜尋存檔名稱、角色名、攻略對象..." class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
         </div>
         <div class="flex items-center gap-1.5">
+          <button id="manual-cloud-sync-btn" class="px-2.5 py-1.5 rounded bg-blue-950/80 hover:bg-blue-900 text-blue-200 hover:text-white border border-blue-700/50 transition text-[11px] font-bold flex items-center gap-1 cursor-pointer" title="將當前進行中的真實遊戲紀錄 (人設、對話、摘要、存檔) 即時同步至 Google Drive">
+            <span>☁️</span>
+            <span>同步至 Google Drive</span>
+          </button>
           <button id="export-all-saves-btn" class="px-2.5 py-1.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-brand-border transition text-[11px] cursor-pointer" title="匯出全部存檔至 JSON 檔案">
             📤 匯出存檔
           </button>
@@ -810,6 +814,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-  <script src="./app.js?v=20260816_v110"></script>
+  <script src="./app.js?v=20260816_v120"></script>
 </body>
 </html>

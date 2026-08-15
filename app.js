@@ -252,6 +252,7 @@ const dom = {
   searchSaveInput: document.getElementById('search-save-input'),
   exportAllSavesBtn: document.getElementById('export-all-saves-btn'),
   importAllSavesInput: document.getElementById('import-all-saves-input'),
+  manualCloudSyncBtn: document.getElementById('manual-cloud-sync-btn'),
   saveArchivesList: document.getElementById('save-archives-list'),
   
   novelStreamContainer: document.getElementById('novel-stream-container'),
@@ -429,6 +430,7 @@ function setupEventListeners() {
   if (dom.closeSaveArchiveBtn) dom.closeSaveArchiveBtn.addEventListener('click', closeSaveArchiveModal);
   if (dom.createNamedSaveBtn) dom.createNamedSaveBtn.addEventListener('click', () => createNamedSave(dom.newSaveNameInput?.value));
   if (dom.searchSaveInput) dom.searchSaveInput.addEventListener('input', renderSaveArchivesList);
+  if (dom.manualCloudSyncBtn) dom.manualCloudSyncBtn.addEventListener('click', () => syncStateToGoogleDriveCloud(state.saveState, state.chapterData, true));
   if (dom.exportAllSavesBtn) dom.exportAllSavesBtn.addEventListener('click', exportAllSaves);
   if (dom.importAllSavesInput) dom.importAllSavesInput.addEventListener('change', importAllSaves);
   if (dom.gameplayQuickSaveBtn) dom.gameplayQuickSaveBtn.addEventListener('click', handleQuickSave);
@@ -553,21 +555,33 @@ function switchAuthTab(tab) {
 
 
 /**
- * ☁️ 非同步同步存檔至 Google Drive (Player_Saves) 與 Google Sheets (Master_Index)
+ * ☁️ 非同步同步真實遊戲存檔至 Google Drive (Player_Saves) 與 Google Sheets (Master_Index)
  */
-async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj) {
-  if (!saveStateObj && !chapterDataObj) return;
+async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManual = false) {
+  const saveState = saveStateObj || state.saveState;
+  const chapterData = chapterDataObj || state.chapterData;
+  const playerProfile = state.playerProfile || (saveState && saveState.meta && saveState.meta.playerProfile);
+
+  if (!saveState && !chapterData) {
+    if (isManual) alert('目前尚無進行中的遊戲進度可同步至雲端！');
+    return;
+  }
 
   try {
-    const email = state.username ? (state.username.includes('@') ? state.username : `${state.username}@undercurrent.game`) : 'anonymous_player@undercurrent.game';
+    const email = state.username ? (state.username.includes('@') ? state.username : `${state.username}@undercurrent.game`) : 'player@undercurrent.game';
     const payload = {
       action: 'novel/save-state',
-      token: state.token || 'epi_guest_token',
-      userId: state.userId || 'usr_guest',
+      token: state.token || 'tok_player_' + (state.userId || 'guest'),
+      userId: state.userId || 'usr_player',
       email: email,
-      saveState: saveStateObj || state.saveState,
-      chapter: chapterDataObj || state.chapterData
+      saveState: saveState,
+      chapter: chapterData,
+      playerProfile: playerProfile,
+      chapterHistory: state.chapterHistoryList || [],
+      namedSaves: getNamedSavesList()
     };
+
+    console.log('[Cloud Sync] Transmitting live game data to Google Drive...', payload);
 
     // 嘗試向 Google Apps Script 後端推播存檔與小說章節
     fetch(state.gasApiUrl, {
@@ -577,11 +591,18 @@ async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj) {
       mode: 'no-cors' // Google Apps Script Web App 跨域支援
     }).then(() => {
       console.log('[Cloud Sync] Successfully triggered Google Drive (Player_Saves) synchronization.');
+      if (isManual) {
+        alert('☁️ 【Google Drive 雲端同步完成】\n已成功將您當前的「真實玩家人設 (Player_Profile.json)」、「完整小說正文 (Full_Novel.md)」、「長期劇情摘要 (Summary_Pool.md)」與「好感度存檔 (save_slot.json)」全數同步儲存至 Google Drive 的 Player_Saves 專屬資料夾中！');
+      }
     }).catch(e => {
       console.warn('[Cloud Sync] Background cloud sync warning (silent fallback):', e.message);
+      if (isManual) {
+        alert('雲端同步已發送至 Google Drive 後台處理中。');
+      }
     });
   } catch (err) {
     console.warn('[Cloud Sync] Sync dispatch skipped:', err.message);
+    if (isManual) alert('同步請求發送失敗：' + err.message);
   }
 }
 

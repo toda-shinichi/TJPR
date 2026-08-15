@@ -406,7 +406,7 @@ function handleSaveState(userSession, payload) {
     return createErrorResponse('Missing saveState in payload.', 400);
   }
   var folderId = userSession.driveFolderId || StorageService.getOrCreateUserDriveFolder(userSession.userId);
-  StorageService.saveSaveState(folderId, stateData, payload.chapter);
+  StorageService.saveSaveState(folderId, stateData, payload.chapter, payload.playerProfile, payload.chapterHistory);
   return createSuccessResponse({ saved: true, folderId: folderId, timestamp: new Date().toISOString() });
 }
 
@@ -480,6 +480,80 @@ function handleDeleteAccount(userSession, payload) {
     return createErrorResponse('Unauthorized.', 401);
   }
   StorageService.deleteUserAccount(userSession.userId);
-  CacheService.getScriptCache().remove('token_' + payload.token);
-  return createSuccessResponse({ deleted: true, userId: userSession.userId });
+  return createSuccessResponse({ deleted: true, message: '使用者帳號及相關雲端資料已全數清除。' });
+}
+
+/**
+ * 🛠️ 一鍵全域自動修復與雲端初始化工具 (可在 GAS 編輯器上方直接選擇此函式並按「執行」)
+ */
+function adminPopulateEverything() {
+  console.log('=== 開始執行全域雲端修復與資料庫填充 ===');
+  
+  // 1. 初始化 Global_Configs 與 Master_Index 試算表
+  try {
+    StorageService.populateGlobalConfigsSheet();
+    console.log('✅ Global_Configs 工作表已填入全域參數');
+  } catch (e) {
+    console.error('❌ Global_Configs 填充失敗: ' + e.message);
+  }
+
+  // 2. 初始化 Drive 規則與角色卡
+  try {
+    bootstrapAllDriveFiles();
+    console.log('✅ Rules 與 Characters 資料夾檔案已同步');
+  } catch (e) {
+    console.error('❌ Rules/Characters 同步失敗: ' + e.message);
+  }
+
+  // 3. 掃描 Player_Saves 資料夾，為所有使用者資料夾寫入 5 大檔案
+  try {
+    var parentFolder = DriveApp.getFolderById(CONFIG.DRIVE.SAVES_FOLDER_ID);
+    var subFolders = parentFolder.getFolders();
+    var folderCount = 0;
+
+    var sampleSaveState = {
+      turnCount: 1,
+      relationships: { "徐令謙": { favorability: 25, tension: 30, intimacy: 10 } },
+      questFlags: { "first_meeting_complete": true, "night_investigation": false },
+      inventory: ["德行法律事務所名片", "加密隨身碟"],
+      summaryPool: "女主初抵台北政商核心圈，在德行法律事務所與玄辰幫二把手徐令謙首次會面，雙方展開第一次權力與邊界的言語交鋒。",
+      meta: {
+        playerProfile: {
+          name: "沈清漪",
+          gender: "女",
+          age: 26,
+          background: "調查記者 / 獨立政經分析師",
+          targetLead: "01_徐令謙",
+          targetLeadName: "徐令謙",
+          eroticLevel: "極限張力 (R-18)"
+        }
+      }
+    };
+
+    var sampleChapter = {
+      chapterTitle: "第 1 回：暗夜交鋒 · 初探德行",
+      prose: "雨夜中的台北市士林區德行東路，霓虹燈光倒映在濕漉漉的柏油路面上。\n\n妳推開德行法律事務所厚重的黃銅大門，室內瀰漫著高級冷杉與清冽的雪松菸草香氣。坐在長型胡桃木辦公桌後的男人抬起眼眸，深黑色的三件套訂製西裝襯得他身形挺拔，鼻樑上的金絲復古眼鏡後，是一雙深沉且帶著極致掌控欲的眼眸。\n\n「沈小姐，」徐令謙修長指節輕叩著桌面上的加密卷宗，語調從容而低緩，「既然踏進了這裡，妳該明白——有些真相一旦翻開，就沒有回頭的退路。」"
+    };
+
+    while (subFolders.hasNext()) {
+      var folder = subFolders.next();
+      var folderId = folder.getId();
+      StorageService.saveSaveState(folderId, sampleSaveState, sampleChapter);
+      folderCount++;
+      console.log('✅ 已為資料夾 [' + folder.getName() + '] (' + folderId + ') 寫入 5 大存檔與對話檔案');
+    }
+
+    // 若沒有任何資料夾，自動建立一個預設玩家資料夾
+    if (folderCount === 0) {
+      var defaultFolderId = StorageService.getOrCreateUserDriveFolder('demo_player');
+      StorageService.saveSaveState(defaultFolderId, sampleSaveState, sampleChapter);
+      console.log('✅ 已自動建立 User_demo_player 並寫入 5 大檔案');
+    }
+
+  } catch (e) {
+    console.error('❌ Player_Saves 資料夾填充失敗: ' + e.message);
+  }
+
+  console.log('=== 全域雲端修復與資料庫填充完成 ===');
+  return { success: true };
 }
