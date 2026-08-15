@@ -2,14 +2,15 @@
  * 《暗流》（UNDER CURRENT）- Frontend Web Client Application
  * 檔案：app.js
  * 
- * 管理讀者端狀態、角色設定檔範本管理、多存檔槽管理器 (Save Slots)、打字機動效與 GAS API 串接。
+ * 管理玩家身分驗證（登入/註冊/隱私隔離）、角色設定檔範本、多存檔槽管理器 (Save Slots)、打字機動效與 GAS API 串接。
  */
 
 // 全域狀態
 const state = {
   gasApiUrl: localStorage.getItem('epilogue_gas_url') || 'https://script.google.com/macros/s/AKfycbzoUqtgXpP5qKpf6FNyc3lT3G1FHqjH5B4GopdO4pZ_jLa8GDTA51LcKuR5ostcXP6hKw/exec',
-  token: localStorage.getItem('epilogue_token') || 'epi_mock_test_token_889922',
-  userId: localStorage.getItem('epilogue_user_id') || 'usr_test_01',
+  token: localStorage.getItem('undercurrent_auth_token') || '',
+  userId: localStorage.getItem('undercurrent_user_id') || '',
+  username: localStorage.getItem('undercurrent_user_name') || '',
   currentTurn: 1,
   currentAct: 1,
   chapterData: null,
@@ -78,6 +79,21 @@ const dom = {
   panelInteraction: document.getElementById('panel-interaction'),
   panelRumors: document.getElementById('panel-rumors'),
 
+  // 登入 / 註冊 驗證視窗
+  authModal: document.getElementById('auth-modal'),
+  tabLoginBtn: document.getElementById('tab-login-btn'),
+  tabRegisterBtn: document.getElementById('tab-register-btn'),
+  loginForm: document.getElementById('login-form'),
+  registerForm: document.getElementById('register-form'),
+  loginUsernameInput: document.getElementById('login-username'),
+  loginPasswordInput: document.getElementById('login-password'),
+  regUsernameInput: document.getElementById('reg-username'),
+  regPasswordInput: document.getElementById('reg-password'),
+  guestPlayBtn: document.getElementById('guest-play-btn'),
+  userBadge: document.getElementById('user-badge'),
+  usernameDisplay: document.getElementById('username-display'),
+  logoutBtn: document.getElementById('logout-btn'),
+
   // 創角表單與設定檔管理
   openCreateCharBtn: document.getElementById('open-create-char-btn'),
   closeModalBtn: document.getElementById('close-modal-btn'),
@@ -115,17 +131,66 @@ const dom = {
 window.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   loadSavedProfilePresets();
-  updateSaveSlotsDisplay();
 
   if (dom.apiUrlInput) {
     dom.apiUrlInput.value = state.gasApiUrl;
   }
 
-  // 載入故事狀態
-  await initializeStory();
+  // 檢查是否已登入，未登入則彈出身分驗證鎖定視窗
+  checkAuthSession();
 });
 
 function setupEventListeners() {
+  // 登入 / 註冊 Tab 切換
+  if (dom.tabLoginBtn && dom.tabRegisterBtn) {
+    dom.tabLoginBtn.addEventListener('click', () => {
+      dom.tabLoginBtn.className = 'flex-1 py-2 rounded-md bg-brand-gold text-slate-950 transition';
+      dom.tabRegisterBtn.className = 'flex-1 py-2 rounded-md text-slate-400 hover:text-white transition';
+      dom.loginForm.style.display = 'block';
+      dom.registerForm.style.display = 'none';
+    });
+
+    dom.tabRegisterBtn.addEventListener('click', () => {
+      dom.tabRegisterBtn.className = 'flex-1 py-2 rounded-md bg-brand-gold text-slate-950 transition';
+      dom.tabLoginBtn.className = 'flex-1 py-2 rounded-md text-slate-400 hover:text-white transition';
+      dom.registerForm.style.display = 'block';
+      dom.loginForm.style.display = 'none';
+    });
+  }
+
+  // 送出登入表單
+  if (dom.loginForm) {
+    dom.loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await handleUserLogin();
+    });
+  }
+
+  // 送出註冊表單
+  if (dom.registerForm) {
+    dom.registerForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await handleUserRegister();
+    });
+  }
+
+  // 訪客試玩
+  if (dom.guestPlayBtn) {
+    dom.guestPlayBtn.addEventListener('click', () => {
+      state.token = 'guest_temp_' + Date.now();
+      state.userId = 'usr_guest';
+      state.username = '訪客玩家';
+      setSession(state.token, state.userId, state.username);
+      dom.authModal.style.display = 'none';
+      initializeStory();
+    });
+  }
+
+  // 登出
+  if (dom.logoutBtn) {
+    dom.logoutBtn.addEventListener('click', handleLogout);
+  }
+
   // 創角彈窗控制
   if (dom.openCreateCharBtn) {
     dom.openCreateCharBtn.addEventListener('click', () => {
@@ -145,22 +210,18 @@ function setupEventListeners() {
     });
   }
 
-  // 儲存目前角色為自訂範本
   if (dom.saveCurrentProfileBtn) {
     dom.saveCurrentProfileBtn.addEventListener('click', saveCurrentFormAsPreset);
   }
 
-  // 匯出角色卡 JSON
   if (dom.exportProfileJsonBtn) {
     dom.exportProfileJsonBtn.addEventListener('click', exportProfileJson);
   }
 
-  // 匯入角色卡 JSON
   if (dom.importProfileJsonInput) {
     dom.importProfileJsonInput.addEventListener('change', importProfileJson);
   }
 
-  // 刪除自訂範本
   if (dom.deleteProfilePresetBtn) {
     dom.deleteProfilePresetBtn.addEventListener('click', deleteSelectedProfilePreset);
   }
@@ -245,6 +306,119 @@ function setupEventListeners() {
   }
 }
 
+// ==========================================
+// 使用者身分驗證 (Auth Security Handlers)
+// ==========================================
+
+function checkAuthSession() {
+  if (state.token && state.username) {
+    dom.authModal.style.display = 'none';
+    if (dom.userBadge) dom.userBadge.classList.remove('hidden');
+    if (dom.usernameDisplay) dom.usernameDisplay.textContent = state.username;
+    updateSaveSlotsDisplay();
+    initializeStory();
+  } else {
+    dom.authModal.style.display = 'flex';
+    if (dom.userBadge) dom.userBadge.classList.add('hidden');
+  }
+}
+
+function setSession(token, userId, username) {
+  state.token = token;
+  state.userId = userId;
+  state.username = username;
+  localStorage.setItem('undercurrent_auth_token', token);
+  localStorage.setItem('undercurrent_user_id', userId);
+  localStorage.setItem('undercurrent_user_name', username);
+  if (dom.userBadge) dom.userBadge.classList.remove('hidden');
+  if (dom.usernameDisplay) dom.usernameDisplay.textContent = username;
+}
+
+async function handleUserLogin() {
+  const username = dom.loginUsernameInput.value.trim();
+  const password = dom.loginPasswordInput.value;
+
+  if (!username || !password) {
+    alert('請輸入帳號與密碼！');
+    return;
+  }
+
+  showLoading('正在驗證玩家身分，讀取私人專屬加密空間……');
+
+  try {
+    const res = await callBackendApi('auth/login', {
+      email: username,
+      password: password
+    });
+
+    if (res.success && res.data) {
+      setSession(res.data.token, res.data.userId, username);
+      dom.authModal.style.display = 'none';
+      alert(`歡迎回來，玩家【${username}】！已成功載入私人空間。`);
+      await initializeStory();
+    } else {
+      alert('登入失敗：' + (res.error?.message || '帳號或密碼錯誤'));
+    }
+  } catch (err) {
+    // 降級本地登入
+    setSession('local_token_' + Date.now(), 'usr_local', username);
+    dom.authModal.style.display = 'none';
+    alert(`【本地模式登入】歡迎玩家【${username}】！`);
+    await initializeStory();
+  }
+
+  hideLoading();
+}
+
+async function handleUserRegister() {
+  const username = dom.regUsernameInput.value.trim();
+  const password = dom.regPasswordInput.value;
+
+  if (!username || !password || password.length < 6) {
+    alert('帳號不得為空，且密碼至少需 6 個字元！');
+    return;
+  }
+
+  showLoading('正在為您註冊並在 Google 雲端建立專屬獨立存檔空間……');
+
+  try {
+    const res = await callBackendApi('auth/register', {
+      email: username,
+      password: password
+    });
+
+    if (res.success && res.data) {
+      setSession(res.data.token, res.data.userId, username);
+      dom.authModal.style.display = 'none';
+      alert(`🎉 註冊成功！已為您建立專屬獨立存檔空間。\n現在請為您的角色建立初始設定！`);
+      dom.charCreationModal.style.display = 'flex';
+    } else {
+      alert('註冊失敗：' + (res.error?.message || '該帳號可能已被註冊'));
+    }
+  } catch (err) {
+    setSession('local_token_' + Date.now(), 'usr_local', username);
+    dom.authModal.style.display = 'none';
+    alert(`【本地註冊】已建立玩家【${username}】，請設定開局角色！`);
+    dom.charCreationModal.style.display = 'flex';
+  }
+
+  hideLoading();
+}
+
+function handleLogout() {
+  if (!confirm('確定要登出當前帳號嗎？')) return;
+  state.token = '';
+  state.userId = '';
+  state.username = '';
+  state.saveState = null;
+  state.chapterData = null;
+  localStorage.removeItem('undercurrent_auth_token');
+  localStorage.removeItem('undercurrent_user_id');
+  localStorage.removeItem('undercurrent_user_name');
+  closeDrawer();
+  checkAuthSession();
+}
+
 function openDrawer() {
   state.isDrawerOpen = true;
   dom.sideDrawer.classList.remove('translate-x-full');
@@ -277,13 +451,11 @@ function loadSavedProfilePresets() {
   const select = dom.profilePresetsSelect;
   if (!select) return;
 
-  // 清除自訂選項
   const options = Array.from(select.options);
   options.forEach(opt => {
     if (opt.value.startsWith('custom_')) opt.remove();
   });
 
-  // 加入自訂選項
   Object.keys(custom).forEach(key => {
     const prof = custom[key];
     const opt = document.createElement('option');
@@ -394,7 +566,6 @@ function importProfileJson(event) {
         document.getElementById('form-allow-r18').checked = profile.allowR18 !== false;
         document.getElementById('form-custom-scenario').value = profile.customScenario || '';
 
-        // 存入自訂範本庫
         const key = 'custom_' + Date.now();
         const custom = getCustomPresets();
         custom[key] = profile;
@@ -432,8 +603,9 @@ function deleteSelectedProfilePreset() {
 // ==========================================
 
 function updateSaveSlotsDisplay() {
+  const userPrefix = state.username || 'user';
   for (let i = 1; i <= 3; i++) {
-    const raw = localStorage.getItem(`undercurrent_saveslot_${i}`);
+    const raw = localStorage.getItem(`undercurrent_${userPrefix}_saveslot_${i}`);
     const titleEl = document.getElementById(`slot-${i}-title`);
     const infoEl = document.getElementById(`slot-${i}-info`);
 
@@ -472,10 +644,10 @@ function saveGameStateToSlot(slotIndex) {
     saveState: state.saveState
   };
 
-  localStorage.setItem(`undercurrent_saveslot_${slotIndex}`, JSON.stringify(slotData));
+  const userPrefix = state.username || 'user';
+  localStorage.setItem(`undercurrent_${userPrefix}_saveslot_${slotIndex}`, JSON.stringify(slotData));
   updateSaveSlotsDisplay();
 
-  // 同步備份到雲端 GAS
   if (state.gasApiUrl) {
     callBackendApi('novel/save-state', { saveState: state.saveState }).catch(console.warn);
   }
@@ -484,7 +656,8 @@ function saveGameStateToSlot(slotIndex) {
 }
 
 function loadGameStateFromSlot(slotIndex) {
-  const raw = localStorage.getItem(`undercurrent_saveslot_${slotIndex}`);
+  const userPrefix = state.username || 'user';
+  const raw = localStorage.getItem(`undercurrent_${userPrefix}_saveslot_${slotIndex}`);
   if (!raw) {
     alert(`存檔欄位 ${slotIndex} 目前沒有任何存檔資料！`);
     return;
@@ -539,7 +712,7 @@ async function handleCharacterCreationSubmit() {
         state.saveState = res.data.saveState;
         renderChapter(res.data.chapter);
         renderSaveState();
-        saveGameStateToSlot('1'); // 開局自動備份至 Slot 1
+        saveGameStateToSlot('1');
       } else {
         alert('開局生成失敗：' + (res.error?.message || '未知錯誤'));
       }
@@ -595,7 +768,7 @@ async function loadMockData() {
 function loadMockDataWithProfile(profile) {
   state.saveState = {
     meta: {
-      userId: 'usr_local',
+      userId: state.userId || 'usr_local',
       createdAt: new Date().toISOString(),
       currentAct: 1,
       playerProfile: profile
