@@ -221,6 +221,8 @@ async function handleCharacterCreationSubmit() {
 async function initializeStory() {
   showLoading('正在連接世界線，讀取故事進度...');
 
+  await loadMockData(); // 先載入正宗台灣權謀世界開場
+
   if (state.gasApiUrl) {
     try {
       const res = await callBackendApi('novel/load-state', {});
@@ -228,15 +230,15 @@ async function initializeStory() {
         state.saveState = res.data.saveState;
         renderSaveState();
       } else {
-        // 無存檔時自動彈出創角表單
+        // 無存檔時主動彈出創角表單
         dom.charCreationModal.style.display = 'flex';
       }
     } catch (e) {
-      console.warn('無法連線後端，使用本地模式:', e);
-      await loadMockData();
+      console.warn('後端連線提示:', e);
+      dom.charCreationModal.style.display = 'flex';
     }
   } else {
-    await loadMockData();
+    dom.charCreationModal.style.display = 'flex';
   }
 
   hideLoading();
