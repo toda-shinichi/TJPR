@@ -71,6 +71,12 @@
         <span class="hidden sm:inline">首頁</span>
       </button>
 
+      <!-- 📜 遊戲指南與圖鑑按鈕 -->
+      <button id="nav-guide-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-amber-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="查看遊戲玩法、系統功能說明與13男主圖鑑">
+        <span>📜</span>
+        <span class="hidden sm:inline">遊戲指南與圖鑑</span>
+      </button>
+
       <!-- 💾 存檔庫按鈕 -->
       <button id="nav-saves-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-300 hover:text-white transition flex items-center gap-1 cursor-pointer" title="開啟存檔庫與讀檔中心">
         <span>💾</span>
@@ -112,11 +118,9 @@
           《暗 流》
         </h1>
         
-        <!-- 宏大世界觀與超高自由度介紹 -->
-        <p class="text-xs sm:text-sm text-slate-300 max-w-2xl mx-auto leading-relaxed">
-          全台政商暗夜修羅場 · 13 位專屬男主 × 超高自由度原創女主。<br class="hidden sm:inline">
-          從士林德行事務所、信義金融核心、陽明山隱密山莊、淡水港灣至黑市暗道，<br class="hidden sm:inline">
-          黑道二把手、地檢白日判官、重案組特警、副總統與政商巨擘，在多方博弈、權謀殺伐與極限性張力的深淵中由妳親自開局決策！
+        <!-- 宏大世界觀與超高自由度引子 -->
+        <p class="text-sm sm:text-base text-amber-100/90 font-serif italic max-w-2xl mx-auto leading-relaxed tracking-wide py-1">
+          「黑夜覆蓋的台北，在政治殺伐、資本商戰、幽微愛情與成人情慾的交織之中，每一次對峙與抉擇，皆是妳的奇思異想與無限可能。」
         </p>
 
         <!-- 當前登入者資訊列與帳號管理 -->
@@ -200,6 +204,25 @@
           </p>
         </div>
 
+      </div>
+
+      <!-- 📜 遊戲指南、系統說明與 13 位男主角色圖鑑入口 -->
+      <div id="home-open-guide-btn" class="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-brand-card/95 via-purple-950/40 to-brand-card/95 border border-brand-gold/40 hover:border-brand-gold transition cursor-pointer shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 group">
+        <div class="flex items-center gap-3 text-center sm:text-left">
+          <span class="text-3xl p-2 rounded-xl bg-brand-gold/10 border border-brand-gold/30">📜</span>
+          <div>
+            <h3 class="font-serif font-bold text-sm sm:text-base text-brand-gold group-hover:text-yellow-300 transition flex items-center justify-center sm:justify-start gap-1.5">
+              <span>遊戲說明 · 系統功能指南 · 13 位男主角色全景圖鑑</span>
+              <span class="text-[10px] font-mono bg-brand-gold/20 text-brand-gold px-2 py-0.5 rounded border border-brand-gold/30">GUIDE</span>
+            </h3>
+            <p class="text-xs text-slate-300 mt-1 leading-relaxed">
+              深入了解三層角色動態注入、長效記憶摘要池運作、自由對白行動機制，並瀏覽全部 13 位官方男主的完整身分與性格檔案。
+            </p>
+          </div>
+        </div>
+        <button class="px-4 py-2 rounded-xl bg-brand-gold/20 group-hover:bg-brand-gold text-brand-gold group-hover:text-slate-950 font-bold text-xs transition shrink-0 border border-brand-gold/40 cursor-pointer shadow-md">
+          打開指南與圖鑑 →
+        </button>
       </div>
 
       <!-- 快速讀取最近存檔區 -->
@@ -580,6 +603,131 @@
     </div>
   </div>
 
+  <!-- 📜 遊戲說明、系統功能與角色圖鑑彈窗 (Game Guide Modal) -->
+  <div id="game-guide-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[85] flex items-center justify-center p-3 sm:p-4 transition-opacity" style="display:none;">
+    <div class="bg-brand-surface border border-brand-gold/50 rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl p-5 sm:p-6 space-y-4">
+      
+      <div class="flex justify-between items-center pb-3 border-b border-brand-border">
+        <div>
+          <h3 class="font-serif font-bold text-lg text-brand-gold flex items-center gap-2">
+            <span>📜 《暗流》全域指南與 13 位男主角色圖鑑</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5">探索自由抉擇機制、三層人設注入、長效記憶架構與 13 位官方男主檔案。</p>
+        </div>
+        <button id="close-game-guide-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <!-- 標籤頁切換列 -->
+      <div class="flex border-b border-brand-border gap-1 sm:gap-2 text-xs font-bold overflow-x-auto pb-1">
+        <button id="guide-tab-gameplay-btn" class="guide-tab-btn py-2 px-3 sm:px-4 border-b-2 border-brand-gold text-brand-gold transition cursor-pointer whitespace-nowrap">
+          📖 遊戲玩法說明
+        </button>
+        <button id="guide-tab-system-btn" class="guide-tab-btn py-2 px-3 sm:px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition cursor-pointer whitespace-nowrap">
+          ⚙️ 系統功能說明
+        </button>
+        <button id="guide-tab-roster-btn" class="guide-tab-btn py-2 px-3 sm:px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition cursor-pointer whitespace-nowrap">
+          👥 13 位角色全景圖鑑
+        </button>
+      </div>
+
+      <!-- 標籤內容容器 -->
+      <div id="guide-tab-content" class="flex-1 overflow-y-auto pr-1 text-xs space-y-4 leading-relaxed">
+        
+        <!-- Tab 1: 遊戲玩法說明 -->
+        <div id="guide-panel-gameplay" class="space-y-4">
+          <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
+            <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
+              <span>✦ 1. 無預設腳本 · 100% 原創即時長篇創作</span>
+            </h4>
+            <p class="text-slate-300 text-xs">
+              《暗流》摒棄傳統文字遊戲預先寫好的固定分支。每一次回合推進，皆由無審查長篇專用大模型根據您的個人人設、抉擇與自訂輸入，現場即時創作 <strong>1,000 ~ 1,500 字</strong> 沉浸式長篇小說正文。
+            </p>
+          </div>
+
+          <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
+            <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
+              <span>✦ 2. 多重博弈與自由行動輸入</span>
+            </h4>
+            <p class="text-slate-300 text-xs">
+              每一回合系統均為您提供 3 個策略選項，並附帶風險提示：
+            </p>
+            <ul class="list-disc list-inside space-y-1 text-slate-400 pl-1">
+              <li><strong class="text-emerald-400">[A] 穩健推進 (Low Risk)</strong>：在規則內步步為營，鞏固情報與底牌。</li>
+              <li><strong class="text-sky-400">[B] 言語試探 (Medium Risk)</strong>：話術機鋒拉扯，探查對方底線。</li>
+              <li><strong class="text-rose-400">[C] 極限誘惑/破局 (High Risk)</strong>：打破常規、傾身靠近、點燃性張力與衝突。</li>
+              <li><strong class="text-brand-gold">⚡ 自由行動輸入</strong>：在底部的文字輸入列中，輸入任何您想說的對白、肢體碰觸或突發行動，AI 將完全接續您的意志推演！</li>
+            </ul>
+          </div>
+
+          <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
+            <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
+              <span>✦ 3. 政治、商戰、情慾與奇思異想的交織</span>
+            </h4>
+            <p class="text-slate-300 text-xs">
+              遊戲涵蓋政界暗潮、法務地檢交鋒、百億集團商戰、黑道殺伐、私密診所支配、頂流偶像情感拉扯與露骨細緻的成人情慾 (R-18)。您可以選擇專攻單一男主，亦可開啟全勢力修羅場，體驗多方爭霸與情感修羅場！
+            </p>
+          </div>
+        </div>
+
+        <!-- Tab 2: 系統功能說明 -->
+        <div id="guide-panel-system" class="space-y-4" style="display:none;">
+          <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
+            <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
+              <span>🎭 1. 三層角色動態注入引擎 (Tiered Lore System)</span>
+            </h4>
+            <ul class="space-y-1.5 text-slate-300 text-xs">
+              <li><strong class="text-brand-gold">Tier 1（核心攻略主角）</strong>：全量常駐完整的官方身分、MBTI、穿搭與嚴格身分防火牆（例如徐令謙絕不是檢察官，韓正寰才是白日判官）。</li>
+              <li><strong class="text-sky-400">Tier 2（動態在場配角）</strong>：一旦小說正文或您的對白中提及背景人物（如韓檢、林次、副總統），系統即刻從記憶體/雲端載入其<strong>全量完整 Markdown 設定</strong>，以配角身分在場推動衝突，絕不喧賓奪主。</li>
+              <li><strong class="text-slate-400">Tier 3（世界全景名冊）</strong>：其餘 11+ 位男主以勢力名冊常駐，世界持續在背景運轉利益暗流，絕不被世界遺忘。</li>
+            </ul>
+          </div>
+
+          <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
+            <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
+              <span>🧠 2. 長期滾動摘要池與雙軌記憶 (Rolling Summary Pool)</span>
+            </h4>
+            <p class="text-slate-300 text-xs">
+              下筆前必讀「歷史滾動摘要池」＋「近期 2 回合對話」。每逢 5 的倍數回合（第 5、10、15 回...），背景將自動調用輕量模型（1.5 秒）將歷史脈絡濃縮為高密度大事紀，確保長篇小說在百回後仍邏輯連貫、伏筆不丟失。
+            </p>
+          </div>
+
+          <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
+            <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
+              <span>💾 3. 存檔庫管理與 Google Drive 雲端雙向同步</span>
+            </h4>
+            <p class="text-slate-300 text-xs">
+              支援無限自訂命名的存檔插槽，隨時可重新命名、搜尋、讀取載入或刪除。同時自動將最新存檔同步至 Google Drive 雲端資料夾，保障進度永不遺失。
+            </p>
+          </div>
+
+          <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
+            <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
+              <span>📊 4. 即時狀態抽屜與好感度矩陣</span>
+            </h4>
+            <p class="text-slate-300 text-xs">
+              點擊右上角狀態圖示即可展開右側抽屜，查看玩家女主生命值 (HP)、理智值 (SAN)、13 位男主的好感度數值、隨身背包物品與最新暗流傳聞。
+            </p>
+          </div>
+        </div>
+
+        <!-- Tab 3: 13 位角色全景圖鑑 -->
+        <div id="guide-panel-roster" class="space-y-3" style="display:none;">
+          <div class="flex items-center justify-between pb-1">
+            <span class="text-slate-400 text-xs">共收錄 13 位官方專屬男主：</span>
+            <input type="text" id="search-roster-input" placeholder="🔍 搜尋男主姓名、勢力、職稱..." class="bg-brand-dark border border-brand-border rounded-lg px-3 py-1 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
+          </div>
+          <div id="roster-gallery-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- 由 JS 動態生成 13 位男主圖鑑卡片 -->
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
   <!-- 右側滑出式狀態抽屜 (Drawer) -->
   <div id="drawer-backdrop" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity opacity-0 pointer-events-none"></div>
   <aside id="side-drawer" class="fixed top-0 right-0 bottom-0 w-full sm:w-96 bg-brand-surface border-l border-brand-border z-50 p-6 overflow-y-auto transform translate-x-full transition-transform duration-300 ease-in-out shadow-2xl space-y-6">
@@ -662,6 +810,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-  <script src="./app.js?v=20260816_v105"></script>
+  <script src="./app.js?v=20260816_v110"></script>
 </body>
 </html>

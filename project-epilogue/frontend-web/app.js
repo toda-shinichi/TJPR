@@ -280,6 +280,19 @@ const dom = {
   supportingLeadsBlock: document.getElementById('supporting-leads-block'),
   supportingLeadsChips: document.getElementById('supporting-leads-chips'),
   
+  navGuideBtn: document.getElementById('nav-guide-btn'),
+  homeOpenGuideBtn: document.getElementById('home-open-guide-btn'),
+  gameGuideModal: document.getElementById('game-guide-modal'),
+  closeGameGuideBtn: document.getElementById('close-game-guide-btn'),
+  guideTabGameplayBtn: document.getElementById('guide-tab-gameplay-btn'),
+  guideTabSystemBtn: document.getElementById('guide-tab-system-btn'),
+  guideTabRosterBtn: document.getElementById('guide-tab-roster-btn'),
+  guidePanelGameplay: document.getElementById('guide-panel-gameplay'),
+  guidePanelSystem: document.getElementById('guide-panel-system'),
+  guidePanelRoster: document.getElementById('guide-panel-roster'),
+  searchRosterInput: document.getElementById('search-roster-input'),
+  rosterGalleryList: document.getElementById('roster-gallery-list'),
+
   loadingOverlay: document.getElementById('loading-overlay'),
   loadingText: document.getElementById('loading-text'),
   loadingSubtext: document.getElementById('loading-subtext'),
@@ -419,6 +432,15 @@ function setupEventListeners() {
   if (dom.exportAllSavesBtn) dom.exportAllSavesBtn.addEventListener('click', exportAllSaves);
   if (dom.importAllSavesInput) dom.importAllSavesInput.addEventListener('change', importAllSaves);
   if (dom.gameplayQuickSaveBtn) dom.gameplayQuickSaveBtn.addEventListener('click', handleQuickSave);
+
+  // 遊戲指南與角色圖鑑彈窗
+  if (dom.navGuideBtn) dom.navGuideBtn.addEventListener('click', () => openGameGuideModal('gameplay'));
+  if (dom.homeOpenGuideBtn) dom.homeOpenGuideBtn.addEventListener('click', () => openGameGuideModal('gameplay'));
+  if (dom.closeGameGuideBtn) dom.closeGameGuideBtn.addEventListener('click', closeGameGuideModal);
+  if (dom.guideTabGameplayBtn) dom.guideTabGameplayBtn.addEventListener('click', () => switchGuideTab('gameplay'));
+  if (dom.guideTabSystemBtn) dom.guideTabSystemBtn.addEventListener('click', () => switchGuideTab('system'));
+  if (dom.guideTabRosterBtn) dom.guideTabRosterBtn.addEventListener('click', () => switchGuideTab('roster'));
+  if (dom.searchRosterInput) dom.searchRosterInput.addEventListener('input', renderRosterGallery);
 
   // 自由行動提交
   if (dom.submitCustomBtn) dom.submitCustomBtn.addEventListener('click', handleCustomActionSubmit);
@@ -2003,6 +2025,120 @@ function handleQuickSave() {
   const turn = state.saveState?.turnCount || 1;
   const autoName = `${pName}-${targetName}第${turn}回`;
   createNamedSave(autoName);
+}
+
+// ==========================================
+// 8.5 遊戲指南、系統說明與角色全景圖鑑 (Game Guide & Roster Gallery)
+// ==========================================
+
+function openGameGuideModal(initialTab = 'gameplay') {
+  if (dom.gameGuideModal) {
+    dom.gameGuideModal.style.display = 'flex';
+    switchGuideTab(initialTab);
+  }
+}
+
+function closeGameGuideModal() {
+  if (dom.gameGuideModal) dom.gameGuideModal.style.display = 'none';
+}
+
+function switchGuideTab(tabName) {
+  const tabs = {
+    gameplay: { btn: dom.guideTabGameplayBtn, panel: dom.guidePanelGameplay },
+    system: { btn: dom.guideTabSystemBtn, panel: dom.guidePanelSystem },
+    roster: { btn: dom.guideTabRosterBtn, panel: dom.guidePanelRoster }
+  };
+
+  Object.keys(tabs).forEach(k => {
+    const t = tabs[k];
+    if (t.btn) {
+      if (k === tabName) {
+        t.btn.classList.add('border-brand-gold', 'text-brand-gold');
+        t.btn.classList.remove('border-transparent', 'text-slate-400');
+      } else {
+        t.btn.classList.remove('border-brand-gold', 'text-brand-gold');
+        t.btn.classList.add('border-transparent', 'text-slate-400');
+      }
+    }
+    if (t.panel) {
+      t.panel.style.display = (k === tabName) ? 'block' : 'none';
+    }
+  });
+
+  if (tabName === 'roster') {
+    renderRosterGallery();
+  }
+}
+
+function renderRosterGallery() {
+  const container = dom.rosterGalleryList;
+  if (!container) return;
+
+  const search = (dom.searchRosterInput?.value || '').toLowerCase().trim();
+  container.innerHTML = '';
+
+  const charKeys = Object.keys(OFFICIAL_DRIVE_CHARACTERS);
+  const filteredKeys = charKeys.filter(k => {
+    const c = OFFICIAL_DRIVE_CHARACTERS[k];
+    if (!search) return true;
+    return c.name.toLowerCase().includes(search) ||
+           c.identityRole.toLowerCase().includes(search) ||
+           c.summary.toLowerCase().includes(search) ||
+           c.title.toLowerCase().includes(search);
+  });
+
+  if (filteredKeys.length === 0) {
+    container.innerHTML = '<div class="col-span-full text-center text-slate-500 py-6">找不到相符的角色資料</div>';
+    return;
+  }
+
+  filteredKeys.forEach(k => {
+    const c = OFFICIAL_DRIVE_CHARACTERS[k];
+    const rMatch = ROSTER_ONE_LINERS.find(r => r.id === k || r.name === c.name);
+    const oneLiner = rMatch ? rMatch.oneLiner : c.summary;
+
+    const card = document.createElement('div');
+    card.className = 'bg-brand-card p-3.5 rounded-xl border border-brand-border hover:border-brand-gold/60 transition space-y-2 flex flex-col justify-between shadow-md group';
+
+    card.innerHTML = `
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between border-b border-brand-border/60 pb-1.5">
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-xs font-bold text-brand-gold bg-brand-gold/15 px-1.5 py-0.5 rounded border border-brand-gold/30">${k.split('_')[0]}</span>
+            <span class="font-serif font-black text-sm text-white group-hover:text-brand-gold transition">${c.name}</span>
+            <span class="text-[11px] text-slate-400 font-mono">（${c.age}）</span>
+          </div>
+          <span class="text-[10px] font-bold text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">官方男主</span>
+        </div>
+        <div class="text-[11px] font-bold text-amber-200/90 leading-tight">
+          ${c.identityRole}
+        </div>
+        <div class="text-xs text-slate-300 leading-relaxed pt-1">
+          ${oneLiner}
+        </div>
+        <div class="text-[11px] text-slate-400 bg-brand-dark/60 p-2 rounded-lg border border-brand-border/40 mt-1 leading-normal">
+          ${c.summary}
+        </div>
+      </div>
+      <div class="pt-2 flex items-center justify-end">
+        <button class="select-this-lead-btn px-3 py-1.5 rounded-lg bg-brand-gold/20 hover:bg-brand-gold text-brand-gold hover:text-slate-950 font-bold text-xs transition border border-brand-gold/40 cursor-pointer shadow-sm" data-key="${k}">
+          ✦ 以此男主開局 →
+        </button>
+      </div>
+    `;
+
+    card.querySelector('.select-this-lead-btn')?.addEventListener('click', () => {
+      closeGameGuideModal();
+      openCharacterCreationModal();
+      const select = dom.formTargetLead || document.getElementById('form-target-lead');
+      if (select) {
+        select.value = k;
+        handleTargetLeadChange();
+      }
+    });
+
+    container.appendChild(card);
+  });
 }
 
 function exportAllSaves() {
