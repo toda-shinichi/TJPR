@@ -27,7 +27,9 @@ const CONFIG = {
     // 主要敘事模型 (Narrator) - 負責 1,200~1,500 字長篇敘事、三項分支選項與狀態更新
     NARRATOR: {
       PRIMARY: 'mistral-large-3',
-      FALLBACK: 'deepseek-v4-pro',
+      FALLBACK: 'gemini-3.6-flash',
+      FALLBACK_2: 'deepseek-v4-pro',
+      FALLBACK_3: 'aion-3.0', // 第四順位備援
       TEMPERATURE: 0.85,
       MAX_TOKENS: 4000,
       TOP_P: 0.95
@@ -35,7 +37,10 @@ const CONFIG = {
     // 快速稽核模型 (Fast Auditor) - 負責 5 回合摘要壓縮、10 回合一致性檢查與幕篇重整
     AUDITOR: {
       PRIMARY: 'gemini-3.6-flash',
-      FALLBACK: 'deepseek-v4-flash',
+      FALLBACK_1: 'gemini-3.6-flash-lite', // 第一備援
+      FALLBACK_2: 'deepseek-v4-flash',    // 第二備援
+      FALLBACK_3: 'mercury-2',             // 第三備援
+      FALLBACK: 'gemini-3.6-flash-lite',
       TEMPERATURE: 0.2,
       MAX_TOKENS: 1500,
       TOP_P: 0.9

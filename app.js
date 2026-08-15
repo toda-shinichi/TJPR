@@ -664,7 +664,8 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
   const models = [
     LLM_CONFIG.PRIMARY_MODEL || 'mistral-large-3',
     'gemini-3.6-flash',
-    'deepseek-v4-flash'
+    'deepseek-v4-pro',
+    'aion-3.0'
   ];
 
   await waitForRpmCooldown();

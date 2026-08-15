@@ -187,6 +187,7 @@ var AIService = (function() {
   /**
    * 主要敘事模型 (Narrator: mistral-large-3)：
    * 生成 1,200~1,500 字的精緻章節內文、3 個互動選項以及存檔狀態更新（Delta）。
+   * 順位：mistral-large-3 -> gemini-3.6-flash -> deepseek-v4-pro -> aion-3.0 (第四順位備援)
    * @param {Object} promptContext - 包含 System Prompt, 角色 Markdown, 摘要池與近期對話歷史
    * @returns {Object} 章節物件 { chapterTitle, prose, choices, stateDelta, narrativeSummaryDelta }
    */
@@ -196,23 +197,40 @@ var AIService = (function() {
       { role: 'user', content: promptContext.userPrompt }
     ];
 
-    var response = callAPI(CONFIG.MODELS.NARRATOR.PRIMARY, messages, {
-      temperature: CONFIG.MODELS.NARRATOR.TEMPERATURE,
-      max_tokens: CONFIG.MODELS.NARRATOR.MAX_TOKENS,
-      fallbackModel: CONFIG.MODELS.NARRATOR.FALLBACK
-    });
+    var narratorModels = [
+      CONFIG.MODELS.NARRATOR.PRIMARY || 'mistral-large-3',
+      CONFIG.MODELS.NARRATOR.FALLBACK || 'gemini-3.6-flash',
+      CONFIG.MODELS.NARRATOR.FALLBACK_2 || 'deepseek-v4-pro',
+      CONFIG.MODELS.NARRATOR.FALLBACK_3 || 'aion-3.0'
+    ];
 
-    var parsedOutput = extractJsonFromResponse(response.content);
-    return {
-      success: true,
-      data: parsedOutput,
-      modelUsed: response.modelUsed,
-      usage: response.usage
-    };
+    var lastError = null;
+    for (var i = 0; i < narratorModels.length; i++) {
+      var currentModel = narratorModels[i];
+      try {
+        var response = callAPI(currentModel, messages, {
+          temperature: CONFIG.MODELS.NARRATOR.TEMPERATURE,
+          max_tokens: CONFIG.MODELS.NARRATOR.MAX_TOKENS
+        });
+        var parsedOutput = extractJsonFromResponse(response.content);
+        return {
+          success: true,
+          data: parsedOutput,
+          modelUsed: response.modelUsed || currentModel,
+          usage: response.usage
+        };
+      } catch (err) {
+        lastError = err;
+        console.warn('Narrator 模型 [' + currentModel + '] 失敗，嘗試下一順位備援: ' + err.message);
+      }
+    }
+
+    throw new Error('所有敘事模型（含 aion-3.0 備援）均無法完成生成: ' + (lastError ? lastError.message : '未知'));
   }
 
   /**
-   * 快速稽核模型 (Fast Auditor: gemini-3.6-flash)：
+   * 快速稽核與記憶模型 (Fast Auditor: gemini-3.6-flash)：
+   * 順位：gemini-3.6-flash -> gemini-3.6-flash-lite (第一備援) -> deepseek-v4-flash (第二備援) -> mercury-2 (第三備援)
    * 每 5 回合壓縮更新滾動摘要池，嚴格維持在 2,000 字元以內。
    * @param {string} existingSummary - 現有摘要池文字
    * @param {Array<Object>} newTurns - 最新幾回合的故事摘記
@@ -241,18 +259,33 @@ var AIService = (function() {
       { role: 'user', content: prompt }
     ];
 
-    var response = callAPI(CONFIG.MODELS.AUDITOR.PRIMARY, messages, {
-      temperature: CONFIG.MODELS.AUDITOR.TEMPERATURE,
-      max_tokens: 1000,
-      fallbackModel: CONFIG.MODELS.AUDITOR.FALLBACK
-    });
+    var auditorModels = [
+      CONFIG.MODELS.AUDITOR.PRIMARY || 'gemini-3.6-flash',
+      CONFIG.MODELS.AUDITOR.FALLBACK_1 || 'gemini-3.6-flash-lite',
+      CONFIG.MODELS.AUDITOR.FALLBACK_2 || 'deepseek-v4-flash',
+      CONFIG.MODELS.AUDITOR.FALLBACK_3 || 'mercury-2'
+    ];
 
-    var updatedSummary = response.content.trim();
-    if (updatedSummary.length > CONFIG.PIPELINE.SUMMARY_POOL_MAX_CHARS) {
-      updatedSummary = updatedSummary.substring(0, CONFIG.PIPELINE.SUMMARY_POOL_MAX_CHARS - 3) + '...';
+    var lastError = null;
+    for (var j = 0; j < auditorModels.length; j++) {
+      var currentModel = auditorModels[j];
+      try {
+        var response = callAPI(currentModel, messages, {
+          temperature: CONFIG.MODELS.AUDITOR.TEMPERATURE,
+          max_tokens: 1000
+        });
+        return response.content.trim();
+      } catch (err) {
+        lastError = err;
+        console.warn('Auditor 模型 [' + currentModel + '] 失敗，嘗試下一順位備援: ' + err.message);
+      }
     }
 
-    return updatedSummary;
+    var result = existingSummary || '';
+    if (result.length > CONFIG.PIPELINE.SUMMARY_POOL_MAX_CHARS) {
+      result = result.substring(0, CONFIG.PIPELINE.SUMMARY_POOL_MAX_CHARS - 3) + '...';
+    }
+    return result;
   }
 
   /**
