@@ -7,7 +7,7 @@
 
 // 全域狀態
 const state = {
-  gasApiUrl: localStorage.getItem('epilogue_gas_url') || 'https://script.google.com/macros/s/AKfycbyY78x300KS_pBXxf9uFt6Av9PoNJJnqBRtH1J1JRGSNj4VfpNXj7TOI8rNgZcM3OPueQ/exec',
+  gasApiUrl: localStorage.getItem('epilogue_gas_url') || 'https://script.google.com/macros/s/AKfycbzoUqtgXpP5qKpf6FNyc3lT3G1FHqjH5B4GopdO4pZ_jLa8GDTA51LcKuR5ostcXP6hKw/exec',
   token: localStorage.getItem('epilogue_token') || 'epi_mock_test_token_889922',
   userId: localStorage.getItem('epilogue_user_id') || 'usr_test_01',
   currentTurn: 1,

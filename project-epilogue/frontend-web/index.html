@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Project Epilogue — 台灣權謀世界沉浸式互動文字RPG</title>
+  <title>《暗流》— 沉浸式互動文字RPG</title>
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -46,11 +46,11 @@
   <!-- 頂部固定導航列 -->
   <header class="sticky top-0 z-40 bg-[#0c0d12]/95 backdrop-blur-md border-b border-brand-border/60 px-3 sm:px-6 py-3 flex justify-between items-center">
     <div class="flex items-center space-x-2">
-      <span class="text-brand-gold font-serif font-black text-base sm:text-lg tracking-wider">PROJECT EPILOGUE</span>
+      <span class="text-brand-gold font-serif font-black text-lg sm:text-xl tracking-wider">暗流 · UNDER CURRENT</span>
       <span class="text-[11px] bg-brand-gold/10 text-brand-gold px-2 py-0.5 rounded border border-brand-gold/20 font-mono hidden sm:inline" id="model-indicator">Mistral-3</span>
     </div>
     
-    <!-- 右側功能：重新開局 / 數值 / 狀態抽屜觸發按鈕 -->
+    <!-- 右側功能：開局創角 / 數值 / 狀態抽屜觸發按鈕 -->
     <div class="flex items-center space-x-2 sm:space-x-3">
       <!-- 重新開局 / 創建角色按鈕 -->
       <button id="open-create-char-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold transition flex items-center gap-1 text-xs font-bold shadow-sm">
@@ -128,7 +128,7 @@
       
       <div class="border-b border-brand-border pb-4 flex justify-between items-center">
         <div>
-          <h2 class="font-serif font-black text-xl sm:text-2xl text-brand-gold tracking-wide">開局角色與開局情境設定</h2>
+          <h2 class="font-serif font-black text-xl sm:text-2xl text-brand-gold tracking-wide">《暗流》開局角色與情境設定</h2>
           <p class="text-xs text-slate-400 mt-1">填寫您的身分背景、選擇主要攻略對象與劇情尺度，主筆將為您量身定制開場篇章。</p>
         </div>
         <button id="close-modal-btn" class="text-slate-400 hover:text-white p-1">
@@ -160,7 +160,7 @@
         <!-- 2. 身分職業與背景 -->
         <div>
           <label class="block font-bold text-slate-300 mb-1">身分背景與職業 *</label>
-          <input type="text" id="form-player-profession" required value="司法政經調查記者（兼獨立自媒體主筆）" placeholder="例如：最高檢檢察事務官、財團特助、黑道暗線..." class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
+          <input type="text" id="form-player-profession" required value="司法政經調查記者（兼獨立自媒體主筆）" placeholder="例如：法務部專員、財團特助、黑道暗線線人..." class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
         </div>
 
         <div>
@@ -180,24 +180,25 @@
           </div>
         </div>
 
-        <!-- 4. 主要攻略對象 (十三男主下拉) -->
+        <!-- 4. 主要攻略對象 (十三男主 + 楊慕璃 下拉) -->
         <div>
-          <label class="block font-bold text-brand-gold mb-1">主要攻略對象 (男主選擇) *</label>
+          <label class="block font-bold text-brand-gold mb-1">主要攻略對象 (角色選擇) *</label>
           <select id="form-target-lead" class="w-full bg-brand-dark border border-brand-gold/60 rounded-lg px-3 py-2.5 text-white font-semibold focus:border-brand-gold focus:outline-none">
-            <option value="01_徐令謙" data-name="徐令謙" selected>01 · 徐令謙（玄辰幫二把手 · 天裕會首領 · 高雅白手套）</option>
-            <option value="02_韓正寰" data-name="韓正寰">02 · 韓正寰（最高檢特偵組主任檢察官 · 司法刀鋒）</option>
-            <option value="03_邵翊衡" data-name="邵翊衡">03 · 邵翊衡（立法委員 · 司法委員會召集人 · 政壇菁英）</option>
-            <option value="04_楊紹宸" data-name="楊紹宸">04 · 楊紹宸（弘楊集團執行長 · 資本獵手）</option>
+            <option value="01_徐令謙" data-name="徐令謙" selected>01 · 徐令謙（玄辰幫二把手 · 天裕會首領 · 士林德行事務所 / 三峽思慕咖啡）</option>
+            <option value="02_韓正寰" data-name="韓正寰">02 · 韓正寰（臺灣士林地檢署檢察官 · 白日判官 · 司法刀鋒）</option>
+            <option value="03_邵翊衡" data-name="邵翊衡">03 · 邵翊衡（立法委員 · 司法委員會召集人 · 敦化北路Penthouse）</option>
+            <option value="04_楊紹宸" data-name="楊紹宸">04 · 楊紹宸（弘楊集團執行長 · 資本獵手 · 陽明山大宅）</option>
             <option value="05_徐宇寧" data-name="徐宇寧">05 · 徐宇寧（天才駭客 · 暗網情報掮客 · 細膩引導）</option>
-            <option value="06_林政修" data-name="林政修">06 · 林政修（刑事辯護大律師 · 灰色邊界遊走者）</option>
-            <option value="07_沈湛然" data-name="沈湛然">07 · 沈湛然（心智分析犯罪心理學家 · 解構師）</option>
-            <option value="08_江瀚文" data-name="江瀚文">08 · 江瀚文（資深調查記者 · 執著正義追尋者）</option>
-            <option value="09_吳衛廷" data-name="吳衛廷">09 · 吳衛廷（黑道王牌打手 · 粗暴直率溫柔）</option>
-            <option value="10_徐承勳" data-name="徐承勳">10 · 徐承勳（國家副元首 · 權力巔峰者）</option>
-            <option value="11_徐耀南" data-name="徐耀南">11 · 徐耀南（遠洋航運巨頭 · 海上霸權）</option>
-            <option value="12_徐若宸" data-name="徐若宸">12 · 徐若宸（頂級外科主治醫師 · 冷靜精準雙手）</option>
-            <option value="13_徐予澈" data-name="徐予澈">13 · 徐予澈（警政署重案組隊長 · 直覺追獵警官）</option>
-            <option value="修羅場" data-name="修羅場">⚡ 【修羅場模式】全員交鋒 · 多方權力情慾推拉</option>
+            <option value="06_林政修" data-name="林政修">06 · 林政修（法務部政務次長 · 中正區華廈 / 彰化鹿港）</option>
+            <option value="07_沈湛然" data-name="沈湛然">07 · 沈湛然（心智分析犯罪心理學家 · 中山區暖光公寓）</option>
+            <option value="08_江瀚文" data-name="江瀚文">08 · 江瀚文（鼎曜媒體集團執行長 · 大直重劃區河岸豪宅）</option>
+            <option value="09_吳衛廷" data-name="吳衛廷">09 · 吳衛廷（早年街頭打滾 · 實打實結實力量 · 粗暴直率護短）</option>
+            <option value="10_徐承勳" data-name="徐承勳">10 · 徐承勳（國家副元首 · ENTJ極度自律控制狂）</option>
+            <option value="11_徐耀南" data-name="徐耀南">11 · 徐耀南（榮南營造集團董事長 · 台中七期豪宅）</option>
+            <option value="12_徐若宸" data-name="徐若宸">12 · 徐若宸（榮南集團少東 · UBC商學院 · 莫蘭迪綠T-Roc）</option>
+            <option value="13_徐予澈" data-name="徐予澈">13 · 徐予澈（藝名徐泰希 / 化名Hans · 台北大安區文化演藝名流）</option>
+            <option value="14_楊慕璃" data-name="楊慕璃">14 · 楊慕璃（弘楊集團公關總監 · 瑾和基金會執行長）</option>
+            <option value="修羅場" data-name="修羅場">⚡ 【修羅場模式】全員交鋒 · 多方權力與情慾推拉</option>
           </select>
         </div>
 
@@ -216,14 +217,14 @@
         <!-- 6. 自定義開場劇情 (選填) -->
         <div>
           <label class="block font-bold text-slate-300 mb-1">自定義開場劇情 / 初始情境 (選填)</label>
-          <textarea id="form-custom-scenario" rows="3" placeholder="例如：深夜十一點，士林思慕咖啡VIP室。我帶著被銷毀的洗錢帳冊底牌走進雨幕中，與坐在角落搖晃威士忌的徐令謙四目相接……" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none resize-none"></textarea>
+          <textarea id="form-custom-scenario" rows="3" placeholder="例如：深夜十一點，士林德行東路德行法律事務所頂層。我帶著被銷毀的洗錢帳冊底牌走進雨幕中，與坐在角落搖晃威士忌的徐令謙四目相接……" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none resize-none"></textarea>
           
           <!-- 快捷情境建議 -->
           <div class="flex flex-wrap gap-1.5 mt-2 text-[11px]">
             <span class="text-slate-400">快捷模板：</span>
-            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="深夜士林思慕咖啡VIP室，我帶著洗錢帳冊底牌前來尋求庇護與談判。">【深夜咖啡館交鋒】</button>
-            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="最高檢特偵組走廊外，暴雨滂沱，我與檢察官在電梯口狹路相逢。">【特偵組走廊偶遇】</button>
-            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="政商慈善晚宴深處，燈光昏暗的露台，我無意間撞破了一場密謀。">【晚宴露台密會】</button>
+            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="深夜士林德行法律事務所頂層制策室，我帶著洗錢帳冊底牌前來與徐令謙談判。">【德行事務所暴雨密會】</button>
+            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="三峽老街溪畔的思慕咖啡館，在手沖香氣與晨霧中，我與前來靜心研磨咖啡豆的徐令謙四目相接。">【三峽思慕咖啡清晨偶遇】</button>
+            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="士林地檢署走廊外，暴雨滂沱，我與檢察官韓正寰在電梯口狹路相逢。">【地檢署走廊交鋒】</button>
           </div>
         </div>
 

@@ -7,7 +7,7 @@
 
 const CONFIG = {
   // 應用程式基本資訊
-  APP_NAME: 'Project Epilogue Engine',
+  APP_NAME: '《暗流》沉浸式互動文字RPG引擎',
   VERSION: '1.0.0',
   ENV: 'production',
 
