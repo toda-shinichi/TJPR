@@ -1,7 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-TW" class="dark">
 <head>
-  <meta charset="UTF-8">
+    <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>《暗流》— 沉浸式互動文字RPG</title>
   
@@ -39,7 +42,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Serif+TC:wght@400;600;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./style.css?v=20260816_v23">
+  <link rel="stylesheet" href="./style.css?v=20260816_v27">
 </head>
 <body class="bg-[#0c0d12] text-[#e6e8f0] font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-black">
 
@@ -573,6 +576,17 @@
     </button>
   </div>
 
-  <script src="./app.js?v=20260816_v26"></script>
+  <script src="./app.js?v=20260816_v27"></script>
+
+  <!-- 🔄 快取穿透與最新版本保證工具 -->
+  <script>
+    function forceBypassCacheReload() {
+      const timestamp = new Date().getTime();
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.set('v', timestamp);
+      window.location.replace(currentUrl.toString());
+    }
+  </script>
+
 </body>
 </html>
