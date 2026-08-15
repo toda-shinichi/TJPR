@@ -2353,6 +2353,25 @@ function loadMockDataWithProfile(profile) {
   saveGameStateToSlot('1');
 }
 
+function startServerCooldown(seconds) {
+  const text = document.getElementById('server-status-text');
+  if (!text) return;
+
+  let remaining = seconds || 12;
+  text.textContent = `冷卻中 (${remaining}s) · 防限流保護`;
+  
+  if (state.cooldownInterval) clearInterval(state.cooldownInterval);
+  state.cooldownInterval = setInterval(() => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(state.cooldownInterval);
+      text.textContent = 'AI 主筆作家在線 · 動態演繹就緒';
+    } else {
+      text.textContent = `冷卻中 (${remaining}s) · 防限流保護`;
+    }
+  }, 1000);
+}
+
 async function makeChoice(choiceId, customInput, isRegenerating = false) {
   // 記錄快照（供悔棋與重擲）
   if (!isRegenerating) {
