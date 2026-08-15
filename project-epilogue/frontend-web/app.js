@@ -640,7 +640,7 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
   for (const model of models) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000);
+      const timeoutId = setTimeout(() => controller.abort(), 65000);
 
       const response = await fetch(LLM_CONFIG.API_URL, {
         method: 'POST',
@@ -1863,7 +1863,6 @@ async function handleRegenerateTurn() {
       renderStoryStream(regeneratedChapter);
       renderSaveState();
       saveGameStateToSlot('1');
-  syncStateToGoogleDriveCloud(state.saveState, initialChapter);
       syncStateToGoogleDriveCloud(state.saveState, regeneratedChapter);
     } catch (err) {
       console.error('第 1 回重新生成失敗:', err);
