@@ -1112,6 +1112,51 @@ function getCustomPresets() {
   }
 }
 
+
+function openCharacterCreationModal() {
+  if (dom.charCreationModal) {
+    dom.charCreationModal.style.display = 'flex';
+    loadSavedProfilePresets();
+    // Default preset selection if empty
+    const currentProfile = getActivePlayerProfile();
+    if (currentProfile && currentProfile.name) {
+      document.getElementById('form-player-name').value = currentProfile.name;
+      document.getElementById('form-player-gender').value = currentProfile.gender || '女';
+      document.getElementById('form-player-age').value = currentProfile.age || '24';
+      document.getElementById('form-player-profession').value = currentProfile.profession || '';
+      document.getElementById('form-player-background').value = currentProfile.background || '';
+      document.getElementById('form-player-appearance').value = currentProfile.appearance || '';
+      document.getElementById('form-player-taboos').value = currentProfile.taboos || '無';
+      document.getElementById('form-target-lead').value = currentProfile.targetLead || '修羅場';
+      document.getElementById('form-allow-r18').checked = !!currentProfile.allowR18;
+      document.getElementById('form-custom-scenario').value = currentProfile.customScenario || '';
+    }
+  }
+}
+
+function getActivePlayerProfile() {
+  if (state.saveState?.meta?.playerProfile?.name) {
+    return state.saveState.meta.playerProfile;
+  }
+  try {
+    const raw = localStorage.getItem('undercurrent_current_player_profile');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return {
+    name: '楊慕璃',
+    gender: '女',
+    age: '24',
+    profession: '弘楊集團公關總監 · 瑾和基金會執行長',
+    background: '身為楊家三房獨生女，在權謀風暴中憑藉智慧與魅力遊走於各方勢力之間',
+    appearance: '素雅長裙、微濕自然捲髮、清甜體香',
+    taboos: '無特定雷區',
+    targetLead: '修羅場',
+    targetLeadName: '修羅場',
+    allowR18: true,
+    customScenario: ''
+  };
+}
+
 function loadSavedProfilePresets() {
   const custom = getCustomPresets();
   const select = dom.profilePresetsSelect;
@@ -2217,6 +2262,9 @@ function importAllSavesJson(event) {
 }
 
 function loadMockDataWithProfile(profile) {
+  state.playerProfile = profile;
+  localStorage.setItem('undercurrent_current_player_profile', JSON.stringify(profile));
+  
   const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
   const targetLeadDisplay = isShura ? '徐令謙、韓正寰（修羅場）' : profile.targetLeadName;
 
@@ -2247,6 +2295,9 @@ function loadMockDataWithProfile(profile) {
       : `玩家 ${profile.name} 正式入局，與 ${profile.targetLeadName} 展開首次交鋒。`,
     turnHistory: []
   };
+
+  localStorage.setItem('undercurrent_current_save_state', JSON.stringify(state.saveState));
+
 
   let initialMockChapter;
 
@@ -2343,7 +2394,12 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
   if (!generatedSuccessfully) {
     state.saveState = state.saveState || {};
     state.saveState.turnCount = (state.saveState.turnCount || 1) + 1;
-    const profile = state.saveState?.meta?.playerProfile || { name: '阮思薇', targetLeadName: '徐令謙' };
+    
+    // 嚴格確保玩家身分一致（絕不跳針或混淆）
+    const profile = getActivePlayerProfile();
+    state.saveState.meta = state.saveState.meta || {};
+    state.saveState.meta.playerProfile = profile;
+    localStorage.setItem('undercurrent_current_save_state', JSON.stringify(state.saveState));
 
     const nextStory = generateDynamicTurnChapter(
       state.saveState.turnCount,
