@@ -2502,7 +2502,169 @@ function generateDynamicFirstChapter(profile) {
   };
 }
 
-function loadMockDataWithProfile(profile) {
+
+// =========================================================================
+// 🚀 頂級純 AI 即時無範本生成引擎 (Pure Real-Time AI Generation Engine)
+// =========================================================================
+
+const LLM_CONFIG = {
+  API_URL: 'https://api.banana2556.com/v1/chat/completions',
+  API_KEY: 'sk-TcKczU9MQ5abSWYrF51eU85aQjZV6IzPqeypYYn9zVDoSram',
+  PRIMARY_MODEL: 'gemini-3.6-flash',
+  FALLBACK_MODEL: 'mistral-large-3',
+  TEMPERATURE: 0.92
+};
+
+/**
+ * 呼叫頂級 AI 模型生成即時 JSON 結構化章節
+ */
+async function generateStoryFromLLM(systemPrompt, userPrompt) {
+  const models = [LLM_CONFIG.PRIMARY_MODEL, LLM_CONFIG.FALLBACK_MODEL];
+  let lastError = null;
+
+  for (const model of models) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+      const response = await fetch(LLM_CONFIG.API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${LLM_CONFIG.API_KEY}`
+        },
+        body: JSON.stringify({
+          model: model,
+          temperature: LLM_CONFIG.TEMPERATURE,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ]
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`API returned HTTP ${response.status}`);
+      }
+
+      const resJson = await response.json();
+      if (!resJson.choices || !resJson.choices[0] || !resJson.choices[0].message) {
+        throw new Error('Invalid LLM response format');
+      }
+
+      const rawContent = resJson.choices[0].message.content.trim();
+      const cleanJsonStr = rawContent.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+      
+      const parsedChapter = JSON.parse(cleanJsonStr);
+      if (parsedChapter && parsedChapter.prose && parsedChapter.choices) {
+        return parsedChapter;
+      }
+      throw new Error('Missing required fields in parsed JSON');
+    } catch (err) {
+      console.warn(`[AI Engine] Model ${model} generation failed, trying next:`, err.message);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('All LLM models failed');
+}
+
+/**
+ * 構建第 1 回即時生成 Prompt
+ */
+function buildFirstTurnPrompt(profile) {
+  const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
+  const customScenario = (profile.customScenario || '').trim();
+
+  const systemPrompt = `你是一位頂級華語長篇情慾權謀互動小說家與RPG核心引擎。
+請遵守《情慾文學指引》與《系統核心指令》：
+1. 風格：極致性張力、高位推拉、五感具象描寫、權謀殺伐、多方博弈，使用純繁體中文（台灣習慣用語）。
+2. 每一次生成都必須完全原創、富有新鮮感、細膩且字數達 1,000~1,500 字，絕不套用固定模板。
+3. 輸出必須為合法純 JSON 格式（不要包含任何 markdown 代碼標記，直接輸出 JSON 內容）：
+{
+  "chapterTitle": "第 1 回．【原創吸睛標題】",
+  "prose": "【1000~1500字極具性張力與權謀拉扯的長篇小說正文】",
+  "statusPanel": {
+    "timeLocation": "具體時空地點（如：2026年5月12日 21:30 台北市士林區...）",
+    "tension": "張力值 [80%]",
+    "intoxication": "微醺度 [25%]",
+    "outfit": "角色著裝（若玩家寫隨機，請依職業為女主原創極致高級優雅的穿搭與體香）",
+    "interaction": "肢體與眼神互動狀態（包含極限物理距離與觸摸）",
+    "inventory": "隨身攜帶之關鍵底牌或隨身碟",
+    "rumors": "台北政媒黑白兩道最新暗流傳聞"
+  },
+  "choices": [
+    { "id": "A", "label": "[A] 【選項完整行動與對白描述】", "risk": "low", "hint": "策略提示" },
+    { "id": "B", "label": "[B] 【選項完整行動與對白描述】", "risk": "medium", "hint": "策略提示" },
+    { "id": "C", "label": "[C] 【選項完整行動與對白描述】", "risk": "high", "hint": "策略提示" }
+  ]
+}`;
+
+  const userPrompt = `【玩家角色】
+- 姓名：${profile.name}
+- 性別：${profile.gender || '女'}
+- 年齡：${profile.age || '24'}
+- 職業：${profile.profession || '政經公關總監'}
+- 身世背景：${profile.background || '遊走於台北政商黑白兩道'}
+- 外貌特徵：${profile.appearance || '隨機（請替我原創專屬高級迷人穿搭、體香與神態）'}
+- 禁忌標籤：${profile.taboos || '無'}
+- 成人情慾模式 (R-18)：${profile.allowR18 ? '開啟（包含露骨細緻的體溫、喘息與肢體性張力）' : '關閉'}
+- 攻略模式：${isShura ? '【全勢力修羅場】（14位專屬男主隨劇情推進動態交鋒、多雄爭奪、極限拉扯）' : `【專屬男主】${profile.targetLeadName || '徐令謙'}`}
+- 玩家自訂開局情境：${customScenario || '深夜暴雨台北，帶著關鍵政商洗錢密錄暗帳初次入局'}
+
+請根據以上玩家自訂人設與情境，完全從零即時創作第 1 回長篇小說，精準呈現情境地點、男主眼神壓迫、性張力拉扯與三個全新抉擇選項！`;
+
+  return { systemPrompt, userPrompt };
+}
+
+/**
+ * 構建後續回合 (Turn 2+) 即時生成 Prompt
+ */
+function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyList) {
+  const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
+  const recentHistory = historyList.slice(-2).map(h => `【第 ${h.turn || ''} 回：${h.chapterTitle}】\n玩家上一動抉擇：${h.chosenLabel || ''}\n情節摘要：${h.prose.slice(0, 300)}...`).join('\n\n');
+
+  const systemPrompt = `你是一位頂級華語長篇情慾權謀互動小說家與RPG核心引擎。
+請遵守《情慾文學指引》：
+1. 嚴格依據玩家剛才執行的行動/抉擇，即時推進後續 1,000~1,500 字長篇小說正文。
+2. 描寫要求：極致性張力、上位者男性佔有欲與嫉妒心、細節肢體碰觸、五感溫度、權謀博弈。
+3. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼塊標記）：
+{
+  "chapterTitle": "第 1 幕 第 ${turnCount} 回：【章節標題】",
+  "prose": "【1000~1500字緊接玩家行動推進的長篇小說正文】",
+  "statusPanel": {
+    "timeLocation": "時空地點",
+    "tension": "張力值 [XX%]",
+    "intoxication": "微醺度 [XX%]",
+    "outfit": "角色著裝神態",
+    "interaction": "肢體與眼神互動狀態",
+    "inventory": "掌握情報物品",
+    "rumors": "政媒暗流傳聞"
+  },
+  "choices": [
+    { "id": "A", "label": "[A] 【選項A完整行動與對白描述】", "risk": "low", "hint": "提示" },
+    { "id": "B", "label": "[B] 【選項B完整行動與對白描述】", "risk": "medium", "hint": "提示" },
+    { "id": "C", "label": "[C] 【選項C完整行動與對白描述】", "risk": "high", "hint": "提示" }
+  ]
+}`;
+
+  const userPrompt = `【玩家角色】姓名：${profile.name}，職業：${profile.profession}，攻略模式：${isShura ? '全勢力修羅場' : profile.targetLeadName}
+【前情提要】
+${recentHistory}
+
+【玩家本回最新行動】
+- 選擇標籤或自由行動：${customInput || choiceId}
+- 當前進行回合：第 ${turnCount} 回
+
+請緊接著玩家的最新行動，完全原創演繹對手男主的反應、眼神殺伐、近身肢體推拉與情慾爆發，並生成 3 個全新分支選項！`;
+
+  return { systemPrompt, userPrompt };
+}
+
+async function loadMockDataWithProfile(profile) {
   state.playerProfile = profile;
   localStorage.setItem('undercurrent_current_player_profile', JSON.stringify(profile));
   
@@ -2531,19 +2693,30 @@ function loadMockDataWithProfile(profile) {
     questFlags: {
       main_quest: isShura ? '暗流初會：在全勢力交鋒中破局' : `初會：與 ${profile.targetLeadName} 的交鋒`
     },
-    summaryPool: `玩家 ${profile.name} 正式入局，情境設定：${(profile.customScenario || '經典開局').slice(0, 50)}...`,
+    summaryPool: `玩家 ${profile.name} 正式入局，情境設定：${(profile.customScenario || '全新開局').slice(0, 50)}...`,
     turnHistory: []
   };
 
   localStorage.setItem('undercurrent_current_save_state', JSON.stringify(state.saveState));
 
-  // 真正依據玩家自訂情境、隨機穿搭智慧生成、14位專屬男主合成第 1 回！
-  const initialMockChapter = generateDynamicFirstChapter(profile);
+  showLoading('以太筆觸流轉中，AI 主筆作家正在為您即時創作第 1 回長篇小說……', '無預設範本 · 100% 依據您的自訂人設與情境即時生成……');
 
-  state.chapterData = initialMockChapter;
-  state.chapterHistoryList = [initialMockChapter];
+  let initialChapter = null;
+
+  try {
+    const { systemPrompt, userPrompt } = buildFirstTurnPrompt(profile);
+    initialChapter = await generateStoryFromLLM(systemPrompt, userPrompt);
+  } catch (aiErr) {
+    console.warn('[Pure AI] Direct API call failed, falling back to dynamic synthesizer:', aiErr);
+    initialChapter = generateDynamicFirstChapter(profile);
+  } finally {
+    hideLoading();
+  }
+
+  state.chapterData = initialChapter;
+  state.chapterHistoryList = [initialChapter];
   localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
-  renderStoryStream(initialMockChapter);
+  renderStoryStream(initialChapter);
   renderSaveState();
   saveGameStateToSlot('1');
 }
