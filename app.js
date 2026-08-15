@@ -105,12 +105,9 @@ const dom = {
 
   // 首頁元件
   homeUsernameDisplay: document.getElementById('home-username-display'),
-  homeAuthActionBtn: document.getElementById('home-auth-action-btn'),
+  homeLogoutBtn: document.getElementById('home-logout-btn'),
+  homeDeleteAccountBtn: document.getElementById('home-delete-account-btn'),
   homeClearAllDataBtn: document.getElementById('home-clear-all-data-btn'),
-  headerLoginBtn: document.getElementById('header-login-btn'),
-  closeAuthModalBtn: document.getElementById('close-auth-modal-btn'),
-  userStatusDot: document.getElementById('user-status-dot'),
-  homeUserDot: document.getElementById('home-user-dot'),
   homeNewGameBtn: document.getElementById('home-new-game-btn'),
   homeContinueGameBtn: document.getElementById('home-continue-game-btn'),
   homeContinueDesc: document.getElementById('home-continue-desc'),
@@ -118,6 +115,20 @@ const dom = {
   homeOpenPresetsBtn: document.getElementById('home-open-presets-btn'),
   homeRecentSavesList: document.getElementById('home-recent-saves-list'),
   homeViewAllSavesBtn: document.getElementById('home-view-all-saves-btn'),
+
+  // 登入 / 註冊 門禁視窗
+  authModal: document.getElementById('auth-modal'),
+  tabLoginBtn: document.getElementById('tab-login-btn'),
+  tabRegisterBtn: document.getElementById('tab-register-btn'),
+  loginForm: document.getElementById('login-form'),
+  registerForm: document.getElementById('register-form'),
+  loginUsernameInput: document.getElementById('login-username'),
+  loginPasswordInput: document.getElementById('login-password'),
+  regUsernameInput: document.getElementById('reg-username'),
+  regPasswordInput: document.getElementById('reg-password'),
+  userBadge: document.getElementById('user-badge'),
+  usernameDisplay: document.getElementById('username-display'),
+  logoutBtn: document.getElementById('logout-btn'),
 
   // 自訂命名存檔庫彈窗
   saveArchiveModal: document.getElementById('save-archive-modal'),
@@ -142,21 +153,6 @@ const dom = {
   errorMessageText: document.getElementById('error-message-text'),
   retryTurnBtn: document.getElementById('retry-turn-btn'),
   dismissErrorBtn: document.getElementById('dismiss-error-btn'),
-
-  // 登入 / 註冊 驗證視窗
-  authModal: document.getElementById('auth-modal'),
-  tabLoginBtn: document.getElementById('tab-login-btn'),
-  tabRegisterBtn: document.getElementById('tab-register-btn'),
-  loginForm: document.getElementById('login-form'),
-  registerForm: document.getElementById('register-form'),
-  loginUsernameInput: document.getElementById('login-username'),
-  loginPasswordInput: document.getElementById('login-password'),
-  regUsernameInput: document.getElementById('reg-username'),
-  regPasswordInput: document.getElementById('reg-password'),
-  guestPlayBtn: document.getElementById('guest-play-btn'),
-  userBadge: document.getElementById('user-badge'),
-  usernameDisplay: document.getElementById('username-display'),
-  logoutBtn: document.getElementById('logout-btn'),
 
   // 創角表單與設定檔管理
   openCreateCharBtn: document.getElementById('open-create-char-btn'),
@@ -334,38 +330,43 @@ function setupEventListeners() {
   if (dom.closeHistoryBtn) dom.closeHistoryBtn.addEventListener('click', closeHistoryModal);
   if (dom.exportNovelBtn) dom.exportNovelBtn.addEventListener('click', exportFullNovelText);
 
-  // 6. 登入 / 註冊 Tab 切換
+  
+  // 登入 / 註冊 Tab 切換
   if (dom.tabLoginBtn && dom.tabRegisterBtn) {
     dom.tabLoginBtn.addEventListener('click', () => {
-      dom.tabLoginBtn.className = 'flex-1 py-2 rounded-md bg-brand-gold text-slate-950 transition';
-      dom.tabRegisterBtn.className = 'flex-1 py-2 rounded-md text-slate-400 hover:text-white transition';
-      dom.loginForm.style.display = 'block';
-      dom.registerForm.style.display = 'none';
+      dom.tabLoginBtn.className = 'flex-1 py-2.5 rounded-md bg-brand-gold text-slate-950 transition font-bold';
+      dom.tabRegisterBtn.className = 'flex-1 py-2.5 rounded-md text-slate-400 hover:text-white transition font-bold';
+      if (dom.loginForm) dom.loginForm.style.display = 'block';
+      if (dom.registerForm) dom.registerForm.style.display = 'none';
     });
 
     dom.tabRegisterBtn.addEventListener('click', () => {
-      dom.tabRegisterBtn.className = 'flex-1 py-2 rounded-md bg-brand-gold text-slate-950 transition';
-      dom.tabLoginBtn.className = 'flex-1 py-2 rounded-md text-slate-400 hover:text-white transition';
-      dom.registerForm.style.display = 'block';
-      dom.loginForm.style.display = 'none';
+      dom.tabRegisterBtn.className = 'flex-1 py-2.5 rounded-md bg-brand-gold text-slate-950 transition font-bold';
+      dom.tabLoginBtn.className = 'flex-1 py-2.5 rounded-md text-slate-400 hover:text-white transition font-bold';
+      if (dom.registerForm) dom.registerForm.style.display = 'block';
+      if (dom.loginForm) dom.loginForm.style.display = 'none';
     });
   }
 
-  if (dom.loginForm) dom.loginForm.addEventListener('submit', async (e) => { e.preventDefault(); await handleUserLogin(); });
-  if (dom.registerForm) dom.registerForm.addEventListener('submit', async (e) => { e.preventDefault(); await handleUserRegister(); });
+  if (dom.loginForm) {
+    dom.loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await handleUserLogin();
+    });
+  }
 
-  if (dom.guestPlayBtn) {
-    dom.guestPlayBtn.addEventListener('click', () => {
-      state.token = 'guest_temp_' + Date.now();
-      state.userId = 'usr_guest';
-      state.username = '訪客玩家';
-      setSession(state.token, state.userId, state.username);
-      dom.authModal.style.display = 'none';
-      initializeStory();
+  if (dom.registerForm) {
+    dom.registerForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await handleUserRegister();
     });
   }
 
   if (dom.logoutBtn) dom.logoutBtn.addEventListener('click', handleLogout);
+  if (dom.homeLogoutBtn) dom.homeLogoutBtn.addEventListener('click', handleLogout);
+  if (dom.homeDeleteAccountBtn) dom.homeDeleteAccountBtn.addEventListener('click', handleDeleteAccount);
+  if (dom.homeClearAllDataBtn) dom.homeClearAllDataBtn.addEventListener('click', clearAllLocalGameData);
+
 
   // 7. 創角彈窗控制與設定檔
   if (dom.openCreateCharBtn) dom.openCreateCharBtn.addEventListener('click', () => { dom.charCreationModal.style.display = 'flex'; });
@@ -992,46 +993,197 @@ function renderChoices(choices) {
 // ==========================================
 
 
+
 // ==========================================
-// 🔐 身分驗證與帳號切換系統 (Auth & Session System)
+// 🔐 身分驗證與門禁系統 (Strict Auth & Account Management)
 // ==========================================
 
-function openAuthModal(defaultTab = 'login') {
-  if (!dom.authModal) return;
-  dom.authModal.style.display = 'flex';
-  if (defaultTab === 'register') {
-    if (dom.tabRegisterBtn) dom.tabRegisterBtn.click();
-  } else {
-    if (dom.tabLoginBtn) dom.tabLoginBtn.click();
+function getLocalUsersDb() {
+  try {
+    return JSON.parse(localStorage.getItem('undercurrent_registered_users') || '{}');
+  } catch (e) {
+    return {};
   }
 }
 
-function closeAuthModal() {
-  if (dom.authModal) dom.authModal.style.display = 'none';
+function saveLocalUsersDb(db) {
+  localStorage.setItem('undercurrent_registered_users', JSON.stringify(db));
+}
+
+function setSession(token, userId, username) {
+  state.token = token;
+  state.userId = userId;
+  state.username = username;
+  localStorage.setItem('undercurrent_auth_token', token);
+  localStorage.setItem('undercurrent_user_id', userId);
+  localStorage.setItem('undercurrent_user_name', username);
+  checkAuthSession();
 }
 
 function checkAuthSession() {
   const isLoggedIn = !!(state.token && state.username);
   
   if (isLoggedIn) {
+    if (dom.authModal) dom.authModal.style.display = 'none';
+    if (dom.userBadge) dom.userBadge.classList.remove('hidden');
     if (dom.usernameDisplay) dom.usernameDisplay.textContent = state.username;
-    if (dom.logoutBtn) dom.logoutBtn.classList.remove('hidden');
-    if (dom.headerLoginBtn) dom.headerLoginBtn.classList.add('hidden');
-    if (dom.userStatusDot) dom.userStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+    updateSaveSlotsDisplay();
+    updateHomeViewDisplay();
+    switchView('home');
   } else {
-    if (dom.usernameDisplay) dom.usernameDisplay.textContent = '訪客玩家';
-    if (dom.logoutBtn) dom.logoutBtn.classList.add('hidden');
-    if (dom.headerLoginBtn) dom.headerLoginBtn.classList.remove('hidden');
-    if (dom.userStatusDot) dom.userStatusDot.className = 'w-2 h-2 rounded-full bg-amber-400';
+    // 嚴格門禁：未登入一律強顯 Auth Modal，阻擋進入首頁
+    if (dom.authModal) dom.authModal.style.display = 'flex';
+    if (dom.userBadge) dom.userBadge.classList.add('hidden');
+    if (dom.homeView) dom.homeView.style.display = 'none';
+    if (dom.gameplayView) dom.gameplayView.style.display = 'none';
+  }
+}
+
+function updateHomeViewDisplay() {
+  if (dom.homeUsernameDisplay) {
+    dom.homeUsernameDisplay.textContent = state.username ? `${state.username}` : '未登入';
   }
   
-  updateSaveSlotsDisplay();
-  updateHomeViewDisplay();
+  // 更新最近存檔摘要
+  if (dom.homeRecentSavesList) {
+    const archives = getNamedSaves();
+    const keys = Object.keys(archives);
+    if (keys.length === 0) {
+      dom.homeRecentSavesList.innerHTML = '<div class="text-xs text-slate-500 py-3 text-center">尚無存檔紀錄，點擊上方【開啟全新局】即刻啟程！</div>';
+      if (dom.homeContinueDesc) dom.homeContinueDesc.textContent = '尚未開始遊戲';
+    } else {
+      const latestKey = keys[keys.length - 1];
+      const latest = archives[latestKey];
+      if (dom.homeContinueDesc) dom.homeContinueDesc.textContent = `進度：${latest.chapterTitle || '第 1 回'} (${latest.name})`;
+      
+      let html = '';
+      keys.slice(-3).reverse().forEach(key => {
+        const item = archives[key];
+        const timeStr = item.timestamp ? new Date(item.timestamp).toLocaleString('zh-TW', { hour12: false }) : '';
+        html += `
+          <div class="flex items-center justify-between p-2.5 rounded-lg bg-brand-dark/80 border border-brand-border hover:border-brand-gold/40 transition">
+            <div class="min-w-0 pr-2">
+              <div class="text-xs font-bold text-white truncate">${item.name}</div>
+              <div class="text-[11px] text-slate-400 truncate">${item.chapterTitle || '章節進度'} ｜ ${timeStr}</div>
+            </div>
+            <button onclick="loadNamedSave('${key}')" class="px-2.5 py-1 rounded bg-brand-gold/15 hover:bg-brand-gold/30 text-brand-gold text-xs font-bold border border-brand-gold/30 transition shrink-0">
+              讀取
+            </button>
+          </div>
+        `;
+      });
+      dom.homeRecentSavesList.innerHTML = html;
+    }
+  }
+}
+
+async function handleUserLogin() {
+  const username = dom.loginUsernameInput.value.trim();
+  const password = dom.loginPasswordInput.value;
+
+  if (!username || !password) {
+    alert('請輸入帳號與密碼！');
+    return;
+  }
+
+  showLoading('正在驗證玩家身分，讀取專屬加密空間……');
+
+  let loginSuccess = false;
+
+  // 嘗試向 Google 雲端登入
+  if (state.gasApiUrl) {
+    try {
+      const res = await callBackendApi('auth/login', {
+        email: username,
+        password: password
+      });
+
+      if (res && res.success && res.data) {
+        setSession(res.data.token, res.data.userId, username);
+        loginSuccess = true;
+      }
+    } catch (e) {
+      console.warn('雲端後端未連線，轉入本地身分庫:', e);
+    }
+  }
+
+  // 本地身分庫比對備援
+  if (!loginSuccess) {
+    const db = getLocalUsersDb();
+    if (db[username]) {
+      if (db[username].password === password) {
+        setSession(db[username].token, db[username].userId, username);
+        loginSuccess = true;
+      } else {
+        hideLoading();
+        alert('❌ 密碼錯誤，請重新輸入！');
+        return;
+      }
+    } else {
+      // 若為全新本地帳號直接開通
+      const userId = 'usr_' + Date.now().toString(36);
+      const token = 'tok_' + Math.random().toString(36).substring(2);
+      db[username] = { userId, token, password, createdAt: new Date().toISOString() };
+      saveLocalUsersDb(db);
+      setSession(token, userId, username);
+      loginSuccess = true;
+    }
+  }
+
+  hideLoading();
+  alert(`🎉 歡迎回來，玩家【${username}】！已進入遊戲首頁。`);
+}
+
+async function handleUserRegister() {
+  const username = dom.regUsernameInput.value.trim();
+  const password = dom.regPasswordInput.value;
+
+  if (!username || !password || password.length < 6) {
+    alert('帳號不得為空，且密碼至少需 6 個字元！');
+    return;
+  }
+
+  showLoading('正在為您註冊並在 Google 雲端建立專屬獨立存檔空間……');
+
+  let registerSuccess = false;
+
+  if (state.gasApiUrl) {
+    try {
+      const res = await callBackendApi('auth/register', {
+        email: username,
+        password: password
+      });
+
+      if (res && res.success && res.data) {
+        setSession(res.data.token, res.data.userId, username);
+        registerSuccess = true;
+      }
+    } catch (e) {
+      console.warn('雲端註冊轉入本地建庫:', e);
+    }
+  }
+
+  if (!registerSuccess) {
+    const db = getLocalUsersDb();
+    if (db[username]) {
+      hideLoading();
+      alert('該帳號已存在，請直接登入或使用其他帳號名稱！');
+      return;
+    }
+    const userId = 'usr_' + Date.now().toString(36);
+    const token = 'tok_' + Math.random().toString(36).substring(2);
+    db[username] = { userId, token, password, createdAt: new Date().toISOString() };
+    saveLocalUsersDb(db);
+    setSession(token, userId, username);
+    registerSuccess = true;
+  }
+
+  hideLoading();
+  alert(`🎉 註冊成功！歡迎玩家【${username}】！已為您建立專屬空間。`);
 }
 
 function handleLogout() {
-  const hadAccount = !!(state.token && state.username);
-  if (hadAccount && !confirm('確定要登出當前帳號嗎？')) return;
+  if (!confirm('確定要登出當前帳號嗎？')) return;
 
   state.token = '';
   state.userId = '';
@@ -1040,19 +1192,57 @@ function handleLogout() {
   localStorage.removeItem('undercurrent_user_id');
   localStorage.removeItem('undercurrent_user_name');
 
-  checkAuthSession();
   closeDrawer();
-  
-  // 登出後直接打開登入/註冊視窗供切換
-  openAuthModal('login');
+  checkAuthSession();
 }
 
-function clearAllLocalGameData() {
-  if (!confirm('⚠️ 警告：確定要清空所有本機暫存、自訂存檔與遊玩歷史紀錄嗎？\n這將把遊戲完全重置為初始工廠狀態！')) {
+async function handleDeleteAccount() {
+  const currentUsername = state.username;
+  if (!currentUsername) return;
+
+  if (!confirm(`⚠️ 【危險操作】確定要永久註銷帳號【${currentUsername}】嗎？\n此動作將永久刪除您的帳號、雲端與本機所有存檔紀錄，且無法復原！`)) {
     return;
   }
 
-  // 清空 localStorage
+  const confirmInput = prompt(`請輸入您的帳號名稱「${currentUsername}」以確認註銷：`);
+  if (confirmInput !== currentUsername) {
+    alert('輸入帳號不一致，已取消註銷操作。');
+    return;
+  }
+
+  showLoading('正在註銷帳號並抹除所有相關存檔……');
+
+  // 嘗試通知雲端後端刪除
+  if (state.gasApiUrl) {
+    try {
+      await callBackendApi('auth/delete-account', { token: state.token });
+    } catch (e) {
+      console.warn('雲端刪除請求結束:', e);
+    }
+  }
+
+  // 抹除本地庫該使用者
+  const db = getLocalUsersDb();
+  delete db[currentUsername];
+  saveLocalUsersDb(db);
+
+  // 清空此使用者的所有存檔
+  clearAllLocalGameDataSilent();
+
+  // 清空 Session
+  state.token = '';
+  state.userId = '';
+  state.username = '';
+  localStorage.removeItem('undercurrent_auth_token');
+  localStorage.removeItem('undercurrent_user_id');
+  localStorage.removeItem('undercurrent_user_name');
+
+  hideLoading();
+  alert(`✅ 帳號【${currentUsername}】已成功永久註銷與刪除！`);
+  checkAuthSession();
+}
+
+function clearAllLocalGameDataSilent() {
   localStorage.removeItem('undercurrent_full_story_chapters');
   localStorage.removeItem('undercurrent_current_save_state');
   localStorage.removeItem('undercurrent_current_player_profile');
@@ -1064,7 +1254,6 @@ function clearAllLocalGameData() {
     localStorage.removeItem(`undercurrent_usr_local_saveslot_${i}`);
   }
 
-  // 重置記憶體狀態
   state.chapterHistoryList = [];
   state.chapterData = null;
   state.saveState = null;
@@ -1073,13 +1262,19 @@ function clearAllLocalGameData() {
 
   if (dom.novelStreamContainer) dom.novelStreamContainer.innerHTML = '';
   if (dom.choicesContainer) dom.choicesContainer.innerHTML = '';
+}
 
+function clearAllLocalGameData() {
+  if (!confirm('⚠️ 警告：確定要清空所有本機暫存、自訂存檔與遊玩歷史紀錄嗎？\n這將把當前帳號的遊戲進度完全重置！')) {
+    return;
+  }
+  clearAllLocalGameDataSilent();
   updateSaveSlotsDisplay();
   updateHomeViewDisplay();
   switchView('home');
-
-  alert('✨ 已成功清空所有本機存檔與紀錄！現在您可以從首頁開啟全新冒險。');
+  alert('✨ 已成功清空所有本機存檔與紀錄！');
 }
+
 
 
 function openDrawer() {

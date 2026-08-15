@@ -52,7 +52,40 @@ var StorageService = (function() {
       if (data[i][4] === token) { // Column 5: API_Token
         // 更新最後活躍時間
         sheet.getRange(i + 1, 8).setValue(new Date().toISOString());
-        return {
+        
+  /**
+   * 永久刪除 / 註銷使用者帳號與資料夾
+   */
+  function deleteUserAccount(userId) {
+    var sheet = getOrCreateSheet(CONFIG.SHEET.USERS_SHEET_NAME, [
+      'User_ID', 'Email', 'Password_Hash', 'Salt', 'API_Token', 'Drive_Folder_ID', 'Created_At', 'Last_Active'
+    ]);
+    var data = sheet.getDataRange().getValues();
+    var folderIdToDelete = null;
+
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === userId) {
+        folderIdToDelete = data[i][5];
+        sheet.deleteRow(i + 1);
+        break;
+      }
+    }
+
+    // 刪除 / 移至垃圾桶 Drive 資料夾
+    if (folderIdToDelete) {
+      try {
+        var folder = DriveApp.getFolderById(folderIdToDelete);
+        if (folder) folder.setTrashed(true);
+      } catch (e) {
+        console.warn('Could not trash user folder: ' + e.message);
+      }
+    }
+
+    return true;
+  }
+
+  return {
+    deleteUserAccount: deleteUserAccount,
           userId: data[i][0],
           email: data[i][1],
           passwordHash: data[i][2],

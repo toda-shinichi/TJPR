@@ -51,6 +51,9 @@ function doPost(e) {
 
     // Router Dispatcher
     switch (action) {
+      case 'auth/delete-account':
+        return handleDeleteAccount(userSession, payload);
+
       case 'auth/verify':
         return createSuccessResponse({
           valid: true,
@@ -458,4 +461,17 @@ function createErrorResponse(message, statusCode) {
   };
   return ContentService.createTextOutput(JSON.stringify(response))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+
+/**
+ * 註銷帳號處理器
+ */
+function handleDeleteAccount(userSession, payload) {
+  if (!userSession || !userSession.userId) {
+    return createErrorResponse('Unauthorized.', 401);
+  }
+  StorageService.deleteUserAccount(userSession.userId);
+  CacheService.getScriptCache().remove('token_' + payload.token);
+  return createSuccessResponse({ deleted: true, userId: userSession.userId });
 }

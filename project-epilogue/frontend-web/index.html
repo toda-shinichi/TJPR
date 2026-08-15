@@ -39,7 +39,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Serif+TC:wght@400;600;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./style.css?v=20260816_v22">
+  <link rel="stylesheet" href="./style.css?v=20260816_v23">
 </head>
 <body class="bg-[#0c0d12] text-[#e6e8f0] font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-black">
 
@@ -80,12 +80,11 @@
         <span class="hidden sm:inline">歷史</span>
       </button>
 
-      <!-- 登入身分指示器 -->
-      <div id="user-badge" class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-brand-card border border-brand-border text-xs text-slate-300">
-        <span class="w-2 h-2 rounded-full bg-emerald-400" id="user-status-dot"></span>
-        <span id="username-display" class="font-mono text-brand-gold text-xs">訪客玩家</span>
-        <button id="logout-btn" class="ml-0.5 text-[11px] text-slate-400 hover:text-rose-400 transition hidden" title="登出切換帳號">登出</button>
-        <button id="header-login-btn" class="ml-0.5 text-[11px] text-brand-gold hover:underline font-bold" title="登入或註冊">登入</button>
+            <!-- 登入身分指示器 -->
+      <div id="user-badge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand-card border border-brand-border text-xs text-slate-300">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span id="username-display" class="font-mono text-brand-gold text-xs font-bold">已登入</span>
+        <button id="logout-btn" class="ml-1 text-[11px] text-slate-400 hover:text-amber-400 transition" title="登出當前帳號">登出</button>
       </div>
 
       <!-- 開局創角按鈕 -->
@@ -166,22 +165,26 @@
           五月的台北士林，暴雨傾盆。黑道二把手、地檢署白日判官、政商巨頭與身懷密錄帳冊的妳，在權謀殺伐與情慾狂瀾的深淵交鋒。
         </p>
         
-        <!-- 當前登入者資訊列與一鍵重置 -->
+                <!-- 當前登入者資訊列與帳號管理 -->
         <div class="pt-3 flex flex-wrap items-center justify-center gap-2.5 text-xs">
           <div class="bg-brand-card/90 px-3 py-1.5 rounded-lg border border-brand-border flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-emerald-400" id="home-user-dot"></span>
-            <span class="text-slate-400">當前身分：</span>
-            <span id="home-username-display" class="font-mono text-brand-gold font-bold">訪客玩家（單機）</span>
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span class="text-slate-400">登入玩家：</span>
+            <span id="home-username-display" class="font-mono text-brand-gold font-bold">載入中...</span>
           </div>
-          <button id="home-auth-action-btn" class="px-3 py-1.5 rounded-lg bg-brand-gold/20 hover:bg-brand-gold/30 text-brand-gold font-bold border border-brand-gold/40 transition">
-            🔑 登入 / 註冊新帳號
+          <button id="home-logout-btn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-brand-border transition flex items-center gap-1">
+            <span>🚪</span>
+            <span>登出帳號</span>
           </button>
-          <button id="home-clear-all-data-btn" class="px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white border border-rose-800/50 transition flex items-center gap-1" title="清空本機所有存檔與暫存，完全重置開局">
+          <button id="home-delete-account-btn" class="px-3 py-1.5 rounded-lg bg-rose-950/70 hover:bg-rose-900 text-rose-300 hover:text-white border border-rose-800/60 transition flex items-center gap-1" title="永久註銷並刪除此帳號及所有存檔">
+            <span>🗑️</span>
+            <span>註銷帳號</span>
+          </button>
+          <button id="home-clear-all-data-btn" class="px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700 transition flex items-center gap-1" title="清空本機存檔重置">
             <span>💥</span>
-            <span>清空所有存檔重置</span>
+            <span>清空本機存檔</span>
           </button>
         </div>
-      </div>
 
       <!-- 🎮 4 大核心入口導航按鈕卡片 -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -315,211 +318,53 @@
     </div>
   </div>
 
-  <!-- 🔐 玩家帳號登入 / 註冊視窗 (Auth Gatekeeper Modal) -->
-  <div id="auth-modal" class="fixed inset-0 bg-black/90 backdrop-blur-lg z-[90] flex items-center justify-center p-4 transition-opacity" style="display:none;">
-    <div class="relative bg-brand-surface border border-brand-gold/50 rounded-2xl max-w-md w-full p-6 sm:p-8 shadow-2xl shadow-black space-y-6">
-      <button id="close-auth-modal-btn" class="absolute top-4 right-4 text-slate-400 hover:text-white p-1" title="關閉視窗（以訪客身分繼續）">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-      </button>
+    <!-- 🔐 玩家帳號登入 / 註冊強制攔截門禁 (Strict Auth Gatekeeper Modal) -->
+  <div id="auth-modal" class="fixed inset-0 bg-[#07080b]/95 backdrop-blur-xl z-[100] flex items-center justify-center p-4 transition-opacity">
+    <div class="bg-brand-surface border border-brand-gold/50 rounded-2xl max-w-md w-full p-6 sm:p-8 shadow-2xl shadow-black space-y-6">
       
       <div class="text-center space-y-1">
         <div class="inline-block font-mono text-[11px] text-brand-gold tracking-widest uppercase bg-brand-gold/10 border border-brand-gold/20 px-2.5 py-0.5 rounded">
-          PRIVATE & SECURE WORKSPACE
+          MANDATORY AUTHENTICATION
         </div>
-        <h2 class="font-serif font-black text-2xl text-brand-gold tracking-wide">《暗流》玩家身分驗證</h2>
-        <p class="text-xs text-slate-400">登入專屬帳號以存取獨立加密儲存空間，確保個人進度與隱私不外洩。</p>
+        <h2 class="font-serif font-black text-2xl text-brand-gold tracking-wide">《暗流》身分驗證大門</h2>
+        <p class="text-xs text-slate-400">本作品採用專屬身分儲存機制，請登入或註冊以進入遊戲首頁。</p>
       </div>
 
       <div class="flex rounded-lg bg-brand-dark p-1 border border-brand-border text-xs font-bold">
-        <button type="button" id="tab-login-btn" class="flex-1 py-2 rounded-md bg-brand-gold text-slate-950 transition">
-          登入帳號
+        <button type="button" id="tab-login-btn" class="flex-1 py-2.5 rounded-md bg-brand-gold text-slate-950 transition">
+          ✦ 登入既有帳號
         </button>
-        <button type="button" id="tab-register-btn" class="flex-1 py-2 rounded-md text-slate-400 hover:text-white transition">
-          註冊新玩家
+        <button type="button" id="tab-register-btn" class="flex-1 py-2.5 rounded-md text-slate-400 hover:text-white transition">
+          ✦ 註冊全新玩家
         </button>
       </div>
 
       <form id="login-form" class="space-y-4 text-xs sm:text-sm">
         <div>
           <label class="block font-bold text-slate-300 mb-1">玩家帳號 / Email</label>
-          <input type="text" id="login-username" required placeholder="例如：player01 或 user@mail.com" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2.5 text-white focus:border-brand-gold focus:outline-none">
+          <input type="text" id="login-username" required placeholder="請輸入您的帳號或 Email" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2.5 text-white focus:border-brand-gold focus:outline-none">
         </div>
         <div>
           <label class="block font-bold text-slate-300 mb-1">密碼</label>
-          <input type="password" id="login-password" required placeholder="輸入您的登入密碼" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2.5 text-white focus:border-brand-gold focus:outline-none">
+          <input type="password" id="login-password" required placeholder="請輸入密碼" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2.5 text-white focus:border-brand-gold focus:outline-none">
         </div>
-        <button type="submit" id="submit-login-btn" class="w-full bg-brand-gold hover:bg-yellow-500 text-slate-950 font-black py-3 rounded-xl transition text-sm shadow-xl shadow-brand-gold/15">
-          ✦ 登入入局 · 載入私人進度
+        <button type="submit" id="submit-login-btn" class="w-full bg-brand-gold hover:bg-yellow-500 text-slate-950 font-black py-3 rounded-xl transition text-sm shadow-xl shadow-brand-gold/15 cursor-pointer">
+          ✦ 登入並進入遊戲首頁
         </button>
       </form>
 
       <form id="register-form" class="space-y-4 text-xs sm:text-sm" style="display:none;">
         <div>
           <label class="block font-bold text-slate-300 mb-1">設定玩家帳號 / Email *</label>
-          <input type="text" id="reg-username" required placeholder="輸入您想設定的帳號或 Email" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2.5 text-white focus:border-brand-gold focus:outline-none">
+          <input type="text" id="reg-username" required placeholder="請設定您的帳號或 Email" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2.5 text-white focus:border-brand-gold focus:outline-none">
         </div>
         <div>
           <label class="block font-bold text-slate-300 mb-1">設定密碼（至少 6 碼） *</label>
-          <input type="password" id="reg-password" minlength="6" required placeholder="設定 6 碼以上安全密碼" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2.5 text-white focus:border-brand-gold focus:outline-none">
+          <input type="password" id="reg-password" minlength="6" required placeholder="請設定 6 碼以上安全密碼" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2.5 text-white focus:border-brand-gold focus:outline-none">
         </div>
-        <button type="submit" id="submit-register-btn" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-3 rounded-xl transition text-sm shadow-xl shadow-emerald-900/20">
-          ✦ 註冊並建立專屬雲端空間
+        <button type="submit" id="submit-register-btn" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-3 rounded-xl transition text-sm shadow-xl shadow-emerald-900/20 cursor-pointer">
+          ✦ 立即註冊並進入遊戲
         </button>
-      </form>
-
-      <div class="pt-3 border-t border-brand-border/60 text-center">
-        <button type="button" id="guest-play-btn" class="text-xs text-slate-400 hover:text-brand-gold transition underline">
-          ⚡ 訪客快速試玩（免登入單機體驗）
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 🌟 開局創建玩家角色與人物設定表單彈窗 (Character Creation Modal) -->
-  <div id="character-creation-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[80] flex items-center justify-center p-4 overflow-y-auto transition-opacity" style="display:none;">
-    <div class="bg-brand-surface border border-brand-gold/40 rounded-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-7 shadow-2xl shadow-black/80 space-y-5">
-      
-      <div class="border-b border-brand-border pb-3 flex justify-between items-center">
-        <div>
-          <h2 class="font-serif font-black text-xl sm:text-2xl text-brand-gold tracking-wide">《暗流》開局角色與情境設定</h2>
-          <p class="text-xs text-slate-400 mt-0.5">填寫身分背景、選擇攻略對象與尺度，支援多套角色範本存檔與隨時讀取切換。</p>
-        </div>
-        <button id="close-modal-btn" class="text-slate-400 hover:text-white p-1">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-        </button>
-      </div>
-
-      <!-- 設定檔快速存取與預設範本管理專區 -->
-      <div class="bg-brand-card p-3.5 rounded-xl border border-brand-gold/30 space-y-2.5">
-        <div class="flex flex-wrap justify-between items-center gap-2">
-          <span class="text-xs font-bold text-brand-gold flex items-center gap-1.5">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
-            角色設定檔 (Profile Presets)
-          </span>
-          <div class="flex items-center gap-1.5 text-xs">
-            <button type="button" id="save-current-profile-btn" class="px-2.5 py-1 rounded bg-brand-gold text-slate-950 font-bold hover:bg-yellow-500 transition text-[11px]">
-              💾 儲存為我的設定檔
-            </button>
-            <button type="button" id="export-profile-json-btn" class="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white border border-brand-border transition text-[11px]">
-              📤 匯出 JSON
-            </button>
-            <label class="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white border border-brand-border transition text-[11px] cursor-pointer">
-              📥 匯入 JSON
-              <input type="file" id="import-profile-json-input" accept=".json" class="hidden">
-            </label>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap gap-2 items-center">
-          <label class="text-xs text-slate-400 shrink-0">快速載入範本：</label>
-          <select id="profile-presets-select" class="flex-1 bg-brand-dark border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-brand-gold focus:outline-none">
-            <option value="preset_yang">🌟 【官方範本】楊慕璃（弘楊集團公關總監 · 瑾和基金會執行長）</option>
-            <option value="preset_ruan" selected>🌟 【官方範本】阮思薇（司法政經獨立調查記者）</option>
-            <option value="preset_custom">✏️ 【自訂空角色】全新自訂</option>
-          </select>
-          <button type="button" id="delete-profile-preset-btn" class="text-rose-400 hover:text-rose-300 text-xs px-2 py-1" title="刪除選中的自訂範本">
-            🗑
-          </button>
-        </div>
-      </div>
-
-      <form id="char-creation-form" class="space-y-4 text-xs sm:text-sm">
-        <!-- 1. 基本身分 -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div>
-            <label class="block font-bold text-slate-300 mb-1">玩家姓名 *</label>
-            <input type="text" id="form-player-name" required value="阮思薇" placeholder="您的姓名" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
-          </div>
-          <div>
-            <label class="block font-bold text-slate-300 mb-1">性別</label>
-            <select id="form-player-gender" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
-              <option value="女" selected>女性</option>
-              <option value="男">男性</option>
-              <option value="雙性/非二元">自訂/非二元</option>
-            </select>
-          </div>
-          <div>
-            <label class="block font-bold text-slate-300 mb-1">年齡</label>
-            <input type="number" id="form-player-age" value="26" min="18" max="99" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
-          </div>
-        </div>
-
-        <!-- 2. 身分職業與背景 -->
-        <div>
-          <label class="block font-bold text-slate-300 mb-1">身分背景與職業 *</label>
-          <input type="text" id="form-player-profession" required value="司法政經調查記者（兼獨立自媒體主筆）" placeholder="例如：法務部專員、財團特助、黑道暗線線人..." class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
-        </div>
-
-        <div>
-          <label class="block font-bold text-slate-300 mb-1">核心動機與過往背景</label>
-          <input type="text" id="form-player-background" value="追查三年前未結的洗錢弊案，手中掌握一份殘缺的帳冊底牌" placeholder="例如：為了復仇、尋找失蹤親人、政商博弈..." class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
-        </div>
-
-        <!-- 3. 外觀與雷區 -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label class="block font-bold text-slate-300 mb-1">外觀特徵與著裝風格</label>
-            <input type="text" id="form-player-appearance" value="深黑合身西裝大衣，珍珠耳釘，神情冷靜敏銳" placeholder="外貌與穿搭細節" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
-          </div>
-          <div>
-            <label class="block font-bold text-slate-300 mb-1">不喜歡的字眼 / 雷區禁忌</label>
-            <input type="text" id="form-player-taboos" value="無特定雷區，禁止酒駕" placeholder="避免出現的情節或字眼" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none">
-          </div>
-        </div>
-
-        <!-- 4. 主要攻略對象 (包含 14 位角色與修羅場) -->
-        <div>
-          <label class="block font-bold text-brand-gold mb-1">主要攻略對象 (角色選擇) *</label>
-          <select id="form-target-lead" class="w-full bg-brand-dark border border-brand-gold/60 rounded-lg px-3 py-2.5 text-white font-semibold focus:border-brand-gold focus:outline-none">
-            <option value="01_徐令謙" data-name="徐令謙" selected>01 · 徐令謙（玄辰幫二把手 · 天裕會首領 · 士林德行事務所 / 三峽思慕咖啡）</option>
-            <option value="02_韓正寰" data-name="韓正寰">02 · 韓正寰（臺灣士林地檢署檢察官 · 白日判官 · 司法刀鋒）</option>
-            <option value="03_邵翊衡" data-name="邵翊衡">03 · 邵翊衡（立法委員 · 司法委員會召集人 · 敦化北路Penthouse）</option>
-            <option value="04_楊紹宸" data-name="楊紹宸">04 · 楊紹宸（弘楊集團執行長 · 資本獵手 · 陽明山大宅）</option>
-            <option value="05_徐宇寧" data-name="徐宇寧">05 · 徐宇寧（天才駭客 · 暗網情報掮客 · 細膩引導）</option>
-            <option value="06_林政修" data-name="林政修">06 · 林政修（法務部政務次長 · 中正區華廈 / 彰化鹿港）</option>
-            <option value="07_沈湛然" data-name="沈湛然">07 · 沈湛然（心智分析犯罪心理學家 · 中山區暖光公寓）</option>
-            <option value="08_江瀚文" data-name="江瀚文">08 · 江瀚文（鼎曜媒體集團執行長 · 大直重劃區河岸豪宅）</option>
-            <option value="09_吳衛廷" data-name="吳衛廷">09 · 吳衛廷（早年街頭打滾 · 實打實結實力量 · 粗暴直率護短）</option>
-            <option value="10_徐承勳" data-name="徐承勳">10 · 徐承勳（國家副元首 · ENTJ極度自律控制狂）</option>
-            <option value="11_徐耀南" data-name="徐耀南">11 · 徐耀南（榮南營造集團董事長 · 台中七期豪宅）</option>
-            <option value="12_徐若宸" data-name="徐若宸">12 · 徐若宸（榮南集團少東 · UBC商學院 · 莫蘭迪綠T-Roc）</option>
-            <option value="13_徐予澈" data-name="徐予澈">13 · 徐予澈（藝名徐泰希 / 化名Hans · 台北大安區文化演藝名流）</option>
-            <option value="14_楊慕璃" data-name="楊慕璃">14 · 楊慕璃（弘楊集團公關總監 · 瑾和基金會執行長 · 杏眼自然捲）</option>
-            <option value="修羅場" data-name="修羅場">⚡ 【修羅場模式】全員交鋒 · 多方權力與情慾推拉</option>
-          </select>
-        </div>
-
-        <!-- 5. 成人互動開關 (R-18) -->
-        <div class="bg-brand-card p-3 rounded-xl border border-brand-border flex items-center justify-between">
-          <div>
-            <div class="font-bold text-slate-200">成人互動 (R-18) 權限</div>
-            <div class="text-[11px] text-slate-400">開啟後遵循《情慾文學指引》，在張力臨界或指令觸發時展開寫實直白描寫。</div>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" id="form-allow-r18" checked class="sr-only peer">
-            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
-          </label>
-        </div>
-
-        <!-- 6. 自定義開場劇情 (選填) -->
-        <div>
-          <label class="block font-bold text-slate-300 mb-1">自定義開場劇情 / 初始情境 (選填)</label>
-          <textarea id="form-custom-scenario" rows="3" placeholder="例如：深夜十一點，士林德行東路德行法律事務所頂層。我帶著被銷毀的洗錢帳冊底牌走進雨幕中，與坐在角落搖晃威士忌的徐令謙四目相接……" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white focus:border-brand-gold focus:outline-none resize-none"></textarea>
-          
-          <div class="flex flex-wrap gap-1.5 mt-2 text-[11px]">
-            <span class="text-slate-400">快捷情境：</span>
-            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="深夜士林德行法律事務所頂層制策室，我帶著洗錢帳冊底牌前來與徐令謙談判。">【德行事務所暴雨密會】</button>
-            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="三峽老街溪畔的思慕咖啡館，在手沖香氣與晨霧中，我與前來靜心研磨咖啡豆的徐令謙四目相接。">【三峽思慕咖啡清晨偶遇】</button>
-            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="士林地檢署走廊外，暴雨滂沱，我與檢察官韓正寰在電梯口狹路相逢。">【地檢署走廊交鋒】</button>
-            <button type="button" class="preset-scenario-btn text-brand-gold hover:underline" data-text="弘楊集團頂樓晚宴，我身著素雅長裙，在暗潮洶湧的酒會上與楊紹宸、楊慕璃不期而遇。">【弘楊集團晚宴修羅場】</button>
-          </div>
-        </div>
-
-        <div class="pt-4 border-t border-brand-border flex gap-3">
-          <button type="submit" id="submit-create-char-btn" class="flex-1 bg-brand-gold hover:bg-yellow-500 text-slate-950 font-black py-3 rounded-xl transition text-sm shadow-xl shadow-brand-gold/15">
-            ✦ 正式入局 · 開啟篇章
-          </button>
-        </div>
       </form>
     </div>
   </div>
@@ -728,6 +573,6 @@
     </button>
   </div>
 
-  <script src="./app.js?v=20260816_v22"></script>
+  <script src="./app.js?v=20260816_v23"></script>
 </body>
 </html>
