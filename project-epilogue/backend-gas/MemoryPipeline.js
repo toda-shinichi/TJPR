@@ -103,52 +103,23 @@ var MemoryPipeline = (function() {
   }
 
   /**
-   * 建構分層設定集 (Tiered Lorebook) 內容
+   * 建構分層設定集 (Tiered Lorebook) 內容，調用 CharacterManager 高速快取與動態偵測
    */
-  function buildTieredLorebook(saveState, recentContextText) {
-    var lore = {
-      tier1MainChar: '',
-      tier2ActiveNPCs: '',
-      tier3GlobalIndex: ''
+  function buildTieredLorebook(saveState, recentContextText, playerChoice) {
+    var playerProfile = (saveState.meta && saveState.meta.playerProfile) || {};
+    var primaryLeadKey = playerProfile.targetLead || '01_徐令謙';
+    var isShura = primaryLeadKey === '修羅場' || playerProfile.targetLeadName === '修羅場';
+
+    // 1. 調用 CharacterManager 偵測在場配角 (Tier 2)
+    var activeNPCs = CharacterManager.detectActiveNPCs(recentContextText, playerChoice, primaryLeadKey);
+
+    // 2. 組裝三層角色提示詞區塊
+    var characterBlock = CharacterManager.assembleCharacterPromptBlock(primaryLeadKey, activeNPCs, isShura);
+
+    return {
+      characterBlock: characterBlock,
+      activeNPCs: activeNPCs
     };
-
-    // Tier 1: 主角完整設定 Markdown
-    var mainCharId = (saveState.protagonist && saveState.protagonist.id) || '01_徐令謙';
-    if (mainCharId === '修羅場' || (saveState.meta && saveState.meta.playerProfile && saveState.meta.playerProfile.targetLead === '修羅場')) {
-      lore.tier1MainChar = [
-        '【修羅場模式：全員交鋒】',
-        StorageService.getCharacterMarkdown('01_徐令謙'),
-        StorageService.getCharacterMarkdown('02_韓正寰'),
-        StorageService.getCharacterMarkdown('04_楊紹宸')
-      ].join('\n\n---\n\n');
-    } else {
-      lore.tier1MainChar = StorageService.getCharacterMarkdown(mainCharId);
-    }
-
-    // Tier 2: 動態關鍵字比對當前場景 NPC
-    var allCharacters = StorageService.listCharacters();
-    var activeNPCsContent = [];
-    var searchCorpus = (recentContextText + ' ' + (saveState.summaryPool || '')).toLowerCase();
-
-    for (var i = 0; i < allCharacters.length; i++) {
-      var charMeta = allCharacters[i];
-      if (charMeta.id !== mainCharId) {
-        if (searchCorpus.indexOf(charMeta.name.toLowerCase()) !== -1 || searchCorpus.indexOf(charMeta.id.toLowerCase()) !== -1) {
-          var charMd = StorageService.getCharacterMarkdown(charMeta.id);
-          if (charMd) {
-            activeNPCsContent.push(charMd);
-          }
-        }
-      }
-    }
-    lore.tier2ActiveNPCs = activeNPCsContent.join('\n\n---\n\n');
-
-    // Tier 3: 全域背景索引
-    lore.tier3GlobalIndex = JSON.stringify(allCharacters.map(function(c) {
-      return { id: c.id, name: c.name };
-    }));
-
-    return lore;
   }
 
   /**
@@ -164,30 +135,21 @@ var MemoryPipeline = (function() {
     var recentTurns = saveState.turnHistory.slice(-CONFIG.PIPELINE.RECENT_TURNS_CONTEXT_LIMIT);
     var recentTurnsText = JSON.stringify(recentTurns);
 
-    var tieredLore = buildTieredLorebook(saveState, recentTurnsText);
+    var playerActionStr = customInput || choiceId;
+    var tieredLore = buildTieredLorebook(saveState, recentTurnsText, playerActionStr);
 
     // 系統提示詞 (System Prompt) 整合 System_Directives.md 與 Romance_Aesthetics.md
     var systemPrompt = [
-      '【核心定位】你是專精成人女性情感小說的頂級主筆作家，任務是引導玩家進入《暗流》（UNDER CURRENT）世界，與十三位男主（徐令謙、韓正寰、邵翊衡、楊紹宸、徐宇寧、林政修、沈湛然、江瀚文、吳衛廷、徐承勳、徐耀南、徐若宸、徐予澈）或修羅場進行深度博弈與情慾推拉。',
+      '【核心定位】你是專精成人女性情感小說與權謀黑幫的頂級角色扮演敘事者與RPG核心引擎。',
       '',
       '【最高指導原則】',
       '1. 絕對禁止OOC：100%沉浸式角色扮演，角色絕不承認是AI，依各自MBTI、身分背景、著裝風格與微表情細膩反應。',
-      '2. 純文學沉浸正文（重要）：正文開頭【嚴禁出現「妳做出了抉擇」、「妳選擇了」等系統破梗語】！玩家的行動已在前文指示中，小說正文必須 100% 宛如出版小說般，直接從劇中人物的動作、微表情、眼神交會、觸摸與對話自然無縫推進！',
-      '3. 篇幅與深度（重要）：每回合正文輸出【嚴格維持 800 至 1,200 字以上】，細緻描寫環境氣味、光影、肢體距離、呼吸心跳、對話交鋒（至少3-4輪對話）與微表情變化，絕不敷衍短寫、不總結、不斷尾。',
-      '4. 修羅場模式特殊規則：若玩家選擇【修羅場】，須在同一場景或暗湧中安排 2 位以上男主（如徐令謙與韓正寰、或徐令謙與楊紹宸）產生目光交鋒、言語試探與對玩家的佔有欲拉扯。',
-      '5. 語境與禁忌：全程台灣繁體中文（zh-TW）與在地地名（士林德行東路德行事務所、三峽思慕咖啡、大安區忠孝新生、陽明山楊家、敦化北路、大直河岸）。除吳衛廷外全體禁止髒話；完全禁止酒駕描寫。',
-      '6. 慢熱與推拉法則（情慾文學指引）：慾望是性格的延伸，以五感優先於直述。當張力值臨界或選項[C]觸發時，依男主專屬美學展開寫實肢體描寫，拒絕隱晦暗喻。',
-      '7. 狀態列完整性：statusPanel 必須完整填寫 outfit（玩家著裝神態 ｜ 男主姓名、著裝細節、眼神與動作）、timeLocation、tension、intoxication、interaction、inventory、rumors。',
+      '2. 純文學沉浸正文：正文開頭【嚴禁出現「妳做出了抉擇」等系統破梗語】！小說正文必須宛如出版實體書，直接從劇中人物的動作、微表情、眼神交會、肢體觸摸與對話自然推進！',
+      '3. 篇幅與深度：每回合正文輸出【嚴格維持 1,000 至 1,500 字】，細緻描寫環境氣味、光影、肢體距離、呼吸心跳、對話交鋒與微表情變化，絕不套用固定模板。',
+      '4. 嚴格身分防火牆：徐令謙是黑道玄辰幫二把手·天裕會中樞，絕非檢察官（士林地檢署檢察官是韓正寰），徐承勳是中華民國副總統，絕不可張冠李戴！',
+      '5. 成人情慾文學指引（R-18）：極致性張力、高位推拉、寫實直白描寫肉體交纏、支配與臣服、五感具象（體溫、喘息、香氣、眼神壓迫、肢體撫摸）、權謀殺伐與多方博弈，使用純台灣繁體中文，拒絕隱晦暗喻！',
       '',
-      '【分層設定集 (Tiered Lorebook)】',
-      '=== [Tier 1: 當前主要攻略對象/男主設定卡] ===',
-      tieredLore.tier1MainChar || '徐令謙（玄辰幫二把手、天裕會首領）',
-      '',
-      '=== [Tier 2: 當前活躍 NPC / 關係人設定卡] ===',
-      tieredLore.tier2ActiveNPCs || '無其他主要關係人登場',
-      '',
-      '=== [Tier 3: 全域世界背景與人物索引] ===',
-      tieredLore.tier3GlobalIndex,
+      tieredLore.characterBlock,
       '',
       '【輸出格式規範】',
       '你必須嚴格輸出標準 JSON 格式，請勿在 JSON 外附帶任何非 JSON 字串：',

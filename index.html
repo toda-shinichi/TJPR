@@ -434,11 +434,33 @@
         </div>
 
         <!-- 攻略對象選擇（13 位官方男主 + 全勢力修羅場模式） -->
-        <div>
-          <label class="block font-bold text-brand-gold mb-1">✦ 攻略對象 / 互動模式 *</label>
+        <div class="space-y-2">
+          <label class="block font-bold text-brand-gold mb-1">✦ 主要攻略對象 (Tier 1 核心主線) *</label>
           <select id="form-target-lead" class="w-full bg-brand-dark border border-brand-gold/60 rounded-lg px-3 py-2 text-white font-bold focus:border-brand-gold focus:outline-none">
             <!-- 由 JS 自動同步填入 13 位官方男主 -->
           </select>
+        </div>
+
+        <!-- ⚠️ 修羅場模式負載提醒卡片 (動態顯示) -->
+        <div id="shura-warning-card" class="p-3.5 rounded-xl bg-amber-950/70 border border-amber-500/60 text-amber-200 text-xs space-y-1 shadow-lg" style="display:none;">
+          <div class="font-bold flex items-center gap-1.5 text-amber-300">
+            <span>⚠️</span>
+            <span>【全勢力修羅場模式 · 負載與耗時提醒】</span>
+          </div>
+          <p class="leading-relaxed text-[11px] text-amber-200/90">
+            全勢力修羅場將即時演繹 13 位男主的勢力交鋒、暗流對峙與多方爭奪。因需同時維護多方人設防火牆與衝突推進，單回推理 Token 較多、耗時稍長，建議在中後期多留意每 5 回合的滾動摘要池以維持長線邏輯精確。
+          </p>
+        </div>
+
+        <!-- 優先交織在場配角 (Tier 2 候選 · 複選 1~2 位) -->
+        <div id="supporting-leads-block" class="bg-brand-card p-3 rounded-xl border border-brand-border space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block font-bold text-slate-200 text-xs">✦ 優先交織配角 (Tier 2 · 可選 1~2 位)</label>
+            <span class="text-[11px] text-slate-400">（未勾選人物亦會在背景持續運轉勢力）</span>
+          </div>
+          <div id="supporting-leads-chips" class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-xs max-h-36 overflow-y-auto pr-1">
+            <!-- 由 JS 動態渲染男主勾選晶片 -->
+          </div>
         </div>
 
         <!-- R-18 與雷區設定 -->
@@ -640,6 +662,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-  <script src="./app.js?v=20260816_v95"></script>
+  <script src="./app.js?v=20260816_v105"></script>
 </body>
 </html>

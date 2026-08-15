@@ -276,6 +276,10 @@ const dom = {
   inventoryList: document.getElementById('inventory-list'),
   rebaseActBtn: document.getElementById('rebase-act-btn'),
   
+  shuraWarningCard: document.getElementById('shura-warning-card'),
+  supportingLeadsBlock: document.getElementById('supporting-leads-block'),
+  supportingLeadsChips: document.getElementById('supporting-leads-chips'),
+  
   loadingOverlay: document.getElementById('loading-overlay'),
   loadingText: document.getElementById('loading-text'),
   loadingSubtext: document.getElementById('loading-subtext'),
@@ -320,6 +324,53 @@ function initTargetLeadSelectOptions() {
     opt.setAttribute('data-name', lead.name);
     opt.textContent = `${key.split('_')[0]}. ${lead.name}（${lead.title.slice(0, 20)} · ${lead.age}）`;
     select.appendChild(opt);
+  });
+
+  // 監聽主要攻略對象切換
+  select.addEventListener('change', handleTargetLeadChange);
+  handleTargetLeadChange();
+}
+
+function handleTargetLeadChange() {
+  const select = dom.formTargetLead || document.getElementById('form-target-lead');
+  const warningCard = dom.shuraWarningCard || document.getElementById('shura-warning-card');
+  const supportingBlock = dom.supportingLeadsBlock || document.getElementById('supporting-leads-block');
+  if (!select) return;
+
+  const isShura = select.value === '修羅場';
+
+  if (warningCard) {
+    warningCard.style.display = isShura ? 'block' : 'none';
+  }
+  if (supportingBlock) {
+    supportingBlock.style.display = isShura ? 'none' : 'block';
+  }
+
+  if (!isShura) {
+    renderSupportingLeadsChips(select.value);
+  }
+}
+
+function renderSupportingLeadsChips(primaryLeadKey) {
+  const container = dom.supportingLeadsChips || document.getElementById('supporting-leads-chips');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  Object.keys(OFFICIAL_DRIVE_CHARACTERS).forEach(key => {
+    if (key === primaryLeadKey) return; // 排除主選對象
+    const lead = OFFICIAL_DRIVE_CHARACTERS[key];
+
+    const label = document.createElement('label');
+    label.className = 'flex items-center gap-1.5 p-1.5 rounded-lg bg-brand-surface hover:bg-brand-surface/80 border border-brand-border/60 cursor-pointer transition select-none text-[11px] text-slate-300 hover:text-white';
+    
+    label.innerHTML = `
+      <input type="checkbox" value="${key}" class="supporting-lead-cb w-3.5 h-3.5 accent-brand-gold rounded cursor-pointer">
+      <span class="truncate font-serif font-bold text-slate-200">${lead.name}</span>
+      <span class="text-[9px] text-slate-500 truncate font-sans">${key.split('_')[0]}</span>
+    `;
+
+    container.appendChild(label);
   });
 }
 
@@ -744,23 +795,118 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
   throw new Error('所有 AI 創作模型生成逾時或回傳格式異常，請檢查網路連線。');
 }
 
+// =========================================================================
+// 4.5 三層角色動態注入引擎與長期滾動摘要池 (Tiered Lore & Memory Pipeline)
+// =========================================================================
+
+const ROSTER_ONE_LINERS = [
+  { id: "01_徐令謙", name: "徐令謙", aliases: ["徐令謙", "二爺", "徐二少", "令謙", "天裕會"], role: "黑道玄辰幫二把手 · 天裕會中樞 · 幕後制策者", oneLiner: "深沉狠戾的黑道制策者，金絲眼鏡後的眼神如刃，擅長以退為進的極致掌控與高位支配。" },
+  { id: "02_韓正寰", name: "韓正寰", aliases: ["韓正寰", "韓檢", "韓主任", "正寰", "士林地檢署", "白日判官"], role: "士林地檢署主任檢察官 · 白日判官", oneLiner: "冷峻禁慾的司法利刃，手握法理與罪證，在正義守護與私慾佔有邊界極限拉扯。" },
+  { id: "03_邵翊衡", name: "邵翊衡", aliases: ["邵翊衡", "邵秘書", "翊衡", "總統府機要秘書"], role: "總統府機要秘書 · 權力樞紐之影", oneLiner: "溫潤優雅的政壇操盤手，談笑間封鎖所有退路，帶著溫和面具的無聲支配者。" },
+  { id: "04_楊紹宸", name: "楊紹宸", aliases: ["楊紹宸", "楊董", "紹宸", "弘楊集團少東"], role: "弘楊集團少東 · 執行董事 · 物流總經理", oneLiner: "桀驁不馴的財閥繼承人，掌控跨國物流與碼頭貿易，佔有慾極強且作風凌厲。" },
+  { id: "05_徐宇寧", name: "徐宇寧", aliases: ["徐宇寧", "宇寧", "明隱牙醫", "徐醫師"], role: "明隱牙醫診所院長 · 牙醫師 · 徐家長房長孫", oneLiner: "白袍下的精緻支配者，溫文爾雅、細膩體貼，帶著令人窒息的專注與掌控。" },
+  { id: "06_林政修", name: "林政修", aliases: ["林政修", "林次", "政修", "法務部次長"], role: "法務部政務次長 · 頂層權力掌舵者", oneLiner: "沉穩威嚴的政壇上位者，舉手投足皆是國家機器級別的絕對權力壓迫。" },
+  { id: "07_沈湛然", name: "沈湛然", aliases: ["沈湛然", "沈醫師", "湛然", "台大精神科"], role: "台大醫院精神醫學部主治名醫 · 心理側寫專家", oneLiner: "洞悉人性的深淵凝視者，能輕易看穿防禦與隱密慾望，擅長潛意識引導與心理推拉。" },
+  { id: "08_江瀚文", name: "江瀚文", aliases: ["江瀚文", "江執行長", "瀚文", "鼎曜傳媒"], role: "鼎曜媒體集團執行長 · 傳媒巨擘", oneLiner: "商界菁英傳媒大亨，擅長資本收購、輿論操控與鏡頭下的致命曖昧。" },
+  { id: "09_吳衛廷", name: "吳衛廷", aliases: ["吳衛廷", "吳委員", "衛廷", "在野黨立委"], role: "立法院司法及法制委員會立法委員 · 舊城區實力派", oneLiner: "深諳基層利益與國會黑幕的實權立委，作風霸道深沉、江湖草莽氣質與政治手腕並存。" },
+  { id: "10_徐承勳", name: "徐承勳", aliases: ["徐承勳", "副總統", "承勳", "徐副"], role: "中華民國副總統 · 國家備位元首", oneLiner: "成熟禁慾的政壇巔峰男性，身處權力牢籠，深邃孤獨且極具上位者威儀。" },
+  { id: "11_徐耀南", name: "徐耀南", aliases: ["徐耀南", "徐董", "耀南", "榮南營造"], role: "榮南營造集團創辦人兼董事長 · 中部營造巨擘", oneLiner: "白手起家的商界梟雄，冷峻威嚴、體魄硬朗，帶有濃烈宗族家長權威。" },
+  { id: "12_徐若宸", name: "徐若宸", aliases: ["徐若宸", "若宸", "徐大少"], role: "榮南營造家族長子 · UBC商學院/企管所", oneLiner: "肩負家族重任的知性清雅貴公子，清瘦內斂，內心壓抑著深沉的情感叛逆。" },
+  { id: "13_徐予澈", name: "徐予澈", aliases: ["徐予澈", "徐泰希", "泰希", "予澈", "HapSTer"], role: "亞洲頂級男團 HapSTer 門面主唱兼領舞（藝名徐泰希）", oneLiner: "台上極限魅惑、私下清冷溫潤的頂流偶像，在聚光燈與私密情感間掙扎。" }
+];
+
+/**
+ * 動態在場配角偵測器 (Tier 2 NPC Detector)
+ */
+function detectActiveNPCs(lastProseText, playerChoice, primaryLeadKey, defaultSupportingLeads = []) {
+  const scanTarget = ((playerChoice || '') + ' ' + ((lastProseText || '').slice(-600))).toLowerCase();
+  const activeNPCs = [];
+
+  // 1. 優先動態掃描正文與對白中被提及/登場的 T3 人物
+  for (let i = 0; i < ROSTER_ONE_LINERS.length; i++) {
+    const charObj = ROSTER_ONE_LINERS[i];
+    if (charObj.id === primaryLeadKey || charObj.name === primaryLeadKey) continue;
+
+    let isMentioned = false;
+    for (let j = 0; j < charObj.aliases.length; j++) {
+      if (scanTarget.includes(charObj.aliases[j].toLowerCase())) {
+        isMentioned = true;
+        break;
+      }
+    }
+
+    if (isMentioned) {
+      activeNPCs.push(charObj);
+      if (activeNPCs.length >= 2) break; // 上限 2 位，避免 Token 膨脹
+    }
+  }
+
+  // 2. 若當前文本無明確提及，且開局有勾選優先交織配角，則將優先配角納入 Tier 2 備選
+  if (activeNPCs.length === 0 && defaultSupportingLeads && defaultSupportingLeads.length > 0) {
+    for (let k = 0; k < defaultSupportingLeads.length; k++) {
+      const sKey = defaultSupportingLeads[k];
+      const match = ROSTER_ONE_LINERS.find(c => c.id === sKey || c.name === sKey);
+      if (match && match.id !== primaryLeadKey && match.name !== primaryLeadKey) {
+        activeNPCs.push(match);
+        if (activeNPCs.length >= 2) break;
+      }
+    }
+  }
+
+  return activeNPCs;
+}
+
+/**
+ * 三層角色提示詞組裝器 (Tier 1 主角 / Tier 2 在場配角 / Tier 3 世界名冊)
+ */
+function assembleCharacterPromptBlock(primaryLeadKey, activeNPCs, isShura) {
+  const blocks = [];
+
+  if (isShura) {
+    blocks.push('=== 【全勢力修羅場 (Tier 1)】 ===');
+    blocks.push('當前模式：十三勢力修羅場交鋒！所有 13 位男主均可能依局勢動態突入，請隨時維持各方勢力交鋒的緊張感與性張力！\n');
+  } else {
+    const primaryChar = OFFICIAL_DRIVE_CHARACTERS[primaryLeadKey] || OFFICIAL_DRIVE_CHARACTERS['01_徐令謙'];
+    blocks.push('=== 【主要互動角色 (Tier 1 · 核心主角 · 全量人設)】 ===');
+    blocks.push(`- 姓名：${primaryChar.name}（${primaryChar.age}）\n- 官方專屬身分：${primaryChar.identityRole}\n- 核心性格與暗線背景：${primaryChar.summary}\n`);
+  }
+
+  if (activeNPCs && activeNPCs.length > 0) {
+    blocks.push('=== 【當前在場配角 (Tier 2 · 動態突入 · 全量人設)】 ===');
+    blocks.push('【在場配角演繹指引】：以下角色已動態升階為在場配角！請載入其完整性格與上位者身分，推動衝突、試探與暗流，但不可喧賓奪主蓋過核心主角！');
+    activeNPCs.forEach((npc, idx) => {
+      const fullChar = OFFICIAL_DRIVE_CHARACTERS[npc.id] || OFFICIAL_DRIVE_CHARACTERS[npc.name] || {};
+      const fullRole = fullChar.identityRole || npc.role;
+      const fullSummary = fullChar.summary || npc.oneLiner;
+      const ageStr = fullChar.age ? `（${fullChar.age}）` : '';
+      blocks.push(`▶ 在場配角 [${idx + 1}]：${npc.name}${ageStr}\n  - 專屬身分：${fullRole}\n  - 性格與暗線細節：${fullSummary}\n  - 核心特徵：${npc.oneLiner}`);
+    });
+    blocks.push('');
+  }
+
+  const activeIds = (activeNPCs || []).map(n => n.id);
+  if (primaryLeadKey) activeIds.push(primaryLeadKey);
+
+  const tier3List = ROSTER_ONE_LINERS.filter(c => !activeIds.includes(c.id) && c.name !== primaryLeadKey);
+  if (tier3List.length > 0) {
+    blocks.push('=== 【世界全景背景名冊 (Tier 3 · 勢力網絡)】 ===');
+    blocks.push('【宏觀世界與勢力交織】：這些人物構成了台北政商黑白兩道的權力網絡。即使本回合未在場，他們的勢力暗流、新聞傳聞、手下眼線與利益關聯仍持續在背景運轉，隨時可能因情勢變化介入局勢！若劇情中提及，請嚴格遵守其官方身分定位，絕不可張冠李戴：');
+    tier3List.forEach(t3 => {
+      blocks.push(`• ${t3.name}：${t3.role} —— ${t3.oneLiner}`);
+    });
+  }
+
+  return blocks.join('\n');
+}
+
 function buildFirstTurnPrompt(profile) {
   const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
   const customScenario = (profile.customScenario || '').trim();
   const leadKey = profile.targetLead || '01_徐令謙';
-  const leadData = OFFICIAL_DRIVE_CHARACTERS[leadKey] || OFFICIAL_DRIVE_CHARACTERS['01_徐令謙'];
 
-  let targetLeadPrompt = '';
-  if (isShura) {
-    targetLeadPrompt = '【全勢力修羅場】包含雲端角色庫中的 13 位男主（徐令謙、韓正寰、邵翊衡、楊紹宸、徐宇寧、林政修、沈湛然、江瀚文、吳衛廷、徐承勳、徐耀南、徐若宸、徐予澈），依劇情走向動態突入與交鋒！';
-  } else if (leadData) {
-    targetLeadPrompt = `【攻略男主設定（嚴格遵守官方身分，絕不可張冠李戴）】
-- 姓名：${leadData.name}（${leadData.age}）
-- 官方專屬身分：${leadData.identityRole}
-- 核心背景細節：${leadData.summary}`;
-  } else {
-    targetLeadPrompt = `【攻略男主】${profile.targetLeadName || '徐令謙'}`;
-  }
+  // 1. 動態偵測自訂情境中是否包含配角
+  const activeNPCs = detectActiveNPCs('', customScenario, leadKey, profile.supportingLeads || []);
+  const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura);
 
   const systemPrompt = `你是一位專精成人女性情感小說與權謀黑幫的頂級角色扮演敘事者與RPG核心引擎。
 請遵守《情慾文學指引》與《系統核心指令》：
@@ -771,7 +917,10 @@ function buildFirstTurnPrompt(profile) {
    絕不可混淆男主身分！
 2. 風格與成人情慾（R-18）：極致性張力、高位推拉、寫實直白描寫肉體交纏、支配與臣服、五感具象（體溫、喘息、香氣、眼神壓迫、肢體撫摸）、權謀殺伐與多方博弈，使用純台灣繁體中文。
 3. 每一次生成完全原創、字數達 1,000~1,500 字，絕不套用固定模板。
-4. 輸出必須為合法純 JSON 格式（不要包含任何 markdown 代碼標記）：
+4. 【三層角色設定集】：
+${characterPromptBlock}
+
+5. 輸出必須為合法純 JSON 格式（不要包含任何 markdown 代碼標記）：
 {
   "chapterTitle": "第 1 回．【原創吸睛標題】",
   "prose": "【1000~1500字極具性張力、權謀拉扯與成人情慾描寫的長篇小說正文】",
@@ -801,8 +950,6 @@ function buildFirstTurnPrompt(profile) {
 - 禁忌標籤：${profile.taboos || '無'}
 - 成人情慾模式 (R-18)：開啟（包含露骨細緻的體溫、喘息、支配與肢體性張力）
 
-${targetLeadPrompt}
-
 - 玩家自訂開局情境：${customScenario || '深夜暴雨台北，帶著關鍵政商洗錢密錄暗帳初次入局'}
 
 請根據以上玩家自訂人設、官方男主真實黑幫/政商身分與開局情境，完全從零即時創作第 1 回長篇小說，精準呈現情境地點、男主眼神壓迫、性張力拉扯與三個全新抉擇選項！`;
@@ -810,16 +957,34 @@ ${targetLeadPrompt}
   return { systemPrompt, userPrompt };
 }
 
-function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyList) {
+function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyList, summaryPool) {
   const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
-  const recentHistory = (historyList || []).slice(-2).map((h, i) => `【第 ${h.turn || (i + 1)} 回：${h.chapterTitle || '前篇'}】\n玩家抉擇：${h.chosenLabel || '無'}\n情節摘要：${(h.prose || '').slice(0, 300)}...`).join('\n\n');
+  const leadKey = profile.targetLead || '01_徐令謙';
+  
+  // 提取最近回合文本與玩家輸入進行配角掃描
+  const lastChapter = (historyList || [])[(historyList || []).length - 1] || {};
+  const lastProseText = lastChapter.prose || '';
+  const playerActionText = customInput || choiceId;
+
+  // 1. 動態偵測在場配角 (Tier 2，含 T3 升階全量載入與開局優先配角)
+  const activeNPCs = detectActiveNPCs(lastProseText, playerActionText, leadKey, profile.supportingLeads || []);
+  const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura);
+
+  // 2. 組裝近期 2 回合短期記憶
+  const recentHistory = (historyList || []).slice(-2).map((h, i) => `【第 ${h.turn || (i + 1)} 回：${h.chapterTitle || '前篇'}】\n玩家抉擇：${h.chosenLabel || '無'}\n情節摘記：${(h.prose || '').slice(0, 300)}...`).join('\n\n');
+
+  // 3. 組裝長期滾動摘要池 (Summary Pool)
+  const summaryBlock = summaryPool ? `【歷史劇情滾動摘要池（長期記憶）】\n${summaryPool}\n\n` : '';
 
   const systemPrompt = `你是一位專精成人女性情感小說與權謀黑幫的頂級角色扮演敘事者與RPG核心引擎。
 請遵守《情慾文學指引》與《系統核心指令》：
 1. 嚴格依據玩家剛才執行的最新行動/抉擇，即時推進後續 1,000~1,500 字長篇小說正文。
 2. 描寫要求：極致性張力、上位者男性佔有欲、五感溫度、喘息、支配與臣服、細節肢體碰觸、成人情慾拉扯與權謀博弈，使用純台灣繁體中文。
 3. 絕不重複前篇標題與對話，每次推進都是全新事件與衝突升級！
-4. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼標記）：
+4. 【三層角色設定集】：
+${characterPromptBlock}
+
+5. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼標記）：
 {
   "chapterTitle": "第 1 幕 第 ${turnCount} 回：【全新章節標題】",
   "prose": "【1000~1500字緊接玩家行動推進的長篇小說正文】",
@@ -842,15 +1007,65 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
   const userPrompt = `【玩家角色】姓名：${profile.name}，職業：${profile.profession}，攻略模式：${isShura ? '全勢力修羅場' : profile.targetLeadName}
 - 成人情慾模式 (R-18)：開啟
 【前情脈絡】
-${recentHistory || '正處於首次交鋒對峙中'}
+${summaryBlock}${recentHistory || '正處於首次交鋒對峙中'}
 
 【玩家本回最新行動】
-- 抉擇標籤或自訂行動：${customInput || choiceId}
+- 抉擇標籤或自訂行動：${playerActionText}
 - 當前進展至：第 ${turnCount} 回
 
 請緊接著玩家的最新行動，完全原創演繹對手男主的反應、眼神殺伐、近身肢體推拉與情慾爆發，並生成 3 個全新分支選項！`;
 
   return { systemPrompt, userPrompt };
+}
+
+/**
+ * ⚡ 5 回合背景滾動摘要池壓縮器 (Fast Auditor Summary Pipeline)
+ */
+async function triggerRollingSummaryUpdate(turnCount) {
+  if (!state.saveState || turnCount <= 1) return;
+  console.log(`[MemoryPipeline] Triggering rolling summary compression for Turn ${turnCount}...`);
+
+  const recent5Turns = (state.chapterHistoryList || []).slice(-5).map(h => ({
+    turn: h.turn,
+    title: h.chapterTitle,
+    action: h.chosenLabel,
+    snippet: (h.prose || '').substring(0, 250)
+  }));
+
+  const systemPrompt = '你是小說記憶統整引擎。請將現有摘要與最新 5 回合故事紀錄濃縮為 1,000 ~ 1,500 字元高資訊密度摘要池（保留關鍵物品、人物好感度轉折、重大線索與承諾）。請一律使用台灣繁體中文輸出純文字摘要，不要多餘寒暄。';
+  const userPrompt = `--- 現有摘要池 ---\n${state.saveState.summaryPool || '（初始開局）'}\n\n--- 待整合的最新回合記錄 ---\n${JSON.stringify(recent5Turns, null, 2)}\n\n【請直接輸出更新後的純摘要文字】：`;
+
+  try {
+    const response = await fetch(LLM_CONFIG.API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${LLM_CONFIG.API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'aion-3.0-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.2,
+        max_tokens: 1000
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const newSummary = data.choices?.[0]?.message?.content?.trim();
+      if (newSummary && newSummary.length > 20) {
+        state.saveState.summaryPool = newSummary;
+        localStorage.setItem('undercurrent_current_save_state', JSON.stringify(state.saveState));
+        console.log(`[MemoryPipeline] Summary Pool successfully updated (${newSummary.length} chars).`);
+        syncStateToGoogleDriveCloud(state.saveState, state.chapterData);
+      }
+    }
+  } catch (err) {
+    console.warn('[MemoryPipeline] Summary update failed in background:', err.message);
+  }
 }
 
 // =========================================================================
@@ -863,6 +1078,9 @@ async function handleCharacterCreationSubmit(e) {
   const targetSelect = dom.formTargetLead || document.getElementById('form-target-lead');
   const selectedOption = targetSelect?.options[targetSelect?.selectedIndex];
 
+  const supportingCheckboxes = document.querySelectorAll('.supporting-lead-cb:checked');
+  const supportingLeads = Array.from(supportingCheckboxes).map(cb => cb.value);
+
   const profile = {
     name: document.getElementById('form-player-name').value.trim() || '楊慕璃',
     gender: document.getElementById('form-player-gender').value,
@@ -873,6 +1091,7 @@ async function handleCharacterCreationSubmit(e) {
     taboos: document.getElementById('form-player-taboos').value.trim() || '無',
     targetLead: targetSelect.value,
     targetLeadName: selectedOption?.getAttribute('data-name') || '徐令謙',
+    supportingLeads: supportingLeads,
     allowR18: document.getElementById('form-allow-r18').checked,
     customScenario: document.getElementById('form-custom-scenario').value.trim()
   };
@@ -898,6 +1117,19 @@ async function startNewGameWithProfile(profile) {
   const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
   const targetLeadDisplay = isShura ? '全勢力男主（修羅場）' : profile.targetLeadName;
 
+  const rels = {};
+  if (isShura) {
+    rels['徐令謙'] = 20;
+    rels['韓正寰'] = 15;
+    rels['楊紹宸'] = 10;
+  } else {
+    rels[profile.targetLeadName] = 25;
+    (profile.supportingLeads || []).forEach(leadKey => {
+      const sLead = OFFICIAL_DRIVE_CHARACTERS[leadKey];
+      if (sLead) rels[sLead.name] = 15;
+    });
+  }
+
   state.saveState = {
     meta: {
       userId: state.userId || 'usr_local',
@@ -916,7 +1148,7 @@ async function startNewGameWithProfile(profile) {
       { id: 'item_card', name: '密錄隨身碟 / 調查底牌', count: 1, desc: '記載著政商併購與洗錢暗帳的關鍵隨身碟。' },
       { id: 'item_press', name: '特許採訪證 / 身分底牌', count: 1, desc: '證明自身出入政商名流場合的身分底牌。' }
     ],
-    relationships: isShura ? { '徐令謙': 20, '韓正寰': 15, '楊紹宸': 10 } : { [profile.targetLeadName]: 20 },
+    relationships: rels,
     questFlags: {
       main_quest: isShura ? '暗流初會：在全勢力交鋒中破局' : `初會：與 ${profile.targetLeadName} 的交鋒`
     },
@@ -1007,7 +1239,8 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
         choiceId,
         customInput,
         profile,
-        state.chapterHistoryList || []
+        state.chapterHistoryList || [],
+        state.saveState.summaryPool || ''
       );
       nextChapter = await generateStoryFromLLM(systemPrompt, userPrompt);
     } catch (llmErr) {
@@ -1041,6 +1274,13 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     renderStoryStream(nextChapter);
     renderSaveState();
     updateGameplayBreadcrumb();
+
+    // ⚡ 每 5 回合自動在背景非同步更新滾動摘要池 (Summary Pool)
+    if (state.saveState.turnCount % 5 === 0) {
+      triggerRollingSummaryUpdate(state.saveState.turnCount);
+    }
+
+    syncStateToGoogleDriveCloud(state.saveState, nextChapter);
     startServerCooldown(10);
   } catch (err) {
     console.error('makeChoice execution error:', err);
