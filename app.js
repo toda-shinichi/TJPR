@@ -120,7 +120,9 @@ const dom = {
   panelTimeLocation: document.getElementById('panel-time-location'),
   panelTension: document.getElementById('panel-tension'),
   panelIntoxication: document.getElementById('panel-intoxication'),
+  panelOutfit: document.getElementById('panel-outfit'),
   panelInteraction: document.getElementById('panel-interaction'),
+  panelInventory: document.getElementById('panel-inventory'),
   panelRumors: document.getElementById('panel-rumors'),
 
   // 登入 / 註冊 驗證視窗
@@ -1185,6 +1187,9 @@ async function loadMockData() {
 }
 
 function loadMockDataWithProfile(profile) {
+  const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
+  const targetLeadDisplay = isShura ? '徐令謙、韓正寰（修羅場）' : profile.targetLeadName;
+
   state.saveState = {
     meta: {
       userId: state.userId || 'usr_local',
@@ -1195,42 +1200,67 @@ function loadMockDataWithProfile(profile) {
     turnCount: 1,
     protagonist: {
       id: profile.targetLead,
-      name: profile.targetLeadName,
+      name: targetLeadDisplay,
       hp: 100,
       sanity: 100
     },
     inventory: [
-      { id: 'item_card', name: '調查記者證 / 隨身底牌', count: 1, desc: '隨身攜帶的關鍵身分與線索。' }
+      { id: 'item_card', name: '密錄隨身碟 / 調查底牌', count: 1, desc: '記載著政商併購與洗錢暗帳的關鍵隨身碟。' },
+      { id: 'item_press', name: '瑾和基金會特許證 / 記者證', count: 1, desc: '證明自身出入政商名流場合的身分底牌。' }
     ],
-    relationships: {
-      [profile.targetLeadName]: 20
-    },
+    relationships: isShura ? { '徐令謙': 20, '韓正寰': 15, '楊紹宸': 10 } : { [profile.targetLeadName]: 20 },
     questFlags: {
-      main_quest: `初會：與 ${profile.targetLeadName} 的交鋒`
+      main_quest: isShura ? '暗流初會：在黑白兩道頂級交鋒中破局' : `初會：與 ${profile.targetLeadName} 的交鋒`
     },
-    summaryPool: `玩家 ${profile.name} 正式入局，與 ${profile.targetLeadName} 展開首次交鋒。`,
+    summaryPool: isShura 
+      ? `玩家 ${profile.name} 踏入德行法律事務所制策室，同時面對玄辰幫二把手徐令謙與士林地檢署檢察官韓正寰的雙重目光鎖定。`
+      : `玩家 ${profile.name} 正式入局，與 ${profile.targetLeadName} 展開首次交鋒。`,
     turnHistory: []
   };
 
-  const initialMockChapter = {
-    chapterTitle: `第 1 回．初會 ${profile.targetLeadName}`,
-    prose: `五月的台北士林，窗外暴雨如注，瘋狂敲打著德行法律事務所頂層制策室的防彈落地窗。\n\n${profile.name}將大衣下擺稍稍攏起，指尖觸碰到手提包內層那枚冰冷而沉重的密錄隨身碟。室內空氣中瀰漫著淺焙手沖咖啡的微酸香氣——那是從三峽思慕咖啡專程送達、由主人親自烘焙磨製的豆子——以及對面男人身上那股若有似無的柑橘木質菸草香。\n\n${profile.targetLeadName}坐在深色胡桃木長桌的另一端，戴著金邊眼鏡，修長而骨節分明的手指輕輕搖晃著水晶杯，目光精準如手術刀般落在她身上。\n\n「${profile.name}，在台北敢帶著這份帳冊底牌直接找進來的人，妳是第一個。」`,
-    statusPanel: {
-      timeLocation: '2026年5月12日 21:30 星期二 於 台北市士林區德行法律事務所頂樓制策室',
-      tension: '張力值 [45%]',
-      intoxication: '微醺度 [20%]',
-      interaction: `初次交鋒 ｜ 與 ${profile.targetLeadName} 隔著長桌對坐，目光交鋒`,
-      outfit: `${profile.name}（${profile.appearance || '深黑大衣'}） ｜ ${profile.targetLeadName}（手工深灰西裝、金錶）`,
-      inventory: '調查記者證、洗錢弊案密錄隨身碟',
-      rumors: '政壇傳言士林地檢署韓正寰正秘密盯梢天裕會金流，黑白兩道暗潮洶湧',
-      pageCode: 'P.001'
-    },
-    choices: [
-      { id: 'opt_a', label: '[A] 順應節奏：神情自若地拉開椅子坐下，將隨身碟推向桌心', risk: 'low', hint: '展現職業從容，以籌碼換取信任' },
-      { id: 'opt_b', label: `[B] 反向推拉：冷靜反詰「看來你很清楚這份帳冊能掀起多大風浪」`, risk: 'medium', hint: '言語機鋒試探底線' },
-      { id: 'opt_c', label: `[C] 情慾暗示：迎著他的視線傾身靠近，壓低聲音「那您打算怎麼處置我？」`, risk: 'high', hint: '主動拉近物理距離，挑動危險氛圍' }
-    ]
-  };
+  let initialMockChapter;
+
+  if (isShura) {
+    initialMockChapter = {
+      chapterTitle: `第 1 回．暴雨制策室 · 黑白兩道的修羅場交鋒`,
+      prose: `五月深夜的台北士林，暴雨如注，重重雨幕將整座城市的霓虹燈火模糊成一片斑駁血色。\n\n德行法律事務所頂層制策室內，防彈落地窗外雷聲滾滾，室內卻寂靜得近乎壓抑。空氣中交織著淺焙手沖咖啡的微酸果香——那是專程自三峽思慕咖啡送達、由主人親手烘焙研磨的特調豆——以及雪茄木質與冷冽沉香的氣息。\n\n${profile.name}立於深色胡桃木長桌一端，身上那一襲淡雅修身的長裙勾勒出優雅身段，微濕的自然捲髮梢垂在白皙的鎖骨間，散發著清淡若有似無的甜香。她指尖緊貼著手提包內層，那枚載有弘楊集團與政界洗錢暗帳的加密隨身碟正隱隱發燙。\n\n長桌上首，徐令謙微倚著皮質高背椅。他戴著一副細邊金絲眼鏡，深灰手工訂製三件套西裝筆挺而從容，左腕上的 Omega 金錶在昏黃吊燈下泛著冷冽光芒。他修長的手指輕輕搖晃著加冰威士忌水晶杯，太陰坐命的眼眸深邃得宛如不見底的古潭，目光精準如手術刀般落在她身上。\n\n「${profile.name}，在士林這片地界，敢捏著這份帳冊直接找進德行事務所的人，妳是第一個。」徐令謙低沉的嗓音徐徐響起，帶著令人心悸的壓迫感。\n\n話音未落，厚重的胡桃木門扉卻傳來一聲沉悶的解鎖聲。室外走廊的穿堂冷風裹挾著雨水潮氣灌入，一道挺拔冷峻的黑色長風衣身影邁步而入——士林地檢署主任檢察官韓正寰攜帶著濃烈的 Diptyque Tam Dao 檀香氣息，反手扣上了房門。\n\n韓正寰胸前的檢察官徽章閃著寒芒，處女座極度自律的眉眼冷若冰霜，視線先是凌厲地掃過徐令謙，隨後牢牢釘在${profile.name}身上。\n\n「看來今晚的德行事務所比法庭還要熱鬧。」韓正寰嗓音如刀刃切過冰面，緩步走近長桌，高大的身形將出口完全封死，「${profile.name}，妳手裡的東西，按照刑事訴訟法，現在就該交給地檢署。」\n\n黑幫幕後二把手與司法界白日判官的視線在半空中激烈交撞，而兩名危險男人的全部焦點，在這一刻齊齊落在正中央的${profile.name}身上。`,
+      statusPanel: {
+        timeLocation: '2026年5月12日 21:30 星期二 於 台北市士林區德行法律事務所頂樓制策室',
+        tension: '張力值 [75%]',
+        intoxication: '微醺度 [25%]',
+        outfit: `${profile.name}（素雅長裙、微濕自然捲髮、清甜體香） ｜ 徐令謙（深灰訂製西裝、金絲眼鏡、Omega金錶） ｜ 韓正寰（黑風衣、地檢徽章、冷峻眼神）`,
+        interaction: '三方修羅場 ｜ 徐令謙坐於上首玩味打量，韓正寰反手封門阻斷退路，物理距離均不足兩米',
+        inventory: '弘楊集團洗錢暗帳隨身碟、瑾和基金會特許證',
+        rumors: '政界盛傳士林地檢署正秘密查扣天裕會金流，黑白兩道暗潮洶湧一觸即發',
+        pageCode: 'P.001'
+      },
+      choices: [
+        { id: 'opt_a', label: '[A] 借力打力：神情自若地拉開中央座椅坐下，將隨身碟壓在掌心「兩位既然都到了，不如聽聽我的開價」', risk: 'low', hint: '展現從容定力，在黑白夾縫中主導談判節奏' },
+        { id: 'opt_b', label: `[B] 轉移焦點：抬眼直視韓正寰「韓檢若想查辦，三年前的案子為何至今不敢結案？」`, risk: 'medium', hint: '直刺司法痛點，拉扯韓正寰心理防線' },
+        { id: 'opt_c', label: `[C] 危險推拉：側身朝徐令謙走近，傾身將隨身碟輕放在他的威士忌杯旁「二爺，您說這東西……我該給誰？」`, risk: 'high', hint: '主動跨越安全距離，當著檢察官面與黑幫首領親暱試探' }
+      ]
+    };
+  } else {
+    initialMockChapter = {
+      chapterTitle: `第 1 回．暴雨德行事務所 · 初會 ${profile.targetLeadName}`,
+      prose: `五月的台北士林，窗外暴雨如注，重重敲打著德行法律事務所頂層制策室的防彈落地窗。\n\n室內空氣中瀰漫著淺焙手沖咖啡的微酸香氣——那是專程從三峽思慕咖啡送達、由主人親自烘焙磨製的特調豆子——以及對面男人身上那股若有似無的柑橘木質菸草香。\n\n${profile.name}將身上的大衣下擺稍稍攏起，指尖觸碰到手提包內層那枚冰冷而沉重的密錄隨身碟。她抬起頭，迎向長桌另一端的目光。\n\n${profile.targetLeadName}坐在深色胡桃木長桌的上首，戴著金邊眼鏡，修長而骨節分明的手指輕輕搖晃著水晶杯，目光精準如手術刀般落在她身上。昏黃的光影勾勒出他深邃的輪廓與手工西裝的精緻紋理，整個人散發著久居上位的內斂壓迫感。\n\n「${profile.name}，在台北敢帶著這份帳冊底牌直接找進來的人，妳是第一個。」他緩緩開口，語調低沉優雅，卻帶著不容忽視的試探。\n\n室內的空氣彷彿在這一刻凝固，窗外的雷聲與室內兩人間急促的呼吸與心跳，交織成一場危險博弈的序曲。`,
+      statusPanel: {
+        timeLocation: '2026年5月12日 21:30 星期二 於 台北市士林區德行法律事務所頂樓制策室',
+        tension: '張力值 [50%]',
+        intoxication: '微醺度 [20%]',
+        outfit: `${profile.name}（${profile.appearance || '深黑大衣、冷靜眼神'}） ｜ ${profile.targetLeadName}（手工深灰西裝、金錶）`,
+        interaction: `初次交鋒 ｜ 與 ${profile.targetLeadName} 隔著長桌對坐，目光交鋒`,
+        inventory: '調查底牌、密錄隨身碟',
+        rumors: '政壇傳言士林地檢署正秘密盯梢天裕會金流，黑白兩道暗潮洶湧',
+        pageCode: 'P.001'
+      },
+      choices: [
+        { id: 'opt_a', label: '[A] 順應節奏：神情自若地拉開椅子坐下，將隨身碟推向桌心', risk: 'low', hint: '展現職業從容，以籌碼換取信任' },
+        { id: 'opt_b', label: `[B] 反向推拉：冷靜反詰「看來你很清楚這份帳冊能掀起多大風浪」`, risk: 'medium', hint: '言語機鋒試探底線' },
+        { id: 'opt_c', label: `[C] 情慾暗示：迎著他的視線傾身靠近，壓低聲音「那您打算怎麼處置我？」`, risk: 'high', hint: '主動拉近物理距離，挑動危險氛圍' }
+      ]
+    };
+  }
 
   state.chapterData = initialMockChapter;
   renderChapter(initialMockChapter);
@@ -1245,11 +1275,13 @@ function renderChapter(chapter) {
 
   if (chapter.statusPanel && dom.inlineStatusPanel) {
     dom.inlineStatusPanel.style.display = 'block';
-    dom.panelTimeLocation.textContent = chapter.statusPanel.timeLocation || '-';
-    dom.panelTension.textContent = chapter.statusPanel.tension || '張力 0%';
-    dom.panelIntoxication.textContent = chapter.statusPanel.intoxication || '微醺 0%';
-    dom.panelInteraction.textContent = chapter.statusPanel.interaction || '-';
-    dom.panelRumors.textContent = chapter.statusPanel.rumors || '-';
+    if (dom.panelTimeLocation) dom.panelTimeLocation.textContent = chapter.statusPanel.timeLocation || '-';
+    if (dom.panelTension) dom.panelTension.textContent = chapter.statusPanel.tension || '張力 0%';
+    if (dom.panelIntoxication) dom.panelIntoxication.textContent = chapter.statusPanel.intoxication || '微醺 0%';
+    if (dom.panelOutfit) dom.panelOutfit.textContent = chapter.statusPanel.outfit || '-';
+    if (dom.panelInteraction) dom.panelInteraction.textContent = chapter.statusPanel.interaction || '-';
+    if (dom.panelInventory) dom.panelInventory.textContent = chapter.statusPanel.inventory || '-';
+    if (dom.panelRumors) dom.panelRumors.textContent = chapter.statusPanel.rumors || '-';
   }
 
   typewriterEffect(chapter.prose, dom.proseContent, () => {
