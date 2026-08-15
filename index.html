@@ -39,7 +39,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Serif+TC:wght@400;600;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./style.css?v=20260815_v12">
+  <link rel="stylesheet" href="./style.css?v=20260815_v13">
 </head>
 <body class="bg-[#0c0d12] text-[#e6e8f0] font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-black">
 
@@ -137,57 +137,14 @@
 
   <!-- 主要閱讀區容器 -->
   <main class="flex-1 max-w-3xl w-full mx-auto px-4 py-6 sm:py-8 pb-32">
-    <!-- 章節標題、幕次回合徽章與操控按鈕 (重擲/悔棋) -->
-    <div class="mb-6 flex justify-between items-start gap-2">
-      <div>
-        <div id="chapter-badge" class="inline-block font-mono text-xs text-brand-gold tracking-widest uppercase bg-brand-gold/10 border border-brand-gold/20 px-2.5 py-1 rounded mb-2">
-          第 1 幕 · 第 1 回合
-        </div>
-        <h1 id="chapter-title" class="font-serif text-2xl sm:text-3xl font-black text-white leading-tight">
-          載入中...
-        </h1>
-      </div>
-
-      <!-- 控制按鈕群：重新生成此回 / 悔棋修改上一回 / 跳過動畫 -->
-      <div class="flex items-center gap-1.5 shrink-0">
-        <!-- 🔄 重新生成此回 -->
-        <button id="regenerate-turn-btn" class="text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-brand-gold px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1" title="不滿意此回描寫？點此讓主筆重新演繹">
-          <span>🔄</span>
-          <span class="hidden sm:inline">重新生成</span>
-        </button>
-
-        <!-- ↩ 悔棋 / 修改上一回抉擇 -->
-        <button id="rewind-turn-btn" class="text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-amber-300 px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1" title="回退上一回合，重新調整送出的選項或文字">
-          <span>↩</span>
-          <span class="hidden sm:inline">悔棋重選</span>
-        </button>
-
-        <!-- ⏩ 跳過打字機 -->
-        <button id="skip-typewriter-btn" class="text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-brand-gold px-2.5 py-1.5 rounded-lg border border-brand-border transition hidden">
-          ⏩ 跳過
-        </button>
-      </div>
+    
+    <!-- 📜 長篇連貫小說瀑布流容器 (Continuous Novel Stream: 累積所有章節可隨時向上回滾閱讀) -->
+    <div id="novel-stream-container" class="space-y-12 mb-8">
+      <!-- 先前章節與當前章節會在此處如書卷般完整連貫呈現 -->
     </div>
 
-    <!-- 小說長篇正文（支援打字機動態與點擊快速跳過） -->
-    <article id="prose-content" class="font-serif text-lg sm:text-[1.18rem] leading-[2.2] text-[#d8dbe6] tracking-wide prose-tc mb-8 cursor-pointer select-text" title="打字中點擊可直接顯示全文">
-      故事載入中，正在連接世界線……
-    </article>
-
-    <!-- 📊 即時狀態面板 (時空 / 氛圍 / 著裝神態 / 互動 / 情報 / 傳聞) -->
-    <div id="inline-status-panel" class="mb-10 bg-brand-surface/80 border border-brand-border rounded-xl p-4 text-xs font-sans space-y-2.5" style="display:none;">
-      <div class="flex flex-wrap gap-x-4 gap-y-1 text-slate-300">
-        <div><strong>🕰 時空：</strong><span id="panel-time-location" class="text-brand-gold">-</span></div>
-        <div><strong>🌡 氛圍：</strong><span id="panel-tension" class="text-rose-400">張力 0%</span> ｜ <span id="panel-intoxication" class="text-amber-300">微醺 0%</span></div>
-      </div>
-      <div class="text-slate-300"><strong>👔 著裝與神態：</strong><span id="panel-outfit" class="text-slate-200">-</span></div>
-      <div class="text-slate-300"><strong>👫 互動姿態：</strong><span id="panel-interaction">-</span></div>
-      <div class="text-slate-300"><strong>🎒 掌握情報：</strong><span id="panel-inventory" class="text-amber-200/90">-</span></div>
-      <div class="text-slate-400"><strong>🌍 政媒傳聞：</strong><span id="panel-rumors" class="italic">-</span></div>
-    </div>
-
-    <!-- 決策分支區塊 (Decisions) -->
-    <section class="mt-8 pt-6 border-t border-dashed border-brand-border">
+    <!-- 決策分支區塊 (Decisions: 固定置於故事最底部) -->
+    <section id="decisions-section" class="mt-8 pt-6 border-t border-dashed border-brand-border">
       <div class="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
         <svg class="w-4 h-4 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
         <span>下一步行動 (3 個預設選項 + 1 個自定義輸入)</span>
@@ -572,6 +529,6 @@
     </button>
   </div>
 
-  <script src="./app.js?v=20260815_v12"></script>
+  <script src="./app.js?v=20260815_v13"></script>
 </body>
 </html>
