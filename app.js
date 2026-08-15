@@ -598,9 +598,9 @@ function updateUserBadgeUI() {
 const LLM_CONFIG = {
   API_URL: 'https://api.banana2556.com/v1/chat/completions',
   API_KEY: 'sk-TcKczU9MQ5abSWYrF51eU85aQjZV6IzPqeypYYn9zVDoSram',
-  PRIMARY_MODEL: 'mistral-large-3',
-  FALLBACK_MODEL: 'deepseek-v4-pro',
-  TEMPERATURE: 0.92
+  PRIMARY_MODEL: 'gemini-3.6-flash',
+  FALLBACK_MODEL: 'aion-3.0',
+  TEMPERATURE: 0.88
 };
 
 /**
@@ -658,14 +658,15 @@ async function waitForRpmCooldown() {
 }
 
 /**
- * 核心大模型直接呼叫函數 (極速雙模型 + 429 自癒機制)
+ * 核心大模型直接呼叫函數 (極速多模型 + 429 自癒機制)
  */
 async function generateStoryFromLLM(systemPrompt, userPrompt) {
   const models = [
-    LLM_CONFIG.PRIMARY_MODEL || 'mistral-large-3',
     'gemini-3.6-flash',
-    'deepseek-v4-pro',
-    'aion-3.0'
+    'aion-3.0',
+    'gemini-3.6-flash-lite',
+    'mercury-2',
+    'mistral-large-3'
   ];
 
   await waitForRpmCooldown();
@@ -682,7 +683,7 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
 
       const controller = new AbortController();
       state.currentAbortController = controller;
-      const timeoutId = setTimeout(() => controller.abort(), 16000); // 16 秒極速換線保護
+      const timeoutId = setTimeout(() => controller.abort(), 22000); // 22 秒極速換線保護
 
       const response = await fetch(LLM_CONFIG.API_URL, {
         method: 'POST',
@@ -697,7 +698,7 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
             { role: 'user', content: userPrompt }
           ],
           temperature: LLM_CONFIG.TEMPERATURE,
-          max_tokens: 3500
+          max_tokens: 2500
         }),
         signal: controller.signal
       });
