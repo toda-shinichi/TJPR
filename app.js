@@ -1202,7 +1202,7 @@ async function startNewGameWithProfile(profile) {
   localStorage.setItem('undercurrent_current_save_state', JSON.stringify(state.saveState));
 
   switchView('gameplay');
-  showLoading('以太筆觸流轉中，AI 主筆作家正在為您現場創作第 1 回長篇小說……', '無預設範本 · 100% 依據您的自訂人設與情境即時生成……');
+  showLoading('選項確認中……', '正在依照自訂人設與情境即時生成第 1 回……');
 
   let initialChapter = null;
   try {
@@ -1259,8 +1259,8 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
   }
 
   showLoading(
-    isRegenerating ? '主筆作家正在重新構思本回演繹……' : '以太筆觸流轉中，AI 主筆作家正在根據您的行動即時撰寫後續長篇情節……',
-    '無預設範本 · 100% 依據您的行動與博弈局勢即時演繹……'
+    isRegenerating ? '章節重新生成中……' : '選項確認中……',
+    '正在依照當前局勢動態演算與鋪陳情節……'
   );
 
   if (dom.errorRecoveryBanner) dom.errorRecoveryBanner.style.display = 'none';
@@ -1937,9 +1937,80 @@ function renderSaveArchivesList() {
 
   const saves = getNamedSavesList();
   const search = (dom.searchSaveInput?.value || '').toLowerCase().trim();
+  const countBadge = document.getElementById('save-count-badge');
+  if (countBadge) countBadge.textContent = `${saves.length} 個存檔槽位`;
 
   container.innerHTML = '';
 
+  // 1. 如果當前有正在進行中的遊戲進度，在最上方提供【🟢 進行中的最新冒險進度 (AutoSave)】大卡片
+  if (state.chapterData && state.saveState && !search) {
+    const p = state.playerProfile || state.saveState?.meta?.playerProfile || {};
+    const turn = state.saveState?.turnCount || 1;
+    const lead = p.targetLeadName || p.targetLead || '主線';
+    const title = state.chapterData.chapterTitle || `第 ${turn} 回`;
+    const snippet = (state.chapterData.prose || '').replace(/\n+/g, ' ').slice(0, 110) + '……';
+
+    const activeCard = document.createElement('div');
+    activeCard.className = 'bg-gradient-to-r from-amber-950/40 via-brand-card to-amber-950/40 p-4 rounded-xl border border-brand-gold/60 shadow-lg space-y-2.5 relative overflow-hidden';
+
+    activeCard.innerHTML = `
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-brand-gold/30 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+          <span class="font-mono text-xs font-bold text-brand-gold bg-brand-gold/20 px-2 py-0.5 rounded border border-brand-gold/40">CURRENT · 進行中</span>
+          <span class="font-serif font-bold text-sm text-white">當前即時進度（第 ${turn} 回 · ${title}）</span>
+        </div>
+        <span class="text-[11px] text-amber-200/80 font-mono">剛剛動態更新</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300">
+        <div class="flex items-center gap-2">
+          <span class="text-slate-400">👤 主角女主：</span>
+          <span class="font-bold text-white">${p.name || '女主'}</span>
+          <span class="text-slate-500">（${p.age || '25'}歲 · ${p.occupation || '政經分析師'}）</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-slate-400">🎯 攻略男主：</span>
+          <span class="font-bold text-amber-300">${lead}</span>
+        </div>
+      </div>
+
+      <div class="text-xs text-slate-300 bg-brand-dark/70 p-2.5 rounded-lg border border-brand-border/60 italic leading-relaxed">
+        "${snippet}"
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <div class="text-[11px] text-slate-400">
+          * 隨時可點擊右側將此進度建立為永久獨立存檔或推送到 Google Drive。
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="active-save-as-btn px-3 py-1.5 rounded-lg bg-brand-gold text-slate-950 font-black hover:bg-yellow-500 transition text-xs shadow cursor-pointer flex items-center gap-1">
+            <span>💾</span>
+            <span>儲存為新檔</span>
+          </button>
+          <button class="active-sync-drive-btn px-3 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-blue-100 font-bold transition text-xs border border-blue-600/50 cursor-pointer flex items-center gap-1">
+            <span>☁️</span>
+            <span>同步此局至 Drive</span>
+          </button>
+          <button class="active-resume-btn px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold transition text-xs cursor-pointer flex items-center gap-1">
+            <span>▶</span>
+            <span>繼續遊玩</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    activeCard.querySelector('.active-save-as-btn')?.addEventListener('click', handleQuickSave);
+    activeCard.querySelector('.active-sync-drive-btn')?.addEventListener('click', () => syncStateToGoogleDriveCloud(state.saveState, state.chapterData, true));
+    activeCard.querySelector('.active-resume-btn')?.addEventListener('click', () => {
+      closeSaveArchiveModal();
+      switchView('gameplay');
+    });
+
+    container.appendChild(activeCard);
+  }
+
+  // 2. 篩選存檔清單
   const filtered = saves.filter(s => {
     if (!search) return true;
     return (s.name || '').toLowerCase().includes(search) ||
@@ -1948,47 +2019,84 @@ function renderSaveArchivesList() {
            (s.playerProfile?.targetLeadName || '').toLowerCase().includes(search);
   });
 
-  if (filtered.length === 0) {
-    container.innerHTML = '<div class="text-center text-slate-500 py-8">尚無任何相符的存檔資料</div>';
+  if (filtered.length === 0 && (!state.chapterData || search)) {
+    container.innerHTML += '<div class="text-center text-slate-500 py-10 bg-brand-card/40 rounded-xl border border-brand-border/40">尚無符合條件的存檔紀錄</div>';
     return;
   }
 
-  filtered.forEach(s => {
+  // 3. 渲染所有存檔卡片 (大選單卡片風格)
+  filtered.forEach((s, idx) => {
     const p = s.playerProfile || {};
+    const turn = s.turnCount || 1;
+    const lead = p.targetLeadName || p.targetLead || '主線';
+    const chTitle = s.chapterTitle || `第 ${turn} 回`;
+    const snippet = s.chapterData?.prose ? (s.chapterData.prose.replace(/\n+/g, ' ').slice(0, 110) + '……') : '（已儲存之分支劇情節點）';
+    const tension = s.saveState?.status?.tension || s.saveState?.tension || 0;
+    const tipsy = s.saveState?.status?.tipsy || s.saveState?.tipsy || 0;
+
     const card = document.createElement('div');
-    card.className = 'bg-brand-card p-3.5 rounded-xl border border-brand-border hover:border-brand-gold/60 transition space-y-2 shadow-md';
+    card.className = 'bg-brand-card p-4 rounded-xl border border-brand-border hover:border-brand-gold/60 transition space-y-3 shadow-md group relative';
 
     card.innerHTML = `
-      <div class="flex items-center justify-between border-b border-brand-border/60 pb-2">
-        <div class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-          <span>💾</span>
-          <span>${s.name}</span>
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-brand-border/70 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-xs font-black text-brand-gold bg-brand-gold/15 px-2 py-0.5 rounded border border-brand-gold/30">SLOT ${String(idx + 1).padStart(2, '0')}</span>
+          <span class="font-serif font-black text-sm text-white group-hover:text-brand-gold transition">${s.name}</span>
         </div>
-        <span class="font-mono text-[11px] text-slate-500">${s.timestamp}</span>
-      </div>
-      <div class="flex items-center justify-between text-xs">
-        <div class="text-slate-300">
-          <span class="font-bold text-white">${p.name || '女主'}</span> ｜ 
-          <span>第 ${s.turnCount || 1} 回合</span> ｜ 
-          <span class="text-amber-200/90">${p.targetLeadName || '主線'}</span>
+        <div class="flex items-center gap-2 font-mono text-[11px] text-slate-400">
+          <span>🕒</span>
+          <span>${s.timestamp}</span>
         </div>
-        <div class="text-[11px] text-slate-400 italic truncate max-w-[160px]">${s.chapterTitle}</div>
       </div>
-      <div class="flex items-center justify-end gap-1.5 pt-1">
-        <button class="load-archive-btn px-3 py-1 rounded bg-brand-gold text-slate-950 font-bold hover:bg-yellow-500 transition text-xs shadow cursor-pointer" data-id="${s.id}">
-          ▶ 載入存檔
+
+      <div class="flex flex-wrap items-center gap-3 text-xs">
+        <div class="flex items-center gap-1.5 bg-brand-dark/80 px-2.5 py-1 rounded border border-brand-border/60">
+          <span class="text-slate-400">👤 女主：</span>
+          <span class="font-bold text-white">${p.name || '女主'}</span>
+        </div>
+        <div class="flex items-center gap-1.5 bg-brand-dark/80 px-2.5 py-1 rounded border border-brand-border/60">
+          <span class="text-slate-400">🎯 攻略：</span>
+          <span class="font-bold text-amber-300">${lead}</span>
+        </div>
+        <div class="flex items-center gap-1.5 bg-brand-dark/80 px-2.5 py-1 rounded border border-brand-border/60">
+          <span class="text-slate-400">📖 進度：</span>
+          <span class="font-bold text-sky-300">第 ${turn} 回（${chTitle}）</span>
+        </div>
+        <div class="flex items-center gap-2 text-[11px] text-slate-400 ml-auto">
+          <span>🌡️ 張力: <b class="text-rose-400">${tension}%</b></span>
+          <span>🍷 微醺: <b class="text-amber-400">${tipsy}%</b></span>
+        </div>
+      </div>
+
+      <div class="text-xs text-slate-300 bg-brand-dark/60 p-2.5 rounded-lg border border-brand-border/40 italic leading-relaxed">
+        "${snippet}"
+      </div>
+
+      <div class="flex flex-wrap items-center justify-end gap-2 pt-1 border-t border-brand-border/40">
+        <button class="load-archive-btn px-4 py-1.5 rounded-lg bg-brand-gold text-slate-950 font-black hover:bg-yellow-500 transition text-xs shadow-md cursor-pointer flex items-center gap-1" data-id="${s.id}">
+          <span>▶</span>
+          <span>讀取載入此存檔</span>
         </button>
-        <button class="rename-archive-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white transition text-xs border border-brand-border cursor-pointer" data-id="${s.id}">
-          ✏️ 重新命名
+        <button class="rename-archive-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white transition text-xs border border-brand-border cursor-pointer flex items-center gap-1" data-id="${s.id}">
+          <span>✏️</span>
+          <span>重新命名</span>
         </button>
-        <button class="delete-archive-btn px-2 py-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white transition text-xs border border-rose-800/40 cursor-pointer" data-id="${s.id}">
-          🗑️ 刪除
+        <button class="sync-single-archive-btn px-3 py-1.5 rounded-lg bg-blue-950/70 hover:bg-blue-900 text-blue-200 hover:text-white transition text-xs border border-blue-700/50 cursor-pointer flex items-center gap-1" data-id="${s.id}">
+          <span>☁️</span>
+          <span>同步此檔至 Drive</span>
+        </button>
+        <button class="delete-archive-btn px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white transition text-xs border border-rose-800/40 cursor-pointer flex items-center gap-1" data-id="${s.id}">
+          <span>🗑️</span>
+          <span>刪除</span>
         </button>
       </div>
     `;
 
     card.querySelector('.load-archive-btn')?.addEventListener('click', () => loadNamedSave(s.id));
     card.querySelector('.rename-archive-btn')?.addEventListener('click', () => renameNamedSave(s.id));
+    card.querySelector('.sync-single-archive-btn')?.addEventListener('click', () => {
+      syncStateToGoogleDriveCloud(s.saveState, s.chapterData, true);
+    });
     card.querySelector('.delete-archive-btn')?.addEventListener('click', () => deleteNamedSave(s.id));
 
     container.appendChild(card);
@@ -2305,10 +2413,7 @@ async function handleRegenerateTurn() {
   if (turnCount <= 1 || !state.lastChoicePayload) {
     // 重新演繹第 1 回開局
     const profile = getActivePlayerProfile();
-    showLoading(
-      '以太筆觸流轉中，AI 主筆作家正在重新為您現場創作第 1 回長篇小說……',
-      '無預設範本 · 100% 依據您的自訂人設與情境即時生成……'
-    );
+    showLoading('選項確認中……', '正在重新演算並構思第 1 回開局情節……');
     try {
       const { systemPrompt, userPrompt } = buildFirstTurnPrompt(profile);
       const regeneratedChapter = await generateStoryFromLLM(systemPrompt, userPrompt);
@@ -2389,13 +2494,27 @@ function startServerCooldown(seconds) {
   }, 1000);
 }
 
-let loadingTimer = null;
+const ROTATING_PROGRESS_STEPS = [
+  '選項確認中……',
+  '角色意向確認中……',
+  '劇情故事產生中……',
+  '場景世界建構中……',
+  '人物言行確認中……',
+  '多方博弈與張力推拉校正中……',
+  '邏輯校正與情慾細節潤飾中……',
+  '章節排版與分支決策封裝中……'
+];
 
-function showLoading(text, subtext) {
+let loadingTimer = null;
+let loadingStepInterval = null;
+
+function showLoading(initialText, initialSubtext) {
   if (dom.loadingOverlay) {
     dom.loadingOverlay.style.display = 'flex';
-    if (dom.loadingText) dom.loadingText.textContent = text || '載入中...';
-    if (dom.loadingSubtext) dom.loadingSubtext.textContent = subtext || '正在依照《系統核心指令》構建多方博弈……';
+    
+    let stepIndex = 0;
+    if (dom.loadingText) dom.loadingText.textContent = initialText || ROTATING_PROGRESS_STEPS[0];
+    if (dom.loadingSubtext) dom.loadingSubtext.textContent = initialSubtext || '正在依照當前局勢動態演算與鋪陳情節……';
     
     let secondsElapsed = 0;
     const timerSpan = document.getElementById('loading-timer-badge');
@@ -2406,6 +2525,14 @@ function showLoading(text, subtext) {
       secondsElapsed++;
       if (timerSpan) timerSpan.textContent = `⏱️ 已耗時 ${secondsElapsed} 秒`;
     }, 1000);
+
+    if (loadingStepInterval) clearInterval(loadingStepInterval);
+    loadingStepInterval = setInterval(() => {
+      stepIndex = (stepIndex + 1) % ROTATING_PROGRESS_STEPS.length;
+      if (dom.loadingText) {
+        dom.loadingText.textContent = ROTATING_PROGRESS_STEPS[stepIndex];
+      }
+    }, 1300);
   }
 }
 
@@ -2413,6 +2540,10 @@ function hideLoading() {
   if (loadingTimer) {
     clearInterval(loadingTimer);
     loadingTimer = null;
+  }
+  if (loadingStepInterval) {
+    clearInterval(loadingStepInterval);
+    loadingStepInterval = null;
   }
   if (dom.loadingOverlay) {
     dom.loadingOverlay.style.display = 'none';

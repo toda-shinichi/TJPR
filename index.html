@@ -552,56 +552,77 @@
     </div>
   </div>
 
-  <!-- 💾 自訂命名無限存檔庫管理彈窗 (Save Archives Modal) -->
-  <div id="save-archive-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[85] flex items-center justify-center p-4 transition-opacity" style="display:none;">
-    <div class="bg-brand-surface border border-brand-gold/40 rounded-2xl max-w-2xl w-full max-h-[88vh] flex flex-col shadow-2xl p-5 sm:p-6 space-y-4">
+  <!-- 💾 大型存檔與讀檔大選單中心 (Save & Load Center Modal) -->
+  <div id="save-archive-modal" class="fixed inset-0 bg-black/90 backdrop-blur-lg z-[85] flex items-center justify-center p-3 sm:p-5 transition-opacity" style="display:none;">
+    <div class="bg-brand-surface border border-brand-gold/50 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl p-5 sm:p-7 space-y-4">
       
-      <div class="flex justify-between items-center pb-3 border-b border-brand-border">
+      <!-- 頂部標題列與操作 -->
+      <div class="flex justify-between items-start pb-3 border-b border-brand-border/80">
         <div>
-          <h3 class="font-serif font-bold text-lg text-brand-gold flex items-center gap-2">
-            <span>💾 存檔庫管理中心 (Save Archives)</span>
-          </h3>
-          <p class="text-xs text-slate-400 mt-0.5">支援自訂命名、搜尋、隨時存檔、回頭讀取、重新命名與刪除。</p>
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">💾</span>
+            <h3 class="font-serif font-black text-xl text-brand-gold">
+              全域存檔庫中心 (Save & Load Archives)
+            </h3>
+            <span id="save-count-badge" class="text-[11px] font-mono bg-brand-gold/15 text-brand-gold px-2 py-0.5 rounded border border-brand-gold/30">0 個存檔槽位</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">
+            視覺化管理所有冒險分支 · 點擊個別存檔卡片即可【讀取載入】、【重新命名】、【刪除】或【同步至 Google Drive】。
+          </p>
         </div>
-        <button id="close-save-archive-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer">
+        <button id="close-save-archive-btn" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer" title="關閉存檔庫">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
       </div>
 
-      <!-- ➕ 儲存當前進度為自訂存檔 -->
-      <div class="bg-brand-card p-3.5 rounded-xl border border-brand-gold/30 space-y-2.5">
-        <div class="text-xs font-bold text-slate-200">➕ 儲存當前遊戲進度為新存檔：</div>
-        <div class="flex gap-2">
-          <input type="text" id="new-save-name-input" placeholder="輸入存檔名稱（例：徐美珍-超商黑道初會、二爺深情暗道線...）" class="flex-1 bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
-          <button id="create-named-save-btn" class="px-4 py-2 rounded-lg bg-brand-gold text-slate-950 font-bold hover:bg-yellow-500 transition text-xs shrink-0 shadow-md cursor-pointer">
-            💾 儲存存檔
-          </button>
-        </div>
-      </div>
-
-      <!-- 存檔搜尋與備份工具列 -->
-      <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
-        <div class="flex-1 min-w-[180px]">
-          <input type="text" id="search-save-input" placeholder="🔍 搜尋存檔名稱、角色名、攻略對象..." class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
-        </div>
-        <div class="flex items-center gap-1.5">
-          <button id="manual-cloud-sync-btn" class="px-2.5 py-1.5 rounded bg-blue-950/80 hover:bg-blue-900 text-blue-200 hover:text-white border border-blue-700/50 transition text-[11px] font-bold flex items-center gap-1 cursor-pointer" title="將當前進行中的真實遊戲紀錄 (人設、對話、摘要、存檔) 即時同步至 Google Drive">
-            <span>☁️</span>
-            <span>同步至 Google Drive</span>
-          </button>
-          <button id="export-all-saves-btn" class="px-2.5 py-1.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-brand-border transition text-[11px] cursor-pointer" title="匯出全部存檔至 JSON 檔案">
-            📤 匯出存檔
-          </button>
-          <label class="px-2.5 py-1.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-brand-border transition text-[11px] cursor-pointer" title="從 JSON 檔案匯入存檔">
-            📥 匯入存檔
-            <input type="file" id="import-all-saves-input" accept=".json" class="hidden">
+      <!-- 頂部操作控制列：新增存檔 + 雲端同步 + 匯入匯出 -->
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3 bg-brand-card/90 p-4 rounded-xl border border-brand-border">
+        
+        <!-- 左側：儲存當前進度 -->
+        <div class="md:col-span-7 space-y-1.5">
+          <label class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+            <span>➕</span>
+            <span>儲存當前冒險進度為新存檔：</span>
           </label>
+          <div class="flex gap-2">
+            <input type="text" id="new-save-name-input" placeholder="輸入存檔自訂名稱（例：徐美珍-德行初會、二爺暗夜線、審訊對峙...）" class="flex-1 bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
+            <button id="create-named-save-btn" class="px-4 py-2 rounded-lg bg-brand-gold text-slate-950 font-black hover:bg-yellow-500 transition text-xs shrink-0 shadow-md cursor-pointer flex items-center gap-1">
+              <span>💾</span>
+              <span>儲存存檔</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 右側：雲端同步與檔案備份 -->
+        <div class="md:col-span-5 flex flex-col justify-end space-y-1.5">
+          <div class="text-[11px] text-slate-400 font-bold">☁️ 雲端同步與備份工具：</div>
+          <div class="flex items-center gap-1.5">
+            <button id="manual-cloud-sync-btn" class="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-900 to-indigo-900 hover:from-blue-800 hover:to-indigo-800 text-blue-100 hover:text-white border border-blue-500/50 transition text-xs font-bold flex items-center justify-center gap-1.5 shadow-md cursor-pointer" title="將當前真實遊玩的小說內文、女主設定、摘要池即時寫入 Google Drive">
+              <span>☁️</span>
+              <span>同步至 Google Drive</span>
+            </button>
+            <button id="export-all-saves-btn" class="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-brand-border transition text-xs cursor-pointer" title="匯出全部存檔至 JSON 檔案">
+              📤 匯出
+            </button>
+            <label class="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-brand-border transition text-xs cursor-pointer flex items-center" title="從 JSON 檔案匯入存檔">
+              📥 匯入
+              <input type="file" id="import-all-saves-input" accept=".json" class="hidden">
+            </label>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 存檔搜尋列 -->
+      <div class="flex items-center gap-2">
+        <div class="relative flex-1">
+          <input type="text" id="search-save-input" placeholder="🔍 搜尋存檔名稱、女主姓名、主要攻略對象、章節名..." class="w-full bg-brand-dark border border-brand-border rounded-lg pl-3 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
         </div>
       </div>
 
-      <!-- 存檔清單容器 -->
-      <div id="save-archives-list" class="flex-1 overflow-y-auto space-y-2.5 pr-1 text-xs">
-        <!-- 動態渲染存檔清單卡片 -->
+      <!-- 存檔清單大選單容器 -->
+      <div id="save-archives-list" class="flex-1 overflow-y-auto space-y-3 pr-1 text-xs max-h-[55vh]">
+        <!-- 動態渲染存檔清單大卡片 -->
       </div>
 
     </div>
@@ -793,11 +814,11 @@
 
   </aside>
 
-  <!-- 載入中動畫遮罩 -->
-  <div id="loading-overlay" class="fixed inset-0 bg-[#0c0d12]/85 backdrop-blur-sm z-[100] flex flex-col items-center justify-center p-4 transition-opacity" style="display:none;">
+  <!-- 載入中動畫遮罩 (動態進度輪轉) -->
+  <div id="loading-overlay" class="fixed inset-0 bg-[#0c0d12]/90 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-4 transition-opacity" style="display:none;">
     <div class="w-12 h-12 border-4 border-brand-gold/20 border-t-brand-gold rounded-full animate-spin mb-4"></div>
-    <div id="loading-text" class="font-serif text-brand-gold text-sm tracking-wide text-center mb-2">筆觸流轉中，AI 主筆作家正在即時創作小說……</div>
-    <div id="loading-subtext" class="text-xs text-slate-400 mb-2 text-center max-w-sm">無預設範本 · 100% 依據您的自訂人設與情境即時生成……</div>
+    <div id="loading-text" class="font-serif font-bold text-brand-gold text-base tracking-wider text-center mb-2 animate-pulse">選項確認中……</div>
+    <div id="loading-subtext" class="text-xs text-slate-400 mb-2 text-center max-w-sm">正在依照當前局勢動態演算與鋪陳情節……</div>
     <div id="loading-timer-badge" class="text-xs text-amber-400 font-mono mb-5 bg-amber-950/40 px-3 py-1 rounded-full border border-amber-800/40">⏱️ 已耗時 0 秒</div>
     <button id="abort-generation-btn" class="px-4 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-700/50 text-rose-200 hover:text-white transition text-xs font-bold flex items-center gap-1.5 shadow-lg cursor-pointer">
       <span>🛑</span>
@@ -814,6 +835,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-  <script src="./app.js?v=20260816_v120"></script>
+  <script src="./app.js?v=20260816_v125"></script>
 </body>
 </html>
