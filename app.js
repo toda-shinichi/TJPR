@@ -332,16 +332,16 @@ function initTargetLeadSelectOptions() {
   const shuraOpt = document.createElement('option');
   shuraOpt.value = '修羅場';
   shuraOpt.setAttribute('data-name', '修羅場');
-  shuraOpt.textContent = '⚡ 【全勢力修羅場】（13位男主隨劇情推進動態交鋒·多雄爭奪·極限拉扯）';
+  shuraOpt.textContent = '⚡ 【全勢力修羅場】（13位男主隨劇情推進動態交鋒 · 多雄爭奪 · 極限拉扯）';
   select.appendChild(shuraOpt);
 
-  // 13 位官方男主
+  // 13 位官方男主（完整呈現身分與年齡，不截字、不出現多餘點）
   Object.keys(OFFICIAL_DRIVE_CHARACTERS).forEach(key => {
     const lead = OFFICIAL_DRIVE_CHARACTERS[key];
     const opt = document.createElement('option');
     opt.value = key;
     opt.setAttribute('data-name', lead.name);
-    opt.textContent = `${key.split('_')[0]}. ${lead.name}（${lead.title.slice(0, 20)} · ${lead.age}）`;
+    opt.textContent = `${key.split('_')[0]}. ${lead.name}（${lead.title} · ${lead.age}）`;
     select.appendChild(opt);
   });
 
