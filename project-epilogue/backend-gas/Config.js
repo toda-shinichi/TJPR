@@ -45,6 +45,13 @@ const CONFIG = {
       TOP_P: 0.9
     }
   },
+  
+  // 管理員通訊與通知設定
+  ADMIN: {
+    EMAIL: 'auto', // 自動讀取 Session.getEffectiveUser().getEmail()
+    NOTIFY_ON_ERROR: true,
+    NOTIFY_ON_FEEDBACK: true
+  },
 
   // Google Drive 資料夾 ID 配置
   DRIVE: {

@@ -74,6 +74,10 @@
         <span>📝</span>
         <span>人設庫</span>
       </button>
+      <button id="nav-feedback-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-sky-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="填寫測試意見回饋或 Bug 回報">
+        <span>💬</span>
+        <span>測試回饋</span>
+      </button>
       <div id="cloud-sync-status-badge" class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-700/50 text-[11px] font-mono text-emerald-300">
         <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
         <span>雲端已自動同步</span>
@@ -284,7 +288,11 @@
           <span class="text-base">⚠️</span>
           <span id="error-message-text">生成請求超時或中斷。</span>
         </div>
-        <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
+          <button id="report-error-btn" class="px-2.5 py-1 rounded-lg bg-rose-900/80 hover:bg-rose-800 text-rose-200 border border-rose-600/50 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer">
+            <span>📝</span>
+            <span>一鍵回報問題</span>
+          </button>
           <button id="retry-turn-btn" class="px-3 py-1 rounded-lg bg-rose-700 hover:bg-rose-600 text-white font-bold transition cursor-pointer">
             重試此回
           </button>
@@ -797,6 +805,10 @@
           <div class="text-xs font-bold text-amber-300 flex items-center gap-1"><span>📜</span><span>13 男主圖鑑</span></div>
           <div class="text-[10px] text-slate-400">人物檔案與系統指南</div>
         </button>
+                <button id="drawer-feedback-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-sky-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
+          <div class="text-xs font-bold text-sky-300 flex items-center gap-1"><span>💬</span><span>測試回饋</span></div>
+          <div class="text-[10px] text-slate-400">意見與問題回報</div>
+        </button>
         <button onclick="forceBypassCacheReload()" class="p-2.5 rounded-xl bg-sky-950/40 hover:bg-sky-950 border border-sky-700/50 text-left transition cursor-pointer flex flex-col gap-0.5">
           <div class="text-xs font-bold text-sky-200 flex items-center gap-1"><span>🔄</span><span>更新最新版</span></div>
           <div class="text-[10px] text-slate-400">強制穿透快取</div>
@@ -841,6 +853,99 @@
     </div>
   </aside>
 
+  <!-- 💬 測試意見反饋與問題回報彈窗 (Feedback Modal) -->
+  <div id="feedback-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[90] flex items-center justify-center p-4 transition-opacity" style="display:none;">
+    <div class="bg-brand-surface border border-sky-500/50 rounded-2xl max-w-lg w-full shadow-2xl p-5 sm:p-6 space-y-4">
+      
+      <div class="flex justify-between items-center pb-3 border-b border-brand-border">
+        <div>
+          <h3 class="font-serif font-bold text-base sm:text-lg text-sky-300 flex items-center gap-2">
+            <span>💬</span>
+            <span>測試意見反饋與問題回報 (Beta Feedback)</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5">您的每一則回饋都將直接同步至開發管理團隊，協助持續打磨《暗流》。</p>
+        </div>
+        <button id="close-feedback-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <form id="feedback-form" class="space-y-3.5 text-xs sm:text-sm">
+        
+        <!-- 回饋類別 -->
+        <div>
+          <label class="block font-bold text-slate-200 mb-1">回饋類別 *</label>
+          <select id="feedback-category" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white text-xs focus:border-sky-400 focus:outline-none">
+            <option value="🐞 Bug / 系統異常報錯">🐞 Bug / 系統異常報錯</option>
+            <option value="💡 劇情 / 人設走向建議">💡 劇情 / 人設走向建議</option>
+            <option value="🎨 介面與排版改進">🎨 介面與排版改進</option>
+            <option value="💬 整體遊玩心得 / 其他" selected>💬 整體遊玩心得 / 其他</option>
+          </select>
+        </div>
+
+        <!-- 滿意度評分 -->
+        <div>
+          <label class="block font-bold text-slate-200 mb-1">體驗滿意度評分（選填）</label>
+          <div class="grid grid-cols-5 gap-1.5 text-center text-xs">
+            <label class="p-2 rounded-lg bg-brand-dark border border-brand-border/60 hover:border-sky-400 cursor-pointer flex flex-col items-center gap-1">
+              <input type="radio" name="feedback-rating" value="⭐ 1星 (亟待改進)" class="accent-sky-400">
+              <span class="text-[10px] text-slate-400">1星</span>
+            </label>
+            <label class="p-2 rounded-lg bg-brand-dark border border-brand-border/60 hover:border-sky-400 cursor-pointer flex flex-col items-center gap-1">
+              <input type="radio" name="feedback-rating" value="⭐⭐ 2星 (普通)" class="accent-sky-400">
+              <span class="text-[10px] text-slate-400">2星</span>
+            </label>
+            <label class="p-2 rounded-lg bg-brand-dark border border-brand-border/60 hover:border-sky-400 cursor-pointer flex flex-col items-center gap-1">
+              <input type="radio" name="feedback-rating" value="⭐⭐⭐ 3星 (良好)" class="accent-sky-400">
+              <span class="text-[10px] text-slate-400">3星</span>
+            </label>
+            <label class="p-2 rounded-lg bg-brand-dark border border-brand-border/60 hover:border-sky-400 cursor-pointer flex flex-col items-center gap-1">
+              <input type="radio" name="feedback-rating" value="⭐⭐⭐⭐ 4星 (很棒)" class="accent-sky-400">
+              <span class="text-[10px] text-slate-400">4星</span>
+            </label>
+            <label class="p-2 rounded-lg bg-brand-dark border border-brand-border/60 hover:border-sky-400 cursor-pointer flex flex-col items-center gap-1">
+              <input type="radio" name="feedback-rating" value="⭐⭐⭐⭐⭐ 5星 (極致沉浸)" checked class="accent-sky-400">
+              <span class="text-[10px] text-amber-300 font-bold">5星</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 具體意見內容 -->
+        <div>
+          <label class="block font-bold text-slate-200 mb-1">具體意見、問題描述或建議 *</label>
+          <textarea id="feedback-content" required rows="3" placeholder="請詳細描述您的想法、遇到的問題情境，或希望調整的人設細節..." class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white text-xs focus:border-sky-400 focus:outline-none"></textarea>
+        </div>
+
+        <!-- 稱呼或聯絡方式 -->
+        <div>
+          <label class="block font-bold text-slate-200 mb-1">您的稱呼 / 聯絡信箱（選填）</label>
+          <input type="text" id="feedback-contact" placeholder="可留 Email 或暱稱，便於團隊跟進" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white text-xs focus:border-sky-400 focus:outline-none">
+        </div>
+
+        <!-- 附帶遊戲診斷數據 -->
+        <div class="flex items-center justify-between p-2.5 rounded-lg bg-brand-card border border-brand-border">
+          <div>
+            <div class="font-bold text-slate-200 text-xs">附帶當前遊戲回合診斷數據</div>
+            <div class="text-[10px] text-slate-400">包含當前幕數、攻略男主與數值，協助精準排查</div>
+          </div>
+          <input type="checkbox" id="feedback-attach-diagnostics" checked class="w-4 h-4 accent-sky-400 cursor-pointer">
+        </div>
+
+        <!-- 按鈕組 -->
+        <div class="flex gap-2 pt-2">
+          <button type="submit" id="submit-feedback-btn" class="flex-1 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs sm:text-sm transition shadow-lg cursor-pointer flex items-center justify-center gap-1.5">
+            <span>🚀</span>
+            <span>送出回饋通知</span>
+          </button>
+          <button type="button" id="cancel-feedback-btn" class="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition border border-brand-border cursor-pointer">
+            取消
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
   <!-- 載入中動畫遮罩 (動態進度輪轉) -->
   <div id="loading-overlay" class="fixed inset-0 bg-[#0c0d12]/90 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-4 transition-opacity" style="display:none;">
     <div class="w-12 h-12 border-4 border-brand-gold/20 border-t-brand-gold rounded-full animate-spin mb-4"></div>
@@ -862,6 +967,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-  <script src="./app.js?v=20260817_v145"></script>
+  <script src="./app.js?v=20260817_v150"></script>
 </body>
 </html>

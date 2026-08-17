@@ -38,6 +38,12 @@ function doPost(e) {
       return handleRegister(payload);
     } else if (action === 'health') {
       return createSuccessResponse({ status: 'healthy', version: CONFIG.VERSION, timestamp: new Date().toISOString() });
+    } else if (action === 'telemetry/log-error') {
+      var errRes = TelemetryService.logError(payload);
+      return createSuccessResponse(errRes);
+    } else if (action === 'telemetry/submit-feedback') {
+      var fbRes = TelemetryService.submitFeedback(payload);
+      return createSuccessResponse(fbRes);
     } else if (action === 'admin/bootstrap') {
       var syncResult = bootstrapAllDriveFiles();
       try {

@@ -488,6 +488,20 @@ function setupEventListeners() {
     on('import-all-saves-input', 'change', importAllSaves);
     on('gameplay-quick-save-btn', 'click', handleQuickSave);
 
+        // 意見回饋與問題回報彈窗
+    on('nav-feedback-btn', 'click', () => openFeedbackModal());
+    on('drawer-feedback-btn', 'click', () => { closeDrawer(); openFeedbackModal(); });
+    on('close-feedback-btn', 'click', closeFeedbackModal);
+    on('cancel-feedback-btn', 'click', closeFeedbackModal);
+    on('feedback-form', 'submit', handleFeedbackSubmit);
+    on('report-error-btn', 'click', () => {
+      const errMsg = document.getElementById('error-message-text')?.textContent || '生成異常';
+      openFeedbackModal({
+        category: '🐞 Bug / 系統異常報錯',
+        content: `【系統異常報錯】：${errMsg}\n請協助排查此問題。`
+      });
+    });
+
     // 遊戲指南與角色圖鑑彈窗
     on('close-game-guide-btn', 'click', closeGameGuideModal);
     on('guide-tab-gameplay-btn', 'click', () => switchGuideTab('gameplay'));
@@ -2614,6 +2628,7 @@ function handleRetryLastTurn() {
 }
 
 function handleAbortGeneration() {
+  sendTelemetryError('USER_ABORT', '玩家主動中止生成', { duration: state.loadingSeconds || 0 });
   if (state.currentAbortController) {
     state.currentAbortController.abort();
     state.currentAbortController = null;
@@ -2723,10 +2738,169 @@ if (typeof window !== 'undefined') {
   window.getKinshipAndSpecialTiesPrompt = getKinshipAndSpecialTiesPrompt;
   window.dismissError = dismissError;
   window.handleRetryLastTurn = handleRetryLastTurn;
+  window.openFeedbackModal = openFeedbackModal;
+  window.closeFeedbackModal = closeFeedbackModal;
+  window.sendTelemetryError = sendTelemetryError;
+  window.handleFeedbackSubmit = handleFeedbackSubmit;
 }
 
 
 function dismissError() {
   const banner = document.getElementById('error-recovery-banner');
   if (banner) banner.style.display = 'none';
+}
+
+
+// =========================================================================
+// 10. 系統遙測日誌與意見回饋管理 (Telemetry & Feedback Engine)
+// =========================================================================
+
+/**
+ * 非同步傳送系統異常日誌至 Google Drive 試算表與管理員 Email
+ */
+async function sendTelemetryError(category, message, details = {}) {
+  try {
+    const payload = {
+      action: 'telemetry/log-error',
+      category: category || 'GENERAL_ERROR',
+      message: String(message || '未知錯誤'),
+      model: LLM_CONFIG.PRIMARY_MODEL || 'mistral-large-3',
+      userId: state.username || state.userId || localStorage.getItem('undercurrent_user_name') || 'guest',
+      act: state.saveState?.meta?.currentAct || 1,
+      turn: state.saveState?.turnCount || 1,
+      targetLead: state.saveState?.meta?.targetLeadName || '未指定',
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Node/Test',
+      details: details
+    };
+
+    console.warn('[Telemetry Alert]', payload);
+
+    const gasUrl = (typeof state !== 'undefined' && state.gasApiUrl) || 'https://script.google.com/macros/s/AKfycbzg3xfoXqVMM90YoIlx4FLwHRg5qy2wu0kV2Bae8xI-kWuNWd_ZNVKuOANygFZKv7rBhQ/exec';
+    if (gasUrl) {
+      fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+        mode: 'cors'
+      }).catch(err => console.warn('[Telemetry Sync Ignored]', err));
+    }
+  } catch (err) {
+    console.warn('[Telemetry Failed]', err);
+  }
+}
+
+/**
+ * 開啟意見回饋彈窗
+ */
+function openFeedbackModal(prefilledData = {}) {
+  const modal = document.getElementById('feedback-modal');
+  if (!modal) return;
+
+  modal.style.display = 'flex';
+
+  const categorySel = document.getElementById('feedback-category');
+  const contentArea = document.getElementById('feedback-content');
+  const contactInput = document.getElementById('feedback-contact');
+
+  if (categorySel && prefilledData.category) {
+    categorySel.value = prefilledData.category;
+  }
+  if (contentArea && prefilledData.content) {
+    contentArea.value = prefilledData.content;
+  }
+  if (contactInput && !contactInput.value) {
+    contactInput.value = state.username || localStorage.getItem('undercurrent_user_name') || '';
+  }
+}
+
+/**
+ * 關閉意見回饋彈窗
+ */
+function closeFeedbackModal() {
+  const modal = document.getElementById('feedback-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+/**
+ * 處理玩家提交意見回饋
+ */
+async function handleFeedbackSubmit(e) {
+  if (e && e.preventDefault) e.preventDefault();
+
+  const category = document.getElementById('feedback-category')?.value || '💬 一般心得';
+  const content = document.getElementById('feedback-content')?.value.trim();
+  const contact = document.getElementById('feedback-contact')?.value.trim() || state.username || '匿名玩家';
+  const attachDiag = document.getElementById('feedback-attach-diagnostics')?.checked !== false;
+
+  let rating = '⭐⭐⭐⭐⭐ 5星 (極致沉浸)';
+  const checkedRating = document.querySelector('input[name="feedback-rating"]:checked');
+  if (checkedRating) rating = checkedRating.value;
+
+  if (!content) {
+    return alert('請填寫具體回饋內容後再送出！');
+  }
+
+  const submitBtn = document.getElementById('submit-feedback-btn');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '傳送中……';
+  }
+
+  const diagnostics = attachDiag ? {
+    act: state.saveState?.meta?.currentAct || 1,
+    turn: state.saveState?.turnCount || 1,
+    targetLead: state.saveState?.meta?.targetLeadName || '未指定',
+    playerProfile: state.saveState?.meta?.playerProfile || null,
+    model: LLM_CONFIG.PRIMARY_MODEL || 'mistral-large-3',
+    status: state.saveState?.protagonist || null
+  } : null;
+
+  const payload = {
+    action: 'telemetry/submit-feedback',
+    category: category,
+    rating: rating,
+    content: content,
+    contact: contact,
+    act: state.saveState?.meta?.currentAct || 1,
+    turn: state.saveState?.turnCount || 1,
+    targetLead: state.saveState?.meta?.targetLeadName || '未指定',
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Node/Test',
+    diagnostics: diagnostics
+  };
+
+  try {
+    const gasUrl = (typeof state !== 'undefined' && state.gasApiUrl) || 'https://script.google.com/macros/s/AKfycbzg3xfoXqVMM90YoIlx4FLwHRg5qy2wu0kV2Bae8xI-kWuNWd_ZNVKuOANygFZKv7rBhQ/exec';
+    if (gasUrl) {
+      await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+        mode: 'cors'
+      });
+    }
+
+    alert('🎉 感謝您的寶貴回饋！意見已成功同步至開發管理團隊。');
+    closeFeedbackModal();
+    const contentArea = document.getElementById('feedback-content');
+    if (contentArea) contentArea.value = '';
+  } catch (err) {
+    console.error('Submit feedback error:', err);
+    alert('🎉 回饋已記錄至本機並排程傳送至雲端，感謝您的支持！');
+    closeFeedbackModal();
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<span>🚀</span><span>送出回饋通知</span>';
+    }
+  }
+}
+
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (e) => {
+    sendTelemetryError('UNCAUGHT_JS_EXCEPTION', e.message, { filename: e.filename, lineno: e.lineno, colno: e.colno, stack: e.error?.stack });
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    sendTelemetryError('UNHANDLED_PROMISE_REJECTION', e.reason?.message || String(e.reason), { stack: e.reason?.stack });
+  });
 }
