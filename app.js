@@ -228,116 +228,149 @@ const state = {
   typeSpeed: localStorage.getItem('undercurrent_type_speed') || 'normal'
 };
 
-// DOM 元素快取
-const dom = {
-  authModal: document.getElementById('auth-modal'),
-  loginForm: document.getElementById('login-form'),
-  registerForm: document.getElementById('register-form'),
-  tabLoginBtn: document.getElementById('tab-login-btn'),
-  tabRegisterBtn: document.getElementById('tab-register-btn'),
-  userBadge: document.getElementById('user-badge'),
-  usernameDisplay: document.getElementById('username-display'),
-  homeUsernameDisplay: document.getElementById('home-username-display'),
-  logoutBtn: document.getElementById('logout-btn'),
-  homeLogoutBtn: document.getElementById('home-logout-btn'),
-  homeDeleteAccountBtn: document.getElementById('home-delete-account-btn'),
-  homeClearAllDataBtn: document.getElementById('home-clear-all-data-btn'),
-  
-  homeView: document.getElementById('home-view'),
-  gameplayView: document.getElementById('gameplay-view'),
-  navHomeBtn: document.getElementById('nav-home-btn'),
-  headerHomeBtn: document.getElementById('header-home-btn'),
-  backToHomeBtn: document.getElementById('back-to-home-btn'),
-  gameplayBreadcrumb: document.getElementById('gameplay-breadcrumb'),
-  
-  homeNewGameBtn: document.getElementById('home-new-game-btn'),
-  homeContinueGameBtn: document.getElementById('home-continue-game-btn'),
-  homeContinueDesc: document.getElementById('home-continue-desc'),
-  homeOpenSavesBtn: document.getElementById('home-open-saves-btn'),
-  homeOpenPresetsBtn: document.getElementById('home-open-presets-btn'),
-  homeViewAllSavesBtn: document.getElementById('home-view-all-saves-btn'),
-  homeRecentSavesList: document.getElementById('home-recent-saves-list'),
+// ==========================================
+// 2. DOM 元素動態安全代理 (Dynamic DOM Proxy)
+// ==========================================
 
-  charCreationModal: document.getElementById('character-creation-modal'),
-  closeModalBtn: document.getElementById('close-modal-btn'),
-  charCreationForm: document.getElementById('char-creation-form'),
-  profilePresetsSelect: document.getElementById('profile-presets-select'),
-  saveCurrentProfileBtn: document.getElementById('save-current-profile-btn'),
-  openProfileManagerBtn: document.getElementById('open-profile-manager-btn'),
-  formTargetLead: document.getElementById('form-target-lead'),
+const DOM_ID_MAP = {
+  authModal: 'auth-modal',
+  loginForm: 'login-form',
+  registerForm: 'register-form',
+  tabLoginBtn: 'tab-login-btn',
+  tabRegisterBtn: 'tab-register-btn',
+  userBadge: 'user-badge',
+  usernameDisplay: 'username-display',
+  homeUsernameDisplay: 'home-username-display',
+  logoutBtn: 'logout-btn',
+  homeLogoutBtn: 'home-logout-btn',
+  homeDeleteAccountBtn: 'home-delete-account-btn',
+  homeClearAllDataBtn: 'home-clear-all-data-btn',
+  
+  homeView: 'home-view',
+  gameplayView: 'gameplay-view',
+  navHomeBtn: 'nav-home-btn',
+  headerHomeBtn: 'header-home-btn',
+  backToHomeBtn: 'back-to-home-btn',
+  gameplayBreadcrumb: 'gameplay-breadcrumb',
+  
+  homeNewGameBtn: 'home-new-game-btn',
+  homeContinueGameBtn: 'home-continue-game-btn',
+  homeContinueDesc: 'home-continue-desc',
+  homeOpenSavesBtn: 'home-open-saves-btn',
+  homeOpenPresetsBtn: 'home-open-presets-btn',
+  homeViewAllSavesBtn: 'home-view-all-saves-btn',
+  homeRecentSavesList: 'home-recent-saves-list',
+  homeOpenGuideBtn: 'home-open-guide-btn',
 
-  profileManagerModal: document.getElementById('profile-manager-modal'),
-  closeProfileManagerBtn: document.getElementById('close-profile-manager-btn'),
-  profileManagerList: document.getElementById('profile-manager-list'),
-  searchProfileInput: document.getElementById('search-profile-input'),
-  exportProfilesBtn: document.getElementById('export-profiles-btn'),
-  importProfilesInput: document.getElementById('import-profiles-input'),
-  
-  navSavesBtn: document.getElementById('nav-saves-btn'),
-  mobileNavSavesBtn: document.getElementById('mobile-nav-saves-btn'),
-  mobileMenuBtn: document.getElementById('mobile-menu-btn'),
-  drawerGameplayBtn: document.getElementById('drawer-gameplay-btn'),
-  drawerPresetsBtn: document.getElementById('drawer-presets-btn'),
-  drawerGuideBtn: document.getElementById('drawer-guide-btn'),
-  navPresetsBtn: document.getElementById('nav-presets-btn'),
-  saveArchiveModal: document.getElementById('save-archive-modal'),
-  closeSaveArchiveBtn: document.getElementById('close-save-archive-btn'),
-  newSaveNameInput: document.getElementById('new-save-name-input'),
-  createNamedSaveBtn: document.getElementById('create-named-save-btn'),
-  searchSaveInput: document.getElementById('search-save-input'),
-  exportAllSavesBtn: document.getElementById('export-all-saves-btn'),
-  importAllSavesInput: document.getElementById('import-all-saves-input'),
-  manualCloudSyncBtn: document.getElementById('manual-cloud-sync-btn'),
-  saveArchivesList: document.getElementById('save-archives-list'),
-  
-  novelStreamContainer: document.getElementById('novel-stream-container'),
-  choicesContainer: document.getElementById('choices-container'),
-  customActionInput: document.getElementById('custom-action-input'),
-  submitCustomBtn: document.getElementById('submit-custom-btn'),
-  
-  sideDrawer: document.getElementById('side-drawer'),
-  drawerBackdrop: document.getElementById('drawer-backdrop'),
-  openDrawerBtn: document.getElementById('open-drawer-btn'),
-  closeDrawerBtn: document.getElementById('close-drawer-btn'),
-  gameplayDrawerBtn: document.getElementById('gameplay-drawer-btn'),
-  drawerHomeBtn: document.getElementById('drawer-home-btn'),
-  drawerSavesBtn: document.getElementById('drawer-saves-btn'),
-  gameplayQuickSaveBtn: document.getElementById('gameplay-quick-save-btn'),
-  
-  hpDisplay: document.getElementById('hp-display'),
-  sanityDisplay: document.getElementById('sanity-display'),
-  profileCardName: document.getElementById('profile-card-name'),
-  profileCardLead: document.getElementById('profile-card-lead'),
-  relationshipsList: document.getElementById('relationships-list'),
-  inventoryList: document.getElementById('inventory-list'),
-  rebaseActBtn: document.getElementById('rebase-act-btn'),
-  
-  shuraWarningCard: document.getElementById('shura-warning-card'),
-  supportingLeadsBlock: document.getElementById('supporting-leads-block'),
-  supportingLeadsChips: document.getElementById('supporting-leads-chips'),
-  
-  navGuideBtn: document.getElementById('nav-guide-btn'),
-  homeOpenGuideBtn: document.getElementById('home-open-guide-btn'),
-  gameGuideModal: document.getElementById('game-guide-modal'),
-  closeGameGuideBtn: document.getElementById('close-game-guide-btn'),
-  guideTabGameplayBtn: document.getElementById('guide-tab-gameplay-btn'),
-  guideTabSystemBtn: document.getElementById('guide-tab-system-btn'),
-  guideTabRosterBtn: document.getElementById('guide-tab-roster-btn'),
-  guidePanelGameplay: document.getElementById('guide-panel-gameplay'),
-  guidePanelSystem: document.getElementById('guide-panel-system'),
-  guidePanelRoster: document.getElementById('guide-panel-roster'),
-  searchRosterInput: document.getElementById('search-roster-input'),
-  rosterGalleryList: document.getElementById('roster-gallery-list'),
+  charCreationModal: 'character-creation-modal',
+  closeModalBtn: 'close-modal-btn',
+  cancelCharCreationBtn: 'cancel-char-creation-btn',
+  charCreationForm: 'char-creation-form',
+  profilePresetsSelect: 'profile-presets-select',
+  saveCurrentProfileBtn: 'save-current-profile-btn',
+  openProfileManagerBtn: 'open-profile-manager-btn',
+  formTargetLead: 'form-target-lead',
 
-  loadingOverlay: document.getElementById('loading-overlay'),
-  loadingText: document.getElementById('loading-text'),
-  loadingSubtext: document.getElementById('loading-subtext'),
-  abortGenerationBtn: document.getElementById('abort-generation-btn'),
-  errorRecoveryBanner: document.getElementById('error-recovery-banner'),
-  errorMessageText: document.getElementById('error-message-text'),
-  retryTurnBtn: document.getElementById('retry-turn-btn'),
-  dismissErrorBtn: document.getElementById('dismiss-error-btn')
+  profileManagerModal: 'profile-manager-modal',
+  closeProfileManagerBtn: 'close-profile-manager-btn',
+  profileManagerList: 'profile-manager-list',
+  searchProfileInput: 'search-profile-input',
+  exportProfilesBtn: 'export-profiles-btn',
+  importProfilesInput: 'import-profiles-input',
+  
+  navSavesBtn: 'nav-saves-btn',
+  navPresetsBtn: 'nav-presets-btn',
+  navGuideBtn: 'nav-guide-btn',
+  navFeedbackBtn: 'nav-feedback-btn',
+  mobileNavSavesBtn: 'mobile-nav-saves-btn',
+  mobileMenuBtn: 'mobile-menu-btn',
+
+  drawerGameplayBtn: 'drawer-gameplay-btn',
+  drawerPresetsBtn: 'drawer-presets-btn',
+  drawerGuideBtn: 'drawer-guide-btn',
+  drawerFeedbackBtn: 'drawer-feedback-btn',
+  drawerHomeBtn: 'drawer-home-btn',
+  drawerSavesBtn: 'drawer-saves-btn',
+
+  saveArchiveModal: 'save-archive-modal',
+  closeSaveArchiveBtn: 'close-save-archive-btn',
+  newSaveNameInput: 'new-save-name-input',
+  createNamedSaveBtn: 'create-named-save-btn',
+  searchSaveInput: 'search-save-input',
+  exportAllSavesBtn: 'export-all-saves-btn',
+  importAllSavesInput: 'import-all-saves-input',
+  manualCloudSyncBtn: 'manual-cloud-sync-btn',
+  saveArchivesList: 'save-archives-list',
+  
+  novelStreamContainer: 'novel-stream-container',
+  choicesContainer: 'choices-container',
+  customActionInput: 'custom-action-input',
+  submitCustomBtn: 'submit-custom-btn',
+  
+  sideDrawer: 'side-drawer',
+  drawerBackdrop: 'drawer-backdrop',
+  openDrawerBtn: 'open-drawer-btn',
+  closeDrawerBtn: 'close-drawer-btn',
+  gameplayDrawerBtn: 'gameplay-drawer-btn',
+  gameplayQuickSaveBtn: 'gameplay-quick-save-btn',
+  
+  hpDisplay: 'hp-display',
+  sanityDisplay: 'sanity-display',
+  profileCardName: 'profile-card-name',
+  profileCardLead: 'profile-card-lead',
+  relationshipsList: 'relationships-list',
+  inventoryList: 'inventory-list',
+  rebaseActBtn: 'rebase-act-btn',
+  
+  shuraWarningCard: 'shura-warning-card',
+  supportingLeadsBlock: 'supporting-leads-block',
+  supportingLeadsChips: 'supporting-leads-chips',
+  
+  gameGuideModal: 'game-guide-modal',
+  closeGameGuideBtn: 'close-game-guide-btn',
+  guideTabGameplayBtn: 'guide-tab-gameplay-btn',
+  guideTabSystemBtn: 'guide-tab-system-btn',
+  guideTabRosterBtn: 'guide-tab-roster-btn',
+  guidePanelGameplay: 'guide-panel-gameplay',
+  guidePanelSystem: 'guide-panel-system',
+  guidePanelRoster: 'guide-panel-roster',
+  searchRosterInput: 'search-roster-input',
+  rosterGalleryList: 'roster-gallery-list',
+
+  loadingOverlay: 'loading-overlay',
+  loadingText: 'loading-text',
+  loadingSubtext: 'loading-subtext',
+  abortGenerationBtn: 'abort-generation-btn',
+  errorRecoveryBanner: 'error-recovery-banner',
+  errorMessageText: 'error-message-text',
+  retryTurnBtn: 'retry-turn-btn',
+  dismissErrorBtn: 'dismiss-error-btn',
+
+  feedbackModal: 'feedback-modal',
+  closeFeedbackBtn: 'close-feedback-btn',
+  cancelFeedbackBtn: 'cancel-feedback-btn',
+  feedbackForm: 'feedback-form',
+  feedbackCategory: 'feedback-category',
+  feedbackContent: 'feedback-content',
+  feedbackContact: 'feedback-contact',
+  feedbackAttachDiagnostics: 'feedback-attach-diagnostics',
+  submitFeedbackBtn: 'submit-feedback-btn',
+  reportErrorBtn: 'report-error-btn'
 };
+
+const dom = new Proxy({}, {
+  get: (target, prop) => {
+    if (typeof prop !== 'string') return undefined;
+    if (typeof document === 'undefined') return undefined;
+    const mappedId = DOM_ID_MAP[prop];
+    if (mappedId) {
+      const el = document.getElementById(mappedId);
+      if (el) return el;
+    }
+    const kebab = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
+    return document.getElementById(kebab) || document.getElementById(prop) || null;
+  }
+});
 
 // ==========================================
 // 1. 初始化與事件綁定 (Initialization & Events)
@@ -469,6 +502,10 @@ function setupEventListeners() {
     on('close-modal-btn', 'click', closeCharacterCreationModal);
     on('cancel-char-creation-btn', 'click', closeCharacterCreationModal);
     on('char-creation-form', 'submit', handleCharacterCreationSubmit);
+    on('submit-char-btn', 'click', (e) => {
+      e.preventDefault();
+      handleCharacterCreationSubmit(e);
+    });
     on('profile-presets-select', 'change', (e) => loadProfilePresetIntoForm(e.target.value));
     on('save-current-profile-btn', 'click', saveCurrentFormAsPreset);
     on('open-profile-manager-btn', 'click', () => { closeCharacterCreationModal(); openProfileManagerModal(); });
@@ -1210,29 +1247,37 @@ async function triggerRollingSummaryUpdate(turnCount) {
 async function handleCharacterCreationSubmit(e) {
   if (e && e.preventDefault) e.preventDefault();
 
-  const targetSelect = dom.formTargetLead || document.getElementById('form-target-lead');
-  const selectedOption = (targetSelect && targetSelect.options && targetSelect.selectedIndex >= 0) ? targetSelect.options[targetSelect.selectedIndex] : null;
+  try {
+    const targetSelect = document.getElementById('form-target-lead') || dom.formTargetLead;
+    const selectedOption = (targetSelect && targetSelect.options && targetSelect.selectedIndex >= 0) ? targetSelect.options[targetSelect.selectedIndex] : null;
 
-  const supportingCheckboxes = document.querySelectorAll('.supporting-lead-cb:checked');
-  const supportingLeads = Array.from(supportingCheckboxes).map(cb => cb.value);
+    const supportingCheckboxes = document.querySelectorAll('.supporting-lead-cb:checked');
+    const supportingLeads = Array.from(supportingCheckboxes).map(cb => cb.value);
 
-  const profile = {
-    name: document.getElementById('form-player-name').value.trim() || '楊慕璃',
-    gender: document.getElementById('form-player-gender').value,
-    age: document.getElementById('form-player-age').value.trim() || '24',
-    profession: document.getElementById('form-player-profession').value.trim() || '弘楊集團公關總監',
-    background: document.getElementById('form-player-background').value.trim(),
-    appearance: document.getElementById('form-player-appearance').value.trim() || '隨機',
-    taboos: document.getElementById('form-player-taboos').value.trim() || '無',
-    targetLead: targetSelect.value,
-    targetLeadName: selectedOption?.getAttribute('data-name') || '徐令謙',
-    supportingLeads: supportingLeads,
-    allowR18: document.getElementById('form-allow-r18').checked,
-    customScenario: document.getElementById('form-custom-scenario').value.trim()
-  };
+    const profile = {
+      name: document.getElementById('form-player-name')?.value?.trim() || '楊慕璃',
+      gender: document.getElementById('form-player-gender')?.value || '女',
+      age: document.getElementById('form-player-age')?.value?.trim() || '24',
+      profession: document.getElementById('form-player-profession')?.value?.trim() || '弘楊集團公關總監 · 瑾和文教基金會執行長',
+      background: document.getElementById('form-player-background')?.value?.trim() || '台大法律/北大犯罪所畢業。身為楊家三房獨生女，在權謀風暴中憑藉智慧與魅力遊走於各方勢力之間。',
+      appearance: document.getElementById('form-player-appearance')?.value?.trim() || '隨機',
+      taboos: document.getElementById('form-player-taboos')?.value?.trim() || '禁止暴力侮辱，無特定雷區',
+      targetLead: targetSelect?.value || '01_徐令謙',
+      targetLeadName: selectedOption?.getAttribute('data-name') || '徐令謙',
+      supportingLeads: supportingLeads,
+      allowR18: document.getElementById('form-allow-r18')?.checked !== false,
+      customScenario: document.getElementById('form-custom-scenario')?.value?.trim() || ''
+    };
 
-  closeCharacterCreationModal();
-  await startNewGameWithProfile(profile);
+    closeCharacterCreationModal();
+    switchView('gameplay');
+    await startNewGameWithProfile(profile);
+  } catch (err) {
+    console.error('[handleCharacterCreationSubmit Error]', err);
+    sendTelemetryError('START_GAME_ERROR', err.message, { stack: err.stack });
+    alert('開局發生異常：' + err.message + '，正在嘗試為您自動恢復……');
+    switchView('gameplay');
+  }
 }
 
 async function startNewGameWithProfile(profile) {
