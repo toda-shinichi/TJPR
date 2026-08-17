@@ -893,8 +893,8 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
     'mistral-large-3',
     'gemini-3.6-flash',
     'cognitivecomputations/dolphin-mistral-24b-venice-edition',
-    'gpt-5.6-luna',
-    'aion-3.0'
+    'aion-3.0',
+    'gpt-5.6-luna'
   ];
 
   await waitForRpmCooldown();
@@ -902,11 +902,13 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
   for (let mIdx = 0; mIdx < models.length; mIdx++) {
     const model = models[mIdx];
     try {
-      const controller = new AbortController();
+      const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       state.currentAbortController = controller;
-      const timeoutId = setTimeout(() => controller.abort(), 22000); // 22 秒極速換線保護
+      const timeoutId = setTimeout(() => {
+        if (controller) controller.abort();
+      }, 25000); // 25 秒極速換線保護
 
-      const response = await fetch(LLM_CONFIG.API_URL, {
+      const fetchOptions = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -920,10 +922,13 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
           ],
           temperature: LLM_CONFIG.TEMPERATURE,
           max_tokens: 2500
-        }),
-        signal: controller.signal
-      });
+        })
+      };
+      if (controller) {
+        fetchOptions.signal = controller.signal;
+      }
 
+      const response = await fetch(LLM_CONFIG.API_URL, fetchOptions);
       clearTimeout(timeoutId);
       lastRequestTimestamp = Date.now();
 
