@@ -314,12 +314,29 @@ const dom = {
 // ==========================================
 
 window.addEventListener('DOMContentLoaded', async () => {
-  initTargetLeadSelectOptions();
-  setupEventListeners();
-  checkAuthAndInitUser();
-  loadSavedProfilePresetsIntoSelect();
-  renderHomeRecentSaves();
-  restoreSavedStateFromStorage();
+  try {
+    initTargetLeadSelectOptions();
+  } catch (e) { console.warn('initTargetLeadSelectOptions warn:', e); }
+
+  try {
+    setupEventListeners();
+  } catch (e) { console.warn('setupEventListeners warn:', e); }
+
+  try {
+    checkAuthAndInitUser();
+  } catch (e) { console.warn('checkAuthAndInitUser warn:', e); }
+
+  try {
+    loadSavedProfilePresetsIntoSelect();
+  } catch (e) { console.warn('loadSavedProfilePresetsIntoSelect warn:', e); }
+
+  try {
+    renderHomeRecentSaves();
+  } catch (e) { console.warn('renderHomeRecentSaves warn:', e); }
+
+  try {
+    restoreSavedStateFromStorage();
+  } catch (e) { console.warn('restoreSavedStateFromStorage warn:', e); }
 });
 
 function initTargetLeadSelectOptions() {
@@ -394,119 +411,118 @@ function renderSupportingLeadsChips(primaryLeadKey) {
 }
 
 function setupEventListeners() {
-  // 導航視圖切換
-  if (dom.navHomeBtn) dom.navHomeBtn.addEventListener('click', () => switchView('home'));
-  if (dom.headerHomeBtn) dom.headerHomeBtn.addEventListener('click', () => switchView('home'));
-  if (dom.backToHomeBtn) dom.backToHomeBtn.addEventListener('click', () => switchView('home'));
-  if (dom.drawerHomeBtn) dom.drawerHomeBtn.addEventListener('click', () => { closeDrawer(); switchView('home'); });
-
-  // 首頁 4 大卡片
-  if (dom.homeNewGameBtn) dom.homeNewGameBtn.addEventListener('click', openCharacterCreationModal);
-  if (dom.homeContinueGameBtn) dom.homeContinueGameBtn.addEventListener('click', handleContinueGame);
-  if (dom.homeOpenSavesBtn) dom.homeOpenSavesBtn.addEventListener('click', openSaveArchiveModal);
-  if (dom.homeOpenPresetsBtn) dom.homeOpenPresetsBtn.addEventListener('click', openProfileManagerModal);
-  if (dom.homeViewAllSavesBtn) dom.homeViewAllSavesBtn.addEventListener('click', openSaveArchiveModal);
-
-  // 導航列快捷鍵
-  if (dom.navSavesBtn) dom.navSavesBtn.addEventListener('click', openSaveArchiveModal);
-  if (dom.navPresetsBtn) dom.navPresetsBtn.addEventListener('click', openProfileManagerModal);
-    // 手機版專屬導航事件
-  if (dom.mobileNavSavesBtn) dom.mobileNavSavesBtn.addEventListener('click', openSaveArchiveModal);
-  if (dom.mobileMenuBtn) dom.mobileMenuBtn.addEventListener('click', openDrawer);
-  if (dom.drawerGameplayBtn) dom.drawerGameplayBtn.addEventListener('click', () => {
-    closeDrawer();
-    switchView('gameplay');
-  });
-  if (dom.drawerPresetsBtn) dom.drawerPresetsBtn.addEventListener('click', () => {
-    closeDrawer();
-    openProfileManagerModal();
-  });
-  if (dom.drawerGuideBtn) dom.drawerGuideBtn.addEventListener('click', () => {
-    closeDrawer();
-    openGameGuideModal('gameplay');
-  });
-
-  if (dom.drawerSavesBtn) dom.drawerSavesBtn.addEventListener('click', () => { closeDrawer(); openSaveArchiveModal(); });
-
-  // 抽屜開關
-  if (dom.openDrawerBtn) dom.openDrawerBtn.addEventListener('click', openDrawer);
-  if (dom.gameplayDrawerBtn) dom.gameplayDrawerBtn.addEventListener('click', openDrawer);
-  if (dom.closeDrawerBtn) dom.closeDrawerBtn.addEventListener('click', closeDrawer);
-  if (dom.drawerBackdrop) dom.drawerBackdrop.addEventListener('click', closeDrawer);
-
-  // 創角與人設彈窗
-  if (dom.closeModalBtn) dom.closeModalBtn.addEventListener('click', closeCharacterCreationModal);
-  if (dom.charCreationForm) dom.charCreationForm.addEventListener('submit', handleCharacterCreationSubmit);
-  if (dom.profilePresetsSelect) dom.profilePresetsSelect.addEventListener('change', (e) => loadProfilePresetIntoForm(e.target.value));
-  if (dom.saveCurrentProfileBtn) dom.saveCurrentProfileBtn.addEventListener('click', saveCurrentFormAsPreset);
-  if (dom.openProfileManagerBtn) dom.openProfileManagerBtn.addEventListener('click', () => { closeCharacterCreationModal(); openProfileManagerModal(); });
-
-  // 人設管理中心彈窗
-  if (dom.closeProfileManagerBtn) dom.closeProfileManagerBtn.addEventListener('click', closeProfileManagerModal);
-  if (dom.searchProfileInput) dom.searchProfileInput.addEventListener('input', renderProfileManagerList);
-  if (dom.exportProfilesBtn) dom.exportProfilesBtn.addEventListener('click', exportProfiles);
-  if (dom.importProfilesInput) dom.importProfilesInput.addEventListener('change', importProfiles);
-
-  // 存檔管理中心彈窗
-  if (dom.closeSaveArchiveBtn) dom.closeSaveArchiveBtn.addEventListener('click', closeSaveArchiveModal);
-  if (dom.createNamedSaveBtn) dom.createNamedSaveBtn.addEventListener('click', () => createNamedSave(dom.newSaveNameInput?.value));
-  if (dom.searchSaveInput) dom.searchSaveInput.addEventListener('input', renderSaveArchivesList);
-  if (dom.manualCloudSyncBtn) dom.manualCloudSyncBtn.addEventListener('click', () => syncStateToGoogleDriveCloud(state.saveState, state.chapterData, true));
-  if (dom.exportAllSavesBtn) dom.exportAllSavesBtn.addEventListener('click', exportAllSaves);
-  if (dom.importAllSavesInput) dom.importAllSavesInput.addEventListener('change', importAllSaves);
-  if (dom.gameplayQuickSaveBtn) dom.gameplayQuickSaveBtn.addEventListener('click', handleQuickSave);
-
-  // 遊戲指南與角色圖鑑彈窗
-  if (dom.navGuideBtn) dom.navGuideBtn.addEventListener('click', () => openGameGuideModal('gameplay'));
-  if (dom.homeOpenGuideBtn) dom.homeOpenGuideBtn.addEventListener('click', () => openGameGuideModal('gameplay'));
-  if (dom.closeGameGuideBtn) dom.closeGameGuideBtn.addEventListener('click', closeGameGuideModal);
-  if (dom.guideTabGameplayBtn) dom.guideTabGameplayBtn.addEventListener('click', () => switchGuideTab('gameplay'));
-  if (dom.guideTabSystemBtn) dom.guideTabSystemBtn.addEventListener('click', () => switchGuideTab('system'));
-  if (dom.guideTabRosterBtn) dom.guideTabRosterBtn.addEventListener('click', () => switchGuideTab('roster'));
-  if (dom.searchRosterInput) dom.searchRosterInput.addEventListener('input', renderRosterGallery);
-
-  // 自由行動提交
-  if (dom.submitCustomBtn) dom.submitCustomBtn.addEventListener('click', handleCustomActionSubmit);
-  if (dom.customActionInput) {
-    dom.customActionInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.isComposing) {
-        e.preventDefault();
-        handleCustomActionSubmit();
-      }
-    });
+  function on(id, event, handler) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener(event, handler);
+    }
   }
 
-  // 帳號認證
-  if (dom.tabLoginBtn) dom.tabLoginBtn.addEventListener('click', () => switchAuthTab('login'));
-  if (dom.tabRegisterBtn) dom.tabRegisterBtn.addEventListener('click', () => switchAuthTab('register'));
-  if (dom.loginForm) dom.loginForm.addEventListener('submit', handleLogin);
-  if (dom.registerForm) dom.registerForm.addEventListener('submit', handleRegister);
-  if (dom.logoutBtn) dom.logoutBtn.addEventListener('click', handleLogout);
-  if (dom.homeLogoutBtn) dom.homeLogoutBtn.addEventListener('click', handleLogout);
-  if (dom.homeDeleteAccountBtn) dom.homeDeleteAccountBtn.addEventListener('click', handleDeleteAccount);
-  if (dom.homeClearAllDataBtn) dom.homeClearAllDataBtn.addEventListener('click', handleClearAllData);
+  try {
+    // 導航視圖切換
+    on('nav-home-btn', 'click', () => switchView('home'));
+    on('header-home-btn', 'click', () => switchView('home'));
+    on('back-to-home-btn', 'click', () => switchView('home'));
+    on('drawer-home-btn', 'click', () => { closeDrawer(); switchView('home'); });
 
-  // 中止與錯誤救援
-  if (dom.abortGenerationBtn) dom.abortGenerationBtn.addEventListener('click', handleAbortGeneration);
-  if (dom.retryTurnBtn) dom.retryTurnBtn.addEventListener('click', handleRetryLastTurn);
-  if (dom.dismissErrorBtn) dom.dismissErrorBtn.addEventListener('click', () => { if (dom.errorRecoveryBanner) dom.errorRecoveryBanner.style.display = 'none'; });
-  if (dom.rebaseActBtn) dom.rebaseActBtn.addEventListener('click', handleActRebase);
-}
+    // 首頁 4 大卡片
+    on('home-new-game-btn', 'click', openCharacterCreationModal);
+    on('home-continue-game-btn', 'click', handleContinueGame);
+    on('home-open-saves-btn', 'click', openSaveArchiveModal);
+    on('home-open-presets-btn', 'click', openProfileManagerModal);
+    on('home-view-all-saves-btn', 'click', openSaveArchiveModal);
+    on('home-open-guide-btn', 'click', () => openGameGuideModal('gameplay'));
 
-// ==========================================
-// 2. 視圖切換與抽屜控制 (View Switching & Drawer)
-// ==========================================
+    // 頂部導航列快捷鍵
+    on('nav-saves-btn', 'click', openSaveArchiveModal);
+    on('nav-presets-btn', 'click', openProfileManagerModal);
+    on('nav-guide-btn', 'click', () => openGameGuideModal('gameplay'));
+    on('mobile-nav-saves-btn', 'click', openSaveArchiveModal);
+    on('mobile-menu-btn', 'click', openDrawer);
 
-function switchView(viewName) {
-  if (viewName === 'home') {
-    if (dom.homeView) dom.homeView.style.display = 'block';
-    if (dom.gameplayView) dom.gameplayView.style.display = 'none';
-    renderHomeRecentSaves();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  } else if (viewName === 'gameplay') {
-    if (dom.homeView) dom.homeView.style.display = 'none';
-    if (dom.gameplayView) dom.gameplayView.style.display = 'block';
-    updateGameplayBreadcrumb();
+    // 抽屜內全功能導航
+    on('drawer-gameplay-btn', 'click', () => { closeDrawer(); switchView('gameplay'); });
+    on('drawer-saves-btn', 'click', () => { closeDrawer(); openSaveArchiveModal(); });
+    on('drawer-presets-btn', 'click', () => { closeDrawer(); openProfileManagerModal(); });
+    on('drawer-guide-btn', 'click', () => { closeDrawer(); openGameGuideModal('gameplay'); });
+
+    // 抽屜開關
+    on('open-drawer-btn', 'click', openDrawer);
+    on('gameplay-drawer-btn', 'click', openDrawer);
+    on('close-drawer-btn', 'click', closeDrawer);
+    on('drawer-backdrop', 'click', closeDrawer);
+
+    // 創角與人設表單彈窗
+    on('close-modal-btn', 'click', closeCharacterCreationModal);
+    on('cancel-char-creation-btn', 'click', closeCharacterCreationModal);
+    on('char-creation-form', 'submit', handleCharacterCreationSubmit);
+    on('profile-presets-select', 'change', (e) => loadProfilePresetIntoForm(e.target.value));
+    on('save-current-profile-btn', 'click', saveCurrentFormAsPreset);
+    on('open-profile-manager-btn', 'click', () => { closeCharacterCreationModal(); openProfileManagerModal(); });
+
+    // 人設管理中心彈窗
+    on('close-profile-manager-btn', 'click', closeProfileManagerModal);
+    on('search-profile-input', 'input', renderProfileManagerList);
+    on('export-profiles-btn', 'click', exportProfiles);
+    on('import-profiles-input', 'change', importProfiles);
+
+    // 存檔管理中心彈窗
+    on('close-save-archive-btn', 'click', closeSaveArchiveModal);
+    on('create-named-save-btn', 'click', () => createNamedSave(document.getElementById('new-save-name-input')?.value));
+    on('search-save-input', 'input', renderSaveArchivesList);
+    on('manual-cloud-sync-btn', 'click', () => syncStateToGoogleDriveCloud(state.saveState, state.chapterData, true));
+    on('export-all-saves-btn', 'click', exportAllSaves);
+    on('import-all-saves-input', 'change', importAllSaves);
+    on('gameplay-quick-save-btn', 'click', handleQuickSave);
+
+    // 遊戲指南與角色圖鑑彈窗
+    on('close-game-guide-btn', 'click', closeGameGuideModal);
+    on('guide-tab-gameplay-btn', 'click', () => switchGuideTab('gameplay'));
+    on('guide-tab-system-btn', 'click', () => switchGuideTab('system'));
+    on('guide-tab-roster-btn', 'click', () => switchGuideTab('roster'));
+    on('search-roster-input', 'input', renderRosterGallery);
+
+    // 自由行動提交
+    on('submit-custom-btn', 'click', handleCustomActionSubmit);
+    const customInputEl = document.getElementById('custom-action-input');
+    if (customInputEl) {
+      customInputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.isComposing) {
+          e.preventDefault();
+          handleCustomActionSubmit();
+        }
+      });
+    }
+
+    // 帳號認證
+    on('tab-login-btn', 'click', () => switchAuthTab('login'));
+    on('tab-register-btn', 'click', () => switchAuthTab('register'));
+    on('login-form', 'submit', handleLogin);
+    on('register-form', 'submit', handleRegister);
+    on('logout-btn', 'click', handleLogout);
+    on('home-logout-btn', 'click', handleLogout);
+    on('home-delete-account-btn', 'click', handleDeleteAccount);
+    on('home-clear-all-data-btn', 'click', handleClearAllData);
+
+    // 中止與錯誤救援
+    on('abort-generation-btn', 'click', handleAbortGeneration);
+    on('retry-turn-btn', 'click', handleRetryTurn);
+    on('dismiss-error-btn', 'click', dismissError);
+    on('rebase-act-btn', 'click', handleActRebase);
+
+    // 鍵盤 ESC 快捷鍵關閉所有彈窗
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeCharacterCreationModal();
+        closeProfileManagerModal();
+        closeSaveArchiveModal();
+        closeGameGuideModal();
+        closeDrawer();
+      }
+    });
+
+  } catch (err) {
+    console.error('[Setup Events Error]', err);
   }
 }
 

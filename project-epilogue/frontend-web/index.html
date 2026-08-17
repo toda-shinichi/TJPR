@@ -505,9 +505,16 @@
           <textarea id="form-custom-scenario" rows="2" placeholder="輸入任何自訂情境，AI 大模型將即時為您現場創作第 1 回..." class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white text-xs focus:border-brand-gold focus:outline-none">在深夜的台北士林便利商店遇到徐令謙</textarea>
         </div>
 
-        <button type="submit" id="submit-char-btn" class="w-full py-3 rounded-xl bg-brand-gold hover:bg-yellow-500 text-slate-950 font-black text-sm transition shadow-xl shadow-brand-gold/20 cursor-pointer">
-          ✦ 正式入局 · 展開第 1 回純 AI 長篇小說
-        </button>
+                <div class="flex flex-col sm:flex-row gap-2 pt-2">
+          <button type="submit" id="submit-char-btn" class="flex-1 py-3 rounded-xl bg-brand-gold hover:bg-yellow-500 text-slate-950 font-black text-xs sm:text-sm transition shadow-xl shadow-brand-gold/20 cursor-pointer flex items-center justify-center gap-1.5">
+            <span>✦</span>
+            <span>正式入局 · 展開第 1 回純 AI 長篇小說</span>
+          </button>
+          <button type="button" id="cancel-char-creation-btn" onclick="closeCharacterCreationModal()" class="py-3 px-5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs sm:text-sm transition border border-brand-border cursor-pointer flex items-center justify-center gap-1">
+            <span>✕</span>
+            <span>取消並返回首頁</span>
+          </button>
+        </div>
 
       </form>
 
@@ -753,22 +760,22 @@
     </div>
   </div>
 
-  <!-- 右側滑出式狀態抽屜 (Drawer) -->
-  <div id="drawer-backdrop" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity opacity-0 pointer-events-none"></div>
-  <aside id="side-drawer" class="fixed top-0 right-0 bottom-0 w-full sm:w-96 bg-brand-surface border-l border-brand-border z-50 p-6 overflow-y-auto transform translate-x-full transition-transform duration-300 ease-in-out shadow-2xl space-y-6">
-    <div class="flex justify-between items-center pb-4 border-b border-brand-border">
-      <h2 class="font-serif font-bold text-lg text-white flex items-center gap-2">
+    <!-- 右側滑出式狀態抽屜 (Drawer) -->
+  <div id="drawer-backdrop" onclick="closeDrawer()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity opacity-0 pointer-events-none"></div>
+  <aside id="side-drawer" class="fixed top-0 right-0 bottom-0 w-full sm:w-96 bg-brand-surface border-l border-brand-border z-50 p-6 overflow-y-auto transform translate-x-full transition-transform duration-300 ease-in-out shadow-2xl space-y-5">
+    <div class="flex justify-between items-center pb-3 border-b border-brand-border">
+      <h2 class="font-serif font-bold text-base text-white flex items-center gap-2">
         <svg class="w-5 h-5 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-        角色狀態與系統管理
+        全域導航與角色狀態
       </h2>
-      <button id="close-drawer-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer">
+      <button id="close-drawer-btn" onclick="closeDrawer()" class="text-slate-400 hover:text-white p-1 cursor-pointer">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
       </button>
     </div>
 
-        <!-- 📱 手機與全域專屬完整導航清單 -->
+    <!-- 📱 全域直覺導航網格 -->
     <div class="space-y-2">
-      <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">全域功能導航</div>
+      <div class="text-[11px] font-bold text-brand-gold uppercase tracking-wider">全域功能導航</div>
       <div class="grid grid-cols-2 gap-2">
         <button id="drawer-home-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-brand-gold/50 text-left transition cursor-pointer flex flex-col gap-0.5">
           <div class="text-xs font-bold text-white flex items-center gap-1"><span>🏠</span><span>首頁主選單</span></div>
@@ -796,10 +803,20 @@
         </button>
       </div>
     </div>
+
+    <!-- 當前角色卡摘要 -->
+    <div class="bg-brand-card p-3.5 rounded-xl border border-brand-border space-y-2">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">當前女主檔案</h3>
+      <div id="profile-card-name" class="font-serif font-bold text-sm text-white">楊慕璃</div>
+      <div id="profile-card-lead" class="text-xs text-slate-300">攻略對象：修羅場 ｜ R-18：開啟</div>
+      <div class="grid grid-cols-2 gap-2 pt-2 border-t border-brand-border/60 text-xs">
+        <div>生命值 (HP): <span id="hp-display" class="font-mono text-emerald-400 font-bold">100</span></div>
+        <div>理智值 (SAN): <span id="sanity-display" class="font-mono text-sky-400 font-bold">100</span></div>
+      </div>
     </div>
 
     <!-- 男主好感度矩陣 -->
-    <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
+    <div class="bg-brand-card p-3.5 rounded-xl border border-brand-border space-y-2">
       <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">男主關係與好感度</h3>
       <div id="relationships-list" class="space-y-1.5 text-xs text-slate-300">
         <!-- JS 動態生成好感條 -->
@@ -807,22 +824,21 @@
     </div>
 
     <!-- 隨身行囊 -->
-    <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
-      <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">隨身背包與關鍵底牌</h3>
+    <div class="bg-brand-card p-3.5 rounded-xl border border-brand-border space-y-2">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">隨身背包與關鍵情報</h3>
       <div id="inventory-list" class="space-y-1 text-xs text-slate-300">
         <!-- JS 動態渲染道具 -->
       </div>
     </div>
 
     <!-- 卷末換窗 (Act Rebase) -->
-    <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
+    <div class="bg-brand-card p-3.5 rounded-xl border border-brand-border space-y-2">
       <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">幕篇重整 (Act Rebase)</h3>
       <p class="text-[11px] text-slate-400">當前幕篇進行過長時，可將對話濃縮為 800 字檔案重整視窗，保留數值與道具。</p>
       <button id="rebase-act-btn" class="w-full bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold font-bold py-2 rounded-lg text-xs transition cursor-pointer">
         執行卷末換窗 (Act Rebase)
       </button>
     </div>
-
   </aside>
 
   <!-- 載入中動畫遮罩 (動態進度輪轉) -->
@@ -846,6 +862,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-  <script src="./app.js?v=20260817_v142"></script>
+  <script src="./app.js?v=20260817_v145"></script>
 </body>
 </html>
