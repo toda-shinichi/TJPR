@@ -244,6 +244,11 @@ const dom = {
   importProfilesInput: document.getElementById('import-profiles-input'),
   
   navSavesBtn: document.getElementById('nav-saves-btn'),
+  mobileNavSavesBtn: document.getElementById('mobile-nav-saves-btn'),
+  mobileMenuBtn: document.getElementById('mobile-menu-btn'),
+  drawerGameplayBtn: document.getElementById('drawer-gameplay-btn'),
+  drawerPresetsBtn: document.getElementById('drawer-presets-btn'),
+  drawerGuideBtn: document.getElementById('drawer-guide-btn'),
   navPresetsBtn: document.getElementById('nav-presets-btn'),
   saveArchiveModal: document.getElementById('save-archive-modal'),
   closeSaveArchiveBtn: document.getElementById('close-save-archive-btn'),
@@ -405,6 +410,22 @@ function setupEventListeners() {
   // 導航列快捷鍵
   if (dom.navSavesBtn) dom.navSavesBtn.addEventListener('click', openSaveArchiveModal);
   if (dom.navPresetsBtn) dom.navPresetsBtn.addEventListener('click', openProfileManagerModal);
+    // 手機版專屬導航事件
+  if (dom.mobileNavSavesBtn) dom.mobileNavSavesBtn.addEventListener('click', openSaveArchiveModal);
+  if (dom.mobileMenuBtn) dom.mobileMenuBtn.addEventListener('click', openDrawer);
+  if (dom.drawerGameplayBtn) dom.drawerGameplayBtn.addEventListener('click', () => {
+    closeDrawer();
+    switchView('gameplay');
+  });
+  if (dom.drawerPresetsBtn) dom.drawerPresetsBtn.addEventListener('click', () => {
+    closeDrawer();
+    openProfileManagerModal();
+  });
+  if (dom.drawerGuideBtn) dom.drawerGuideBtn.addEventListener('click', () => {
+    closeDrawer();
+    openGameGuideModal('gameplay');
+  });
+
   if (dom.drawerSavesBtn) dom.drawerSavesBtn.addEventListener('click', () => { closeDrawer(); openSaveArchiveModal(); });
 
   // 抽屜開關
@@ -757,7 +778,7 @@ async function waitForRpmCooldown() {
 async function generateStoryFromLLM(systemPrompt, userPrompt) {
   const models = [
     'mistral-large-3',
-    'aion-rp-1.0',
+    'gemini-3.6-flash',
     'cognitivecomputations/dolphin-mistral-24b-venice-edition',
     'gpt-5.6-luna',
     'aion-3.0'

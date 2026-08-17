@@ -46,8 +46,8 @@
 </head>
 <body class="bg-[#0c0d12] text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-black">
 
-  <!-- 頂部通用導航列 (Mobile-First 專屬適配) -->
-  <header class="sticky top-0 z-40 bg-brand-surface/95 backdrop-blur-md border-b border-brand-border px-3 sm:px-6 py-2 flex items-center justify-between shadow-lg">
+    <!-- 頂部通用導航列 (Mobile-First 專屬直覺式導航) -->
+  <header class="sticky top-0 z-40 bg-brand-surface/95 backdrop-blur-md border-b border-brand-border px-3 sm:px-6 py-2.5 flex items-center justify-between shadow-lg">
     <div class="flex items-center space-x-2 sm:space-x-3">
       <button id="nav-home-btn" class="font-serif font-black text-lg sm:text-xl tracking-wider text-brand-gold hover:text-yellow-400 transition flex items-center gap-1 cursor-pointer" title="回到遊戲首頁">
         <span class="text-brand-gold text-base sm:text-lg">✦</span>
@@ -56,43 +56,45 @@
       <span class="text-[11px] text-slate-400 font-mono hidden md:inline border-l border-slate-700 pl-3">UNDER CURRENT</span>
     </div>
 
-    <!-- 導航功能按鈕組 (手機端大觸控熱區) -->
-    <div class="flex items-center gap-1 sm:gap-2">
-      
-      <!-- 🔄 強制快取穿透刷新鍵 -->
-      <button id="force-reload-btn" onclick="forceBypassCacheReload()" class="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-sky-950/60 hover:bg-sky-900 border border-sky-700/50 text-xs text-sky-300 hover:text-white transition flex items-center gap-1 cursor-pointer touch-target" title="強制穿透快取並載入最新版">
+    <!-- 🖥️ 電腦版導航功能按鈕組 (>= md 展開文字) -->
+    <div class="hidden md:flex items-center gap-2">
+      <button id="force-reload-btn" onclick="forceBypassCacheReload()" class="px-2.5 py-1.5 rounded-lg bg-sky-950/60 hover:bg-sky-900 border border-sky-700/50 text-xs text-sky-300 hover:text-white transition flex items-center gap-1 cursor-pointer" title="強制穿透快取並載入最新版">
         <span>🔄</span>
-        <span class="hidden md:inline">更新</span>
+        <span>更新最新版</span>
       </button>
-
-      <!-- 📜 遊戲指南與圖鑑按鈕 -->
-      <button id="nav-guide-btn" class="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-amber-200 hover:text-white transition flex items-center gap-1 cursor-pointer touch-target" title="遊戲指南與13男主圖鑑">
+      <button id="nav-guide-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-amber-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="遊戲指南與13男主圖鑑">
         <span>📜</span>
-        <span class="hidden md:inline">指南與圖鑑</span>
+        <span>遊戲指南與圖鑑</span>
       </button>
-
-      <!-- 💾 存檔庫按鈕 -->
-      <button id="nav-saves-btn" class="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer touch-target" title="開啟存檔庫與讀檔大選單">
+      <button id="nav-saves-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="開啟存檔庫與讀檔大選單">
         <span>💾</span>
-        <span class="hidden md:inline">存檔庫</span>
+        <span>存檔庫</span>
       </button>
-
-      <!-- 📝 人設庫按鈕 -->
-      <button id="nav-presets-btn" class="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer touch-target" title="人物與自訂情境庫">
+      <button id="nav-presets-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="人物與自訂情境庫">
         <span>📝</span>
-        <span class="hidden md:inline">人設庫</span>
+        <span>人設庫</span>
       </button>
-
-      <!-- 登入指示器 (桌機顯示) -->
-      <div id="user-badge" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand-card border border-brand-border text-xs text-slate-300">
+      <div id="user-badge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand-card border border-brand-border text-xs text-slate-300">
         <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-        <span id="username-display" class="font-mono text-brand-gold text-xs font-bold truncate max-w-[100px]">已登入</span>
+        <span id="username-display" class="font-mono text-brand-gold text-xs font-bold truncate max-w-[120px]">已登入</span>
         <button id="logout-btn" class="ml-1 text-[11px] text-slate-400 hover:text-rose-400 transition cursor-pointer" title="登出當前帳號">登出</button>
       </div>
-
-      <!-- 側邊抽屜開關 (狀態與數值) -->
-      <button id="open-drawer-btn" class="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold transition cursor-pointer touch-target" title="打開角色狀態與好感度數值">
+      <button id="open-drawer-btn" class="p-2 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold transition cursor-pointer" title="打開角色狀態與好感度數值">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+      </button>
+    </div>
+
+    <!-- 📱 手機版專屬超清晰文字膠囊按鈕組 (< md 顯示) -->
+    <div class="flex md:hidden items-center gap-2">
+      <!-- 快速存檔大選單按鈕 -->
+      <button id="mobile-nav-saves-btn" class="px-3 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-brand-gold font-bold flex items-center gap-1.5 shadow cursor-pointer">
+        <span>💾</span>
+        <span>存檔庫</span>
+      </button>
+      <!-- 全功能導航選單大按鈕 -->
+      <button id="mobile-menu-btn" class="px-3 py-1.5 rounded-lg bg-brand-gold text-slate-950 font-black text-xs flex items-center gap-1.5 shadow cursor-pointer">
+        <span>☰</span>
+        <span>功能選單</span>
       </button>
     </div>
   </header>
@@ -760,25 +762,36 @@
       </button>
     </div>
 
-    <!-- 快捷導航：返回首頁 / 開啟存檔庫 -->
-    <div class="grid grid-cols-2 gap-2">
-      <button id="drawer-home-btn" class="w-full py-2 px-3 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer">
-        <span>🏠 返回首頁</span>
-      </button>
-      <button id="drawer-saves-btn" class="w-full py-2 px-3 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-slate-200 text-xs flex items-center justify-center gap-1.5 transition cursor-pointer">
-        <span>💾 存檔庫管理</span>
-      </button>
-    </div>
-
-    <!-- 角色卡摘要 -->
-    <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
-      <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">當前角色檔案</h3>
-      <div id="profile-card-name" class="font-serif font-bold text-sm text-white">楊慕璃</div>
-      <div id="profile-card-lead" class="text-xs text-slate-300">攻略對象：修羅場 ｜ R-18：開啟</div>
-      <div class="grid grid-cols-2 gap-2 pt-2 border-t border-brand-border/60 text-xs">
-        <div>生命值 (HP): <span id="hp-display" class="font-mono text-emerald-400 font-bold">100</span></div>
-        <div>理智值 (SAN): <span id="sanity-display" class="font-mono text-sky-400 font-bold">100</span></div>
+        <!-- 📱 手機與全域專屬完整導航清單 -->
+    <div class="space-y-2">
+      <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">全域功能導航</div>
+      <div class="grid grid-cols-2 gap-2">
+        <button id="drawer-home-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-brand-gold/50 text-left transition cursor-pointer flex flex-col gap-0.5">
+          <div class="text-xs font-bold text-white flex items-center gap-1"><span>🏠</span><span>首頁主選單</span></div>
+          <div class="text-[10px] text-slate-400">返回主畫面</div>
+        </button>
+        <button id="drawer-gameplay-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-sky-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
+          <div class="text-xs font-bold text-sky-300 flex items-center gap-1"><span>📖</span><span>繼續冒險</span></div>
+          <div class="text-[10px] text-slate-400">回到小說劇情</div>
+        </button>
+        <button id="drawer-saves-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-emerald-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
+          <div class="text-xs font-bold text-emerald-300 flex items-center gap-1"><span>💾</span><span>存檔大選單</span></div>
+          <div class="text-[10px] text-slate-400">存讀檔與雲端同步</div>
+        </button>
+        <button id="drawer-presets-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-purple-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
+          <div class="text-xs font-bold text-purple-300 flex items-center gap-1"><span>📝</span><span>人設設定庫</span></div>
+          <div class="text-[10px] text-slate-400">女主履歷與情境</div>
+        </button>
+        <button id="drawer-guide-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-amber-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
+          <div class="text-xs font-bold text-amber-300 flex items-center gap-1"><span>📜</span><span>13 男主圖鑑</span></div>
+          <div class="text-[10px] text-slate-400">人物檔案與系統指南</div>
+        </button>
+        <button onclick="forceBypassCacheReload()" class="p-2.5 rounded-xl bg-sky-950/40 hover:bg-sky-950 border border-sky-700/50 text-left transition cursor-pointer flex flex-col gap-0.5">
+          <div class="text-xs font-bold text-sky-200 flex items-center gap-1"><span>🔄</span><span>更新最新版</span></div>
+          <div class="text-[10px] text-slate-400">強制穿透快取</div>
+        </button>
       </div>
+    </div>
     </div>
 
     <!-- 男主好感度矩陣 -->
@@ -829,6 +842,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-  <script src="./app.js?v=20260817_v130"></script>
+  <script src="./app.js?v=20260817_v135"></script>
 </body>
 </html>
