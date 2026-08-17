@@ -613,12 +613,12 @@ async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManua
     }).then(() => {
       console.log('[Cloud Sync] Successfully triggered Google Drive (Player_Saves) synchronization.');
       if (isManual) {
-        alert('☁️ 【Google Drive 雲端同步完成】\n已成功將您當前的「真實玩家人設 (Player_Profile.json)」、「完整小說正文 (Full_Novel.md)」、「長期劇情摘要 (Summary_Pool.md)」與「好感度存檔 (save_slot.json)」全數同步儲存至 Google Drive 的 Player_Saves 專屬資料夾中！');
+        alert('☁️ 【雲端同步完成】\n已成功將您當前的「真實玩家人設 (Player_Profile.json)」、「完整小說正文 (Full_Novel.md)」、「長期劇情摘要 (Summary_Pool.md)」與「好感度存檔 (save_slot.json)」全數手動同步至雲端（可跨裝置遊戲）！');
       }
     }).catch(e => {
       console.warn('[Cloud Sync] Background cloud sync warning (silent fallback):', e.message);
       if (isManual) {
-        alert('雲端同步已發送至 Google Drive 後台處理中。');
+        alert('雲端同步已發送至雲端後台處理中（可跨裝置遊戲）。');
       }
     });
   } catch (err) {
@@ -2071,7 +2071,7 @@ function renderSaveArchivesList() {
 
       <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
         <div class="text-[11px] text-slate-400">
-          * 隨時可點擊右側將此進度建立為永久獨立存檔或推送到 Google Drive。
+          * 隨時可點擊右側將此進度建立為永久獨立存檔或手動同步至雲端（可跨裝置遊戲）。
         </div>
         <div class="flex items-center gap-2">
           <button class="active-save-as-btn px-3 py-1.5 rounded-lg bg-brand-gold text-slate-950 font-black hover:bg-yellow-500 transition text-xs shadow cursor-pointer flex items-center gap-1">
@@ -2080,7 +2080,7 @@ function renderSaveArchivesList() {
           </button>
           <button class="active-sync-drive-btn px-3 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-blue-100 font-bold transition text-xs border border-blue-600/50 cursor-pointer flex items-center gap-1">
             <span>☁️</span>
-            <span>同步此局至 Drive</span>
+            <span>手動同步此局至雲端（可跨裝置遊戲）</span>
           </button>
           <button class="active-resume-btn px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold transition text-xs cursor-pointer flex items-center gap-1">
             <span>▶</span>
@@ -2173,7 +2173,7 @@ function renderSaveArchivesList() {
         </button>
         <button class="sync-single-archive-btn px-3 py-1.5 rounded-lg bg-blue-950/70 hover:bg-blue-900 text-blue-200 hover:text-white transition text-xs border border-blue-700/50 cursor-pointer flex items-center gap-1" data-id="${s.id}">
           <span>☁️</span>
-          <span>同步此檔至 Drive</span>
+          <span>手動同步此檔至雲端（可跨裝置遊戲）</span>
         </button>
         <button class="delete-archive-btn px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white transition text-xs border border-rose-800/40 cursor-pointer flex items-center gap-1" data-id="${s.id}">
           <span>🗑️</span>
