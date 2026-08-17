@@ -456,6 +456,30 @@ function renderSupportingLeadsChips(primaryLeadKey) {
   });
 }
 
+/**
+ * 切換首頁 (home) 與遊玩主介面 (gameplay) 視圖
+ */
+function switchView(viewName) {
+  const homeView = document.getElementById('home-view') || dom.homeView;
+  const gameplayView = document.getElementById('gameplay-view') || dom.gameplayView;
+
+  if (viewName === 'home') {
+    if (homeView) homeView.style.display = 'block';
+    if (gameplayView) gameplayView.style.display = 'none';
+    renderHomeRecentSaves();
+    if (typeof window !== 'undefined' && window.scrollTo) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  } else if (viewName === 'gameplay') {
+    if (homeView) homeView.style.display = 'none';
+    if (gameplayView) gameplayView.style.display = 'block';
+    updateGameplayBreadcrumb();
+    if (typeof window !== 'undefined' && window.scrollTo) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+}
+
 function setupEventListeners() {
   function on(id, event, handler) {
     const el = document.getElementById(id);
@@ -2787,6 +2811,7 @@ if (typeof window !== 'undefined') {
   window.closeFeedbackModal = closeFeedbackModal;
   window.sendTelemetryError = sendTelemetryError;
   window.handleFeedbackSubmit = handleFeedbackSubmit;
+  window.switchView = switchView;
 }
 
 
