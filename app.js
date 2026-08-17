@@ -322,6 +322,19 @@ const DEFAULT_PRESETS = {
     targetLeadName: '韓正寰',
     allowR18: true,
     customScenario: '士林地檢署第六偵查庭深夜閉門訊問'
+  },
+  'preset_chen': {
+    name: '陳牧言',
+    gender: '男',
+    age: '25',
+    profession: '新銳獨立調查記者 · 政經專欄作家',
+    background: '台大政治系畢業。以冷峻敏銳的視角剖析政商金流與派系黑幕，在各方勢力博弈中探尋真相與破局點。',
+    appearance: '隨機',
+    taboos: '無特定雷區',
+    targetLead: '01_徐令謙',
+    targetLeadName: '徐令謙',
+    allowR18: true,
+    customScenario: '在天母思慕咖啡深夜初次遭遇徐令謙'
   }
 };
 
@@ -994,7 +1007,7 @@ async function waitForRpmCooldown() {
     let remainingSec = Math.ceil((MIN_REQUEST_GAP_MS - elapsed) / 1000);
     while (remainingSec > 0) {
       if (dom.loadingText) {
-        dom.loadingText.textContent = `⚡ 筆觸沉澱冷卻中（剩餘 ${remainingSec} 秒）……`;
+        dom.loadingText.textContent = `筆觸沉澱冷卻中（剩餘 ${remainingSec} 秒）……`;
       }
       if (dom.loadingSubtext) {
         dom.loadingSubtext.textContent = '系統正為您自動排隊，即將於倒數結束後即時推演劇情……';
@@ -1056,7 +1069,7 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
         console.warn(`[Pure AI] Rate Limit. Waiting 12s cooldown...`);
         let cd = 12;
         while (cd > 0) {
-          if (dom.loadingText) dom.loadingText.textContent = `⚡ 筆觸冷卻中（剩餘 ${cd} 秒）……`;
+          if (dom.loadingText) dom.loadingText.textContent = `筆觸冷卻中（剩餘 ${cd} 秒）……`;
           if (dom.loadingSubtext) dom.loadingSubtext.textContent = '正在為您自動重試推進，請稍候……';
           await new Promise(r => setTimeout(r, 1000));
           cd--;
@@ -1234,7 +1247,7 @@ function buildFirstTurnPrompt(profile) {
   const activeNPCs = detectActiveNPCs('', customScenario, leadKey, profile.supportingLeads || []);
   const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura);
 
-  const systemPrompt = `你是一位專精成人女性情感小說與權謀黑幫的頂級角色扮演敘事者與RPG核心引擎。
+  const systemPrompt = `你是一位專精沉浸式情感小說、權謀博弈與多方張力的頂級角色扮演敘事者與RPG核心引擎。
 ${CHARACTER_IDENTITY_FIREWALL}
 【最高指導原則：全量人物設定 100% 絕對對標（最高約束力）】：
 1. 【嚴格對標座車與配件】：提及角色出入或座車時，必須 100% 使用其設定檔中的指定座車（例如：楊紹宸為私人鐵灰 Audi RS7 / 公務黑色 Benz S680 配司機，絕非邁巴赫；徐令謙為 BMW M760i / X6 M60i；韓正寰為 Škoda Enyaq；邵翊衡為 Porsche 911 / Audi A8；徐宇寧為 Volvo XC60；徐承勳為 Audi A8 L 防彈裝甲車 / Jaguar F-Type；江瀚文為 Aston Martin DBS 等），嚴禁 AI 自行隨意發明！
@@ -1248,7 +1261,7 @@ ${CHARACTER_IDENTITY_FIREWALL}
 3. 【數值真實性運算規則】：
    - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
    - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，數值必須保持 0！
-   - favorabilityDelta（好感度變動 -5~+10）：依據女主言行魅力給予增減（初次見面展現膽識給予 +2~+5）。
+   - favorabilityDelta（好感度變動 -5~+10）：依據主角言行魅力與交鋒魄力給予增減（初次見面展現膽識給予 +2~+5）。
 4. 【三層角色設定集】：
 ${characterPromptBlock}
 
@@ -1264,7 +1277,7 @@ ${characterPromptBlock}
     "intoxicationLabel": "完全清醒",
     "favorabilityDelta": 3,
     "favorabilityReason": "展現從容膽識，引起男主探究欲",
-    "outfit": "角色著裝神態（依女主職業原創高級迷人穿搭、體香與神態）",
+    "outfit": "角色著裝神態（依主角性別與職業原創高級迷人穿搭、香氣與神態）",
     "interaction": "肢體接觸與眼神距離",
     "inventory": "隨身攜帶之關鍵情報或物品",
     "rumors": "台北政媒黑白兩道最新暗流傳聞"
@@ -1312,7 +1325,7 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
   // 3. 組裝長期滾動摘要池
   const summaryBlock = summaryPool ? `【長期劇情摘要池】\n${summaryPool}\n\n` : '';
 
-  const systemPrompt = `你是一位專精成人女性情感小說與權謀黑幫的頂級角色扮演敘事者與RPG核心引擎。
+  const systemPrompt = `你是一位專精沉浸式情感小說、權謀博弈與多方張力的頂級角色扮演敘事者與RPG核心引擎。
 ${CHARACTER_IDENTITY_FIREWALL}
 【最高指導原則：全量人物設定 100% 絕對對標（最高約束力）】：
 1. 【嚴格對標座車與配件】：提及角色出入或座車時，必須 100% 使用其設定檔中的指定座車（例如：楊紹宸為私人鐵灰 Audi RS7 / 公務黑色 Benz S680 配司機，絕非邁巴赫；徐令謙為 BMW M760i / X6 M60i；韓正寰為 Škoda Enyaq；邵翊衡為 Porsche 911 / Audi A8；徐宇寧為 Volvo XC60；徐承勳為 Audi A8 L 防彈裝甲車 / Jaguar F-Type；江瀚文為 Aston Martin DBS 等），嚴禁 AI 自行隨意發明！
@@ -1327,7 +1340,7 @@ ${CHARACTER_IDENTITY_FIREWALL}
 4. 【數值真實性運算規則】：
    - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
    - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，微醺度保持原值或隨時間代謝衰減 5%！
-   - favorabilityDelta（好感度變動 -5~+10）：依據女主此舉是否合乎該男主性格給予增減（精準博弈 +2~+5，重大浪漫/致命共犯 +8~+10，失誤冒犯 -2~-5）。
+   - favorabilityDelta（好感度變動 -5~+10）：依據主角此舉是否合乎該男主性格給予增減（精準博弈 +2~+5，重大浪漫/致命共犯 +8~+10，失誤冒犯 -2~-5）。
 5. 【三層角色設定集】：
 ${characterPromptBlock}
 
@@ -1355,8 +1368,9 @@ ${characterPromptBlock}
   ]
 }`;
 
-  const userPrompt = `【玩家角色】姓名：${profile.name}，職業：${profile.profession}，攻略模式：${isShura ? '全勢力修羅場' : profile.targetLeadName}
+  const userPrompt = `【玩家主角設定】姓名：${profile.name}，性別：${profile.gender || '女'}，年齡：${profile.age || '24'}，職業：${profile.profession}，攻略模式：${isShura ? '全勢力修羅場' : profile.targetLeadName}
 - 成人情慾模式 (R-18)：開啟
+- 【性別代名詞與視角平權】：請嚴格依據玩家所選之性別（${profile.gender || '女'}）與姓名（${profile.name}）使用正確的人稱代名詞（男性玩家使用「他」，女性玩家使用「她」，非二元玩家使用合適稱謂），給予同等極致性張力與權謀交鋒！
 【前情脈絡】
 ${summaryBlock}${recentHistory || '正處於交鋒對峙中'}
 
@@ -1768,12 +1782,10 @@ function renderStoryStream(activeChapter) {
 
       <div class="flex items-center gap-1.5 shrink-0">
         <button id="stream-regenerate-btn" class="text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-brand-gold px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1 cursor-pointer" title="重新生成本回演繹">
-          <span>🔄</span>
-          <span class="hidden sm:inline">重新生成</span>
+          <span>重新生成</span>
         </button>
         <button id="stream-rewind-btn" class="text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-amber-300 px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1 cursor-pointer" title="悔棋回退到上一回合">
-          <span>↩</span>
-          <span class="hidden sm:inline">悔棋</span>
+          <span>悔棋</span>
         </button>
       </div>
     </div>
@@ -1786,33 +1798,33 @@ function renderStoryStream(activeChapter) {
 
     
     <div id="stream-status-panel" class="bg-brand-dark/85 border border-brand-border rounded-xl p-3 sm:p-4 text-xs font-sans space-y-2.5 shadow-md">
-      <!-- 📱 數值即時標籤列 -->
+      <!-- 數值即時標籤列 -->
       <div class="flex flex-wrap items-center gap-2">
         <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/70 border border-rose-700/50 text-rose-200">
-          <span>🌡️ 張力值：</span>
+          <span>張力值：</span>
           <span class="font-mono font-bold text-rose-300">${activeChapter.statusPanel?.tension !== undefined ? activeChapter.statusPanel.tension : 65}%</span>
           <span class="text-[10px] text-rose-400/80">(${activeChapter.statusPanel?.tensionLabel || '高壓推拉'})</span>
         </div>
         <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/70 border border-amber-700/50 text-amber-200">
-          <span>🍷 微醺度：</span>
+          <span>微醺度：</span>
           <span class="font-mono font-bold text-amber-300">${activeChapter.statusPanel?.intoxication !== undefined ? activeChapter.statusPanel.intoxication : 0}%</span>
           <span class="text-[10px] text-amber-400/80">(${activeChapter.statusPanel?.intoxicationLabel || '清醒'})</span>
         </div>
         ${activeChapter.statusPanel?.favorabilityDelta ? `
         <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/70 border border-emerald-700/50 text-emerald-200">
-          <span>❤️ 好感變動：</span>
+          <span>好感變動：</span>
           <span class="font-mono font-bold text-emerald-300">${activeChapter.statusPanel.favorabilityDelta > 0 ? '+' : ''}${activeChapter.statusPanel.favorabilityDelta} pts</span>
           ${activeChapter.statusPanel.favorabilityReason ? `<span class="text-[10px] text-emerald-400/80 hidden sm:inline">(${activeChapter.statusPanel.favorabilityReason})</span>` : ''}
         </div>` : ''}
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300 pt-1 border-t border-brand-border/40">
-        <div><strong>🕰 時空地點：</strong><span class="text-brand-gold">${activeChapter.statusPanel?.timeLocation || '台北市'}</span></div>
-        <div><strong>👔 著裝神態：</strong><span class="text-slate-200">${activeChapter.statusPanel?.outfit || '-'}</span></div>
+        <div><strong>時空地點：</strong><span class="text-brand-gold">${activeChapter.statusPanel?.timeLocation || '台北市'}</span></div>
+        <div><strong>著裝神態：</strong><span class="text-slate-200">${activeChapter.statusPanel?.outfit || '-'}</span></div>
       </div>
-      <div class="text-slate-300"><strong>👫 互動姿態：</strong><span class="text-slate-300">${activeChapter.statusPanel?.interaction || '-'}</span></div>
-      ${activeChapter.statusPanel?.inventory ? `<div class="text-slate-300"><strong>🎒 關鍵情報：</strong><span class="text-amber-200/90">${activeChapter.statusPanel.inventory}</span></div>` : ''}
-      ${activeChapter.statusPanel?.rumors ? `<div class="text-slate-400"><strong>🌍 政媒傳聞：</strong><span class="italic text-slate-400">${activeChapter.statusPanel.rumors}</span></div>` : ''}
+      <div class="text-slate-300"><strong>互動姿態：</strong><span class="text-slate-300">${activeChapter.statusPanel?.interaction || '-'}</span></div>
+      ${activeChapter.statusPanel?.inventory ? `<div class="text-slate-300"><strong>關鍵情報：</strong><span class="text-amber-200/90">${activeChapter.statusPanel.inventory}</span></div>` : ''}
+      ${activeChapter.statusPanel?.rumors ? `<div class="text-slate-400"><strong>政媒傳聞：</strong><span class="italic text-slate-400">${activeChapter.statusPanel.rumors}</span></div>` : ''}
     </div>
   `;
 
@@ -2202,7 +2214,7 @@ function openSaveArchiveModal() {
   if (dom.saveArchiveModal) {
     dom.saveArchiveModal.style.display = 'flex';
     if (dom.newSaveNameInput) {
-      const pName = state.saveState?.meta?.playerProfile?.name || '女主';
+      const pName = state.saveState?.meta?.playerProfile?.name || '主角';
       const targetName = state.saveState?.meta?.playerProfile?.targetLeadName || '主線';
       const turn = state.saveState?.turnCount || 1;
       dom.newSaveNameInput.value = `${pName}-${targetName}第${turn}回`;
@@ -2328,7 +2340,7 @@ function renderSaveArchivesList() {
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300">
         <div class="flex items-center gap-2">
-          <span class="text-slate-400">👤 主角女主：</span>
+          <span class="text-slate-400">主角：</span>
           <span class="font-bold text-white">${p.name || '女主'}</span>
           <span class="text-slate-500">（${p.age || '25'}歲 · ${p.occupation || '政經分析師'}）</span>
         </div>
@@ -2414,7 +2426,7 @@ function renderSaveArchivesList() {
 
       <div class="flex flex-wrap items-center gap-3 text-xs">
         <div class="flex items-center gap-1.5 bg-brand-dark/80 px-2.5 py-1 rounded border border-brand-border/60">
-          <span class="text-slate-400">👤 女主：</span>
+          <span class="text-slate-400">主角：</span>
           <span class="font-bold text-white">${p.name || '女主'}</span>
         </div>
         <div class="flex items-center gap-1.5 bg-brand-dark/80 px-2.5 py-1 rounded border border-brand-border/60">
@@ -2512,7 +2524,7 @@ function handleContinueGame() {
 
 function handleQuickSave() {
   if (!state.chapterData) return alert('目前尚無進行中的故事進度可存檔！');
-  const pName = state.saveState?.meta?.playerProfile?.name || '女主';
+  const pName = state.saveState?.meta?.playerProfile?.name || '主角';
   const targetName = state.saveState?.meta?.playerProfile?.targetLeadName || '主線';
   const turn = state.saveState?.turnCount || 1;
   const autoName = `${pName}-${targetName}第${turn}回`;
@@ -2908,12 +2920,12 @@ function showLoading(initialText, initialSubtext) {
     
     let secondsElapsed = 0;
     const timerSpan = document.getElementById('loading-timer-badge');
-    if (timerSpan) timerSpan.textContent = `⏱️ 已耗時 0 秒`;
+    if (timerSpan) timerSpan.textContent = `已耗時 0 秒`;
 
     if (loadingTimer) clearInterval(loadingTimer);
     loadingTimer = setInterval(() => {
       secondsElapsed++;
-      if (timerSpan) timerSpan.textContent = `⏱️ 已耗時 ${secondsElapsed} 秒`;
+      if (timerSpan) timerSpan.textContent = `已耗時 ${secondsElapsed} 秒`;
     }, 1000);
 
     if (loadingStepInterval) clearInterval(loadingStepInterval);
@@ -3102,7 +3114,7 @@ async function handleFeedbackSubmit(e) {
       });
     }
 
-    alert('🎉 感謝您的寶貴回饋！意見已成功同步至開發管理團隊。');
+    alert('感謝您的寶貴回饋！意見已成功同步至開發管理團隊。');
     closeFeedbackModal();
     const contentArea = document.getElementById('feedback-content');
     if (contentArea) contentArea.value = '';

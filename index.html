@@ -59,23 +59,18 @@
     <!-- 🖥️ 電腦版導航功能按鈕組 (>= md 展開文字) -->
     <div class="hidden md:flex items-center gap-2">
       <button id="force-reload-btn" onclick="forceBypassCacheReload()" class="px-2.5 py-1.5 rounded-lg bg-sky-950/60 hover:bg-sky-900 border border-sky-700/50 text-xs text-sky-300 hover:text-white transition flex items-center gap-1 cursor-pointer" title="強制穿透快取並載入最新版">
-        <span>🔄</span>
         <span>更新最新版</span>
       </button>
       <button id="nav-guide-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-amber-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="遊戲指南與13男主圖鑑">
-        <span>📜</span>
         <span>遊戲指南與圖鑑</span>
       </button>
       <button id="nav-saves-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="開啟存檔庫與讀檔大選單">
-        <span>💾</span>
         <span>存檔庫</span>
       </button>
       <button id="nav-presets-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="人物與自訂情境庫">
-        <span>📝</span>
         <span>人設庫</span>
       </button>
       <button id="nav-feedback-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-sky-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="填寫測試意見回饋或 Bug 回報">
-        <span>💬</span>
         <span>測試回饋</span>
       </button>
       <div id="cloud-sync-status-badge" class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-700/50 text-[11px] font-mono text-emerald-300">
@@ -96,12 +91,10 @@
     <div class="flex md:hidden items-center gap-2">
       <!-- 快速存檔大選單按鈕 -->
       <button id="mobile-nav-saves-btn" class="px-3 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-brand-gold font-bold flex items-center gap-1.5 shadow cursor-pointer">
-        <span>💾</span>
         <span>存檔庫</span>
       </button>
       <!-- 全功能導航選單大按鈕 -->
       <button id="mobile-menu-btn" class="px-3 py-1.5 rounded-lg bg-brand-gold text-slate-950 font-black text-xs flex items-center gap-1.5 shadow cursor-pointer">
-        <span>☰</span>
         <span>功能選單</span>
       </button>
     </div>
@@ -124,7 +117,7 @@
         
         <!-- 宏大世界觀與超高自由度引子 -->
         <p class="text-sm sm:text-base text-amber-100/90 font-serif italic max-w-2xl mx-auto leading-relaxed tracking-wide py-1">
-          「黑夜覆蓋的台北，在政治殺伐、資本商戰、幽微愛情與成人情慾的交織之中，每一次對峙與抉擇，皆是妳的奇思異想與無限可能。」
+          「黑夜覆蓋的台北，在政治殺伐、資本商戰、幽微愛情與成人情慾的交織之中，每一次對峙與抉擇，皆是你的奇思異想與無限可能。」
         </p>
 
         <!-- 當前登入者資訊列與帳號管理 -->
@@ -135,15 +128,12 @@
             <span id="home-username-display" class="font-mono text-brand-gold font-bold">載入中...</span>
           </div>
           <button id="home-logout-btn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-brand-border transition flex items-center gap-1 cursor-pointer">
-            <span>🚪</span>
             <span>登出帳號</span>
           </button>
           <button id="home-delete-account-btn" class="px-3 py-1.5 rounded-lg bg-rose-950/70 hover:bg-rose-900 text-rose-300 hover:text-white border border-rose-800/60 transition flex items-center gap-1 cursor-pointer" title="永久註銷並刪除此帳號及所有存檔">
-            <span>🗑️</span>
             <span>註銷帳號</span>
           </button>
           <button id="home-clear-all-data-btn" class="px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700 transition flex items-center gap-1 cursor-pointer" title="清空本機存檔重置">
-            <span>💥</span>
             <span>清空本機存檔</span>
           </button>
         </div>
@@ -155,7 +145,7 @@
         <!-- 卡片 1: 開啟全新局 -->
         <div id="home-new-game-btn" class="group p-5 rounded-2xl bg-brand-card/90 hover:bg-brand-surface border border-brand-border hover:border-brand-gold/60 transition cursor-pointer shadow-xl relative overflow-hidden">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-2xl">⚔️</span>
+            
             <span class="font-mono text-[10px] font-bold text-brand-gold bg-brand-gold/15 px-2 py-0.5 rounded border border-brand-gold/30">NEW GAME</span>
           </div>
           <h2 class="font-serif font-bold text-base text-white group-hover:text-brand-gold transition mb-1">
@@ -169,7 +159,7 @@
         <!-- 卡片 2: 繼續當前冒險 -->
         <div id="home-continue-game-btn" class="group p-5 rounded-2xl bg-brand-card/90 hover:bg-brand-surface border border-brand-border hover:border-sky-500/60 transition cursor-pointer shadow-xl relative overflow-hidden">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-2xl">📖</span>
+            
             <span class="font-mono text-[10px] font-bold text-sky-400 bg-sky-950/60 px-2 py-0.5 rounded border border-sky-700/50">RESUME</span>
           </div>
           <h2 class="font-serif font-bold text-base text-white group-hover:text-sky-300 transition mb-1">
@@ -183,7 +173,7 @@
         <!-- 卡片 3: 存檔庫與自訂命名存檔 -->
         <div id="home-open-saves-btn" class="group p-5 rounded-2xl bg-brand-card/90 hover:bg-brand-surface border border-brand-border hover:border-emerald-500/60 transition cursor-pointer shadow-xl relative overflow-hidden">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-2xl">💾</span>
+            
             <span class="font-mono text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-700/50">ARCHIVES</span>
           </div>
           <h2 class="font-serif font-bold text-base text-white group-hover:text-emerald-300 transition mb-1">
@@ -197,14 +187,14 @@
         <!-- 卡片 4: 人物與劇情設定檔 -->
         <div id="home-open-presets-btn" class="group p-5 rounded-2xl bg-brand-card/90 hover:bg-brand-surface border border-brand-border hover:border-purple-400/60 transition cursor-pointer shadow-xl relative overflow-hidden">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-2xl">📝</span>
+            
             <span class="font-mono text-[10px] font-bold text-purple-300 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-700/50">PRESETS</span>
           </div>
           <h2 class="font-serif font-bold text-base text-white group-hover:text-purple-200 transition mb-1">
             人物與劇情設定庫
           </h2>
           <p class="text-xs text-slate-400 leading-relaxed">
-            管理、編輯、重新命名與匯出多套女主範本與自訂開場情境。
+            管理、編輯、重新命名與匯出多套主角範本與自訂開場情境。
           </p>
         </div>
 
@@ -213,7 +203,7 @@
       <!-- 📜 遊戲指南、系統說明與 13 位男主角色圖鑑入口 -->
       <div id="home-open-guide-btn" class="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-brand-card/95 via-purple-950/40 to-brand-card/95 border border-brand-gold/40 hover:border-brand-gold transition cursor-pointer shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 group">
         <div class="flex items-center gap-3 text-center sm:text-left">
-          <span class="text-3xl p-2 rounded-xl bg-brand-gold/10 border border-brand-gold/30">📜</span>
+          
           <div>
             <h3 class="font-serif font-bold text-sm sm:text-base text-brand-gold group-hover:text-yellow-300 transition flex items-center justify-center sm:justify-start gap-1.5">
               <span>遊戲說明 · 系統功能指南 · 13 位男主角色全景圖鑑</span>
@@ -233,7 +223,6 @@
       <div class="p-4 rounded-2xl bg-brand-card/60 border border-brand-border space-y-3">
         <div class="flex items-center justify-between border-b border-brand-border/60 pb-2">
           <h3 class="text-xs font-bold text-brand-gold uppercase tracking-wider flex items-center gap-1.5">
-            <span>⚡</span>
             <span>最近存檔快速讀取</span>
           </h3>
           <button id="home-view-all-saves-btn" class="text-xs text-sky-400 hover:underline cursor-pointer">
@@ -396,10 +385,9 @@
       <div class="flex justify-between items-center pb-3 border-b border-brand-border">
         <div>
           <h2 class="font-serif font-bold text-lg text-brand-gold flex items-center gap-2">
-            <span>🎭</span>
             <span>角色自訂與開局情境設定</span>
           </h2>
-          <p class="text-xs text-slate-400 mt-0.5">自訂玩家身分、13 位官方專屬男主（支援全勢力修羅場）與自訂開場劇本。</p>
+          <p class="text-xs text-slate-400 mt-0.5">自訂玩家主角身分、13 位官方專屬男主（支援全勢力修羅場）與自訂開場劇本。</p>
         </div>
         <button id="close-modal-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -409,21 +397,22 @@
       <!-- 範本快速切換與管理工具列 -->
       <div class="bg-brand-card p-3 rounded-xl border border-brand-border space-y-2">
         <div class="flex items-center justify-between">
-          <label class="text-xs font-bold text-brand-gold uppercase tracking-wider">📁 快速載入設定範本：</label>
+          <label class="text-xs font-bold text-brand-gold uppercase tracking-wider">快速載入設定範本：</label>
           <div class="flex gap-1.5">
             <button type="button" id="save-current-profile-btn" class="text-[11px] bg-brand-gold/15 hover:bg-brand-gold/30 text-brand-gold px-2.5 py-1 rounded border border-brand-gold/30 transition cursor-pointer font-bold">
-              💾 另存為人設範本
+              另存為人設範本
             </button>
             <button type="button" id="open-profile-manager-btn" class="text-[11px] bg-purple-950/60 hover:bg-purple-900 text-purple-300 px-2.5 py-1 rounded border border-purple-800/40 transition cursor-pointer font-bold">
-              📝 管理全部人設
+              管理全部人設
             </button>
           </div>
         </div>
         
         <select id="profile-presets-select" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-white focus:border-brand-gold focus:outline-none">
-          <option value="preset_yang">👑 【官方預設】楊慕璃（弘楊集團公關總監 · 瑾和基金會執行長 · 24歲）</option>
-          <option value="preset_ruan">📁 【官方預設】阮思薇（司法政經獨立調查特派員 · 26歲）</option>
-          <option value="preset_custom">✏️ 【空白自訂】全新原創女主私設</option>
+          <option value="preset_yang">【官方預設】楊慕璃（女性 · 弘楊集團公關總監 · 24歲）</option>
+          <option value="preset_ruan">【官方預設】阮思薇（女性 · 司法政經獨立調查特派員 · 26歲）</option>
+          <option value="preset_chen">【官方預設】陳牧言（男性 · 新銳獨立調查記者 · 25歲）</option>
+          <option value="preset_custom">【空白自訂】全新原創主角設定</option>
         </select>
       </div>
 
@@ -475,7 +464,6 @@
         <!-- ⚠️ 修羅場模式負載提醒卡片 (動態顯示) -->
         <div id="shura-warning-card" class="p-3.5 rounded-xl bg-amber-950/70 border border-amber-500/60 text-amber-200 text-xs space-y-1 shadow-lg" style="display:none;">
           <div class="font-bold flex items-center gap-1.5 text-amber-300">
-            <span>⚠️</span>
             <span>【全勢力修羅場模式 · 負載與耗時提醒】</span>
           </div>
           <p class="leading-relaxed text-[11px] text-amber-200/90">
@@ -536,7 +524,7 @@
       <div class="flex justify-between items-center pb-3 border-b border-brand-border">
         <div>
           <h3 class="font-serif font-bold text-lg text-purple-300 flex items-center gap-2">
-            <span>📝 人物與劇情設定庫 (Profile Presets Manager)</span>
+            <span>人物與劇情設定庫 (Profile Presets Manager)</span>
           </h3>
           <p class="text-xs text-slate-400 mt-0.5">自訂人設管理中心：支援即時編輯、重新命名、刪除、複製與一鍵載入開局。</p>
         </div>
@@ -547,13 +535,13 @@
 
       <!-- 工具列 -->
       <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
-        <input type="text" id="search-profile-input" placeholder="🔍 搜尋人設名稱、職業、攻略對象..." class="flex-1 min-w-[200px] bg-brand-dark border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
+        <input type="text" id="search-profile-input" placeholder="搜尋人設名稱、職業、攻略對象..." class="flex-1 min-w-[200px] bg-brand-dark border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
         <div class="flex items-center gap-1.5">
           <button id="export-profiles-btn" class="px-2.5 py-1.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-brand-border transition text-[11px] cursor-pointer">
-            📤 匯出人設 JSON
+            匯出人設 JSON
           </button>
           <label class="px-2.5 py-1.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-brand-border transition text-[11px] cursor-pointer">
-            📥 匯入人設 JSON
+            匯入人設 JSON
             <input type="file" id="import-profiles-input" accept=".json" class="hidden">
           </label>
         </div>
@@ -575,7 +563,7 @@
       <div class="flex justify-between items-start pb-3 border-b border-brand-border/80">
         <div>
           <div class="flex items-center gap-2">
-            <span class="text-2xl">💾</span>
+            
             <h3 class="font-serif font-black text-xl text-brand-gold">
               全域存檔庫中心 (Save & Load Archives)
             </h3>
@@ -596,13 +584,11 @@
         <!-- 左側：儲存當前進度 -->
         <div class="md:col-span-7 space-y-1.5">
           <label class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-            <span>➕</span>
             <span>儲存當前冒險進度為新存檔：</span>
           </label>
           <div class="flex gap-2">
             <input type="text" id="new-save-name-input" placeholder="輸入存檔自訂名稱（例：徐美珍-德行初會、二爺暗夜線、審訊對峙...）" class="flex-1 bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
             <button id="create-named-save-btn" class="px-4 py-2 rounded-lg bg-brand-gold text-slate-950 font-black hover:bg-yellow-500 transition text-xs shrink-0 shadow-md cursor-pointer flex items-center gap-1">
-              <span>💾</span>
               <span>儲存存檔</span>
             </button>
           </div>
@@ -610,17 +596,16 @@
 
         <!-- 右側：雲端同步與檔案備份 -->
         <div class="md:col-span-5 flex flex-col justify-end space-y-1.5">
-          <div class="text-[11px] text-slate-400 font-bold">☁️ 雲端同步與備份工具：</div>
+          <div class="text-[11px] text-slate-400 font-bold">雲端同步與備份工具：</div>
           <div class="flex items-center gap-1.5">
-            <button id="manual-cloud-sync-btn" class="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-900 to-indigo-900 hover:from-blue-800 hover:to-indigo-800 text-blue-100 hover:text-white border border-blue-500/50 transition text-xs font-bold flex items-center justify-center gap-1.5 shadow-md cursor-pointer" title="將當前真實遊玩的小說內文、女主設定、摘要池即時寫入雲端（可跨裝置遊戲）">
-              <span>☁️</span>
+            <button id="manual-cloud-sync-btn" class="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-900 to-indigo-900 hover:from-blue-800 hover:to-indigo-800 text-blue-100 hover:text-white border border-blue-500/50 transition text-xs font-bold flex items-center justify-center gap-1.5 shadow-md cursor-pointer" title="將當前真實遊玩的小說內文、主角設定、摘要池即時寫入雲端（可跨裝置遊戲）">
               <span>手動同步至雲端（可跨裝置遊戲）</span>
             </button>
             <button id="export-all-saves-btn" class="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-brand-border transition text-xs cursor-pointer" title="匯出全部存檔至 JSON 檔案">
-              📤 匯出
+              匯出
             </button>
             <label class="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-brand-border transition text-xs cursor-pointer flex items-center" title="從 JSON 檔案匯入存檔">
-              📥 匯入
+              匯入
               <input type="file" id="import-all-saves-input" accept=".json" class="hidden">
             </label>
           </div>
@@ -631,7 +616,7 @@
       <!-- 存檔搜尋列 -->
       <div class="flex items-center gap-2">
         <div class="relative flex-1">
-          <input type="text" id="search-save-input" placeholder="🔍 搜尋存檔名稱、女主姓名、主要攻略對象、章節名..." class="w-full bg-brand-dark border border-brand-border rounded-lg pl-3 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
+          <input type="text" id="search-save-input" placeholder="搜尋存檔名稱、主角姓名、主要攻略對象、章節名..." class="w-full bg-brand-dark border border-brand-border rounded-lg pl-3 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
         </div>
       </div>
 
@@ -650,7 +635,7 @@
       <div class="flex justify-between items-center pb-3 border-b border-brand-border">
         <div>
           <h3 class="font-serif font-bold text-lg text-brand-gold flex items-center gap-2">
-            <span>📜 《暗流》全域指南與 13 位男主角色圖鑑</span>
+            <span>《暗流》全域指南與 13 位男主角色圖鑑</span>
           </h3>
           <p class="text-xs text-slate-400 mt-0.5">探索自由抉擇機制、三層人設注入、長效記憶架構與 13 位官方男主檔案。</p>
         </div>
@@ -662,10 +647,10 @@
       <!-- 標籤頁切換列 -->
       <div class="flex border-b border-brand-border gap-1 sm:gap-2 text-xs font-bold overflow-x-auto pb-1">
         <button id="guide-tab-gameplay-btn" class="guide-tab-btn py-2 px-3 sm:px-4 border-b-2 border-brand-gold text-brand-gold transition cursor-pointer whitespace-nowrap">
-          📖 遊戲玩法說明
+          遊戲玩法說明
         </button>
         <button id="guide-tab-system-btn" class="guide-tab-btn py-2 px-3 sm:px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition cursor-pointer whitespace-nowrap">
-          ⚙️ 系統功能說明
+          系統功能說明
         </button>
         <button id="guide-tab-roster-btn" class="guide-tab-btn py-2 px-3 sm:px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition cursor-pointer whitespace-nowrap">
           👥 13 位角色全景圖鑑
@@ -747,7 +732,7 @@
               <span>📊 4. 即時狀態抽屜與好感度矩陣</span>
             </h4>
             <p class="text-slate-300 text-xs">
-              點擊右上角狀態圖示即可展開右側抽屜，查看玩家女主生命值 (HP)、理智值 (SAN)、13 位男主的好感度數值、隨身背包物品與最新暗流傳聞。
+              點擊右上角狀態圖示即可展開右側抽屜，查看玩家主角生命值 (HP)、理智值 (SAN)、13 位男主的好感度數值、隨身背包物品與最新暗流傳聞。
             </p>
           </div>
         </div>
@@ -799,7 +784,7 @@
         </button>
         <button id="drawer-presets-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-purple-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
           <div class="text-xs font-bold text-purple-300 flex items-center gap-1"><span>📝</span><span>人設設定庫</span></div>
-          <div class="text-[10px] text-slate-400">女主履歷與情境</div>
+          <div class="text-[10px] text-slate-400">主角履歷與情境</div>
         </button>
         <button id="drawer-guide-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-amber-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
           <div class="text-xs font-bold text-amber-300 flex items-center gap-1"><span>📜</span><span>13 男主圖鑑</span></div>
@@ -818,7 +803,7 @@
 
     <!-- 當前角色卡摘要 -->
     <div class="bg-brand-card p-3.5 rounded-xl border border-brand-border space-y-2">
-      <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">當前女主檔案</h3>
+      <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">當前主角檔案</h3>
       <div id="profile-card-name" class="font-serif font-bold text-sm text-white">楊慕璃</div>
       <div id="profile-card-lead" class="text-xs text-slate-300">攻略對象：修羅場 ｜ R-18：開啟</div>
       <div class="grid grid-cols-2 gap-2 pt-2 border-t border-brand-border/60 text-xs">
@@ -860,7 +845,6 @@
       <div class="flex justify-between items-center pb-3 border-b border-brand-border">
         <div>
           <h3 class="font-serif font-bold text-base sm:text-lg text-sky-300 flex items-center gap-2">
-            <span>💬</span>
             <span>測試意見反饋與問題回報 (Beta Feedback)</span>
           </h3>
           <p class="text-xs text-slate-400 mt-0.5">您的每一則回饋都將直接同步至開發管理團隊，協助持續打磨《暗流》。</p>
@@ -876,10 +860,10 @@
         <div>
           <label class="block font-bold text-slate-200 mb-1">回饋類別 *</label>
           <select id="feedback-category" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white text-xs focus:border-sky-400 focus:outline-none">
-            <option value="🐞 Bug / 系統異常報錯">🐞 Bug / 系統異常報錯</option>
-            <option value="💡 劇情 / 人設走向建議">💡 劇情 / 人設走向建議</option>
-            <option value="🎨 介面與排版改進">🎨 介面與排版改進</option>
-            <option value="💬 整體遊玩心得 / 其他" selected>💬 整體遊玩心得 / 其他</option>
+            <option value="Bug / 系統異常報錯">Bug / 系統異常報錯</option>
+            <option value="劇情 / 人設走向建議">劇情 / 人設走向建議</option>
+            <option value="介面與排版改進">介面與排版改進</option>
+            <option value="整體遊玩心得 / 其他" selected>整體遊玩心得 / 其他</option>
           </select>
         </div>
 
@@ -888,15 +872,15 @@
           <label class="block font-bold text-slate-200 mb-1">體驗滿意度評分（選填）</label>
           <div class="grid grid-cols-5 gap-1.5 text-center text-xs">
             <label class="p-2 rounded-lg bg-brand-dark border border-brand-border/60 hover:border-sky-400 cursor-pointer flex flex-col items-center gap-1">
-              <input type="radio" name="feedback-rating" value="⭐ 1星 (亟待改進)" class="accent-sky-400">
+              <input type="radio" name="feedback-rating" value="1星 (亟待改進)" class="accent-sky-400">
               <span class="text-[10px] text-slate-400">1星</span>
             </label>
             <label class="p-2 rounded-lg bg-brand-dark border border-brand-border/60 hover:border-sky-400 cursor-pointer flex flex-col items-center gap-1">
-              <input type="radio" name="feedback-rating" value="⭐⭐ 2星 (普通)" class="accent-sky-400">
+              <input type="radio" name="feedback-rating" value="2星 (普通)" class="accent-sky-400">
               <span class="text-[10px] text-slate-400">2星</span>
             </label>
             <label class="p-2 rounded-lg bg-brand-dark border border-brand-border/60 hover:border-sky-400 cursor-pointer flex flex-col items-center gap-1">
-              <input type="radio" name="feedback-rating" value="⭐⭐⭐ 3星 (良好)" class="accent-sky-400">
+              <input type="radio" name="feedback-rating" value="3星 (良好)" class="accent-sky-400">
               <span class="text-[10px] text-slate-400">3星</span>
             </label>
             <label class="p-2 rounded-lg bg-brand-dark border border-brand-border/60 hover:border-sky-400 cursor-pointer flex flex-col items-center gap-1">
@@ -967,6 +951,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-  <script src="./app.js?v=20260817_v175"></script>
+  <script src="./app.js?v=20260817_v180"></script>
 </body>
 </html>
