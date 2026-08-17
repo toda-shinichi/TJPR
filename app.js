@@ -1,3 +1,33 @@
+function getKinshipAndSpecialTiesPrompt(playerProfile, primaryLeadKey, activeNPCs = []) {
+  let ties = [];
+  const profileName = (playerProfile?.name || '').trim();
+  const leadKeys = [primaryLeadKey, ...activeNPCs].filter(Boolean);
+
+  // 1. 楊慕璃 (女主) × 楊紹宸 (二哥) 核心豪門羈絆
+  const isPlayerMuLi = profileName.includes('楊慕璃') || profileName.includes('慕璃');
+  const hasShaoChen = leadKeys.some(k => String(k).includes('楊紹宸') || String(k).includes('04_'));
+
+  if (isPlayerMuLi && hasShaoChen) {
+    ties.push(`【🔥 絕對不可撼動之血緣與既定羈絆防火牆：楊慕璃 × 楊紹宸】
+1. 【親屬與豪門位階】：楊慕璃（弘楊集團三房獨生女，24歲）是 楊紹宸（大房次子 · 弘楊集團少東兼執行董事，28歲）同父異母的「親妹妹」。
+2. 【同住既定事實】：兩人自幼同住在陽明山腰的楊家大宅多年，【絕對不是初次見面的陌生人】！絕不可出現「初次見面自我介紹」、「客套遞名片」、「請問您是哪位」等嚴重破壞沉浸感的失誤！
+3. 【稱謂與互動默契】：楊慕璃私下稱其為「二哥」或「紹宸哥」；楊紹宸稱其為「慕璃」或「小妹」。
+4. 【深層張力與心理】：楊紹宸表面冷靜自律、步步做局，但對妹妹慕璃有著極度壓抑、強烈佔有慾的「重度妹控」屬性，深知慕璃的一切生活習慣（喜飲金萱與不甜香檳、不喝咖啡、體質敏感精緻）。
+5. 【嚴格禁制】：兩人互動必須建立在深厚熟稔與豪門權力推拉的基礎上，嚴禁任何陌生化描寫！`);
+  }
+
+  // 2. 徐令謙 (堂哥) × 徐宇寧 (堂弟)
+  const hasLingQian = leadKeys.some(k => String(k).includes('徐令謙') || String(k).includes('01_'));
+  const hasYuNing = leadKeys.some(k => String(k).includes('徐宇寧') || String(k).includes('05_'));
+  if (hasLingQian && hasYuNing) {
+    ties.push(`【🔥 既定親屬關係：徐令謙 × 徐宇寧】
+- 徐令謙是徐宇寧的遠房堂哥。少年時期徐令謙曾啟發宇寧練習射擊（「找出你的優勢，有效率地變強」）。
+- 徐宇寧為徐令謙的主治牙醫，兩人在天母與永康街偶有往來，非陌生人。`);
+  }
+
+  return ties.length > 0 ? ('\n\n' + ties.join('\n\n') + '\n') : '';
+}
+
 /**
  * 《暗流》（UNDER CURRENT）— 頂級沉浸式互動文字 RPG 核心引擎
  * 版本: v20260816_v50
@@ -19,8 +49,8 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "age": "35歲",
     "title": "玄辰幫二把手 · 天裕會中樞 · 德行事務所顧問",
     "file": "01_徐令謙.md",
-    "identityRole": "台灣最大黑幫「玄辰幫」二把手 · 直屬堂口「天裕會」最高掌舵者，氣質優雅冷酷，手握洗錢暗帳與龐大地下勢力。",
-    "summary": "台灣最大黑幫「玄辰幫」二把手 · 直屬堂口「天裕會」最高掌舵者，氣質優雅冷酷，手握洗錢暗帳與龐大地下勢力。"
+    "identityRole": "台灣最大黑幫「玄辰幫」二把手 · 直屬堂口「天裕會」最高掌舵者（【絕對警語】：徐令謙是黑道霸主與幕後操盤者，絕不是檢察官或警察！地檢署檢察官是韓正寰）。他戴金絲復古眼鏡、深黑三件套西裝、Omega金錶，氣質優雅冷酷，手握洗錢暗帳與龐大地下勢力。",
+    "summary": "35歲，INTJ。台灣最大幫派玄辰幫二把手、天裕會中樞。表面為德行法律事務所合夥顧問與思慕咖啡老闆，實為地下秩序制策者。冷靜高雅、支配欲極強、雪松菸草香氣。"
   },
   "02_韓正寰": {
     "key": "02_韓正寰",
@@ -59,8 +89,8 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "age": "28歲",
     "title": "明隱牙醫診所院長 · 牙科權威醫師 · 空氣槍射擊高手",
     "file": "05_徐宇寧.md",
-    "identityRole": "明隱牙醫診所院長兼主治牙科醫師，徐令謙堂弟。身著整潔白袍與無框眼鏡，氣質溫文儒雅，空氣槍射擊全國高手。",
-    "summary": "明隱牙醫診所院長兼主治牙科醫師，徐令謙堂弟。身著整潔白袍與無框眼鏡，氣質溫文儒雅，空氣槍射擊全國高手。"
+    "identityRole": "明隱牙醫診所院長兼主治牙科醫師，徐家長房長孫（徐令謙堂弟）。身著整潔白袍與無框眼鏡，氣質溫文儒雅，空氣槍射擊全國高手。【絕對身分防火牆】：徐宇寧是專職牙醫師與診所院長，【絕對不是檢察官、警察或黑道】！全劇唯一的檢察官是韓正寰。",
+    "summary": "28歲，ISFJ。白袍下的精緻支配者，細膩體貼、潔癖溫柔，帶著令人窒息的專注與深沉掌控欲。診所密室配備專業精密儀器。"
   },
   "06_林政修": {
     "key": "06_林政修",
@@ -314,33 +344,16 @@ const dom = {
 // ==========================================
 
 window.addEventListener('DOMContentLoaded', async () => {
-  try {
-    initTargetLeadSelectOptions();
-  } catch (e) { console.warn('initTargetLeadSelectOptions warn:', e); }
-
-  try {
-    setupEventListeners();
-  } catch (e) { console.warn('setupEventListeners warn:', e); }
-
-  try {
-    checkAuthAndInitUser();
-  } catch (e) { console.warn('checkAuthAndInitUser warn:', e); }
-
-  try {
-    loadSavedProfilePresetsIntoSelect();
-  } catch (e) { console.warn('loadSavedProfilePresetsIntoSelect warn:', e); }
-
-  try {
-    renderHomeRecentSaves();
-  } catch (e) { console.warn('renderHomeRecentSaves warn:', e); }
-
-  try {
-    restoreSavedStateFromStorage();
-  } catch (e) { console.warn('restoreSavedStateFromStorage warn:', e); }
+  try { initTargetLeadSelectOptions(); } catch (e) { console.warn('initTargetLeadSelectOptions warn:', e); }
+  try { setupEventListeners(); } catch (e) { console.warn('setupEventListeners warn:', e); }
+  try { checkAuthAndInitUser(); } catch (e) { console.warn('checkAuthAndInitUser warn:', e); }
+  try { loadSavedProfilePresetsIntoSelect(); } catch (e) { console.warn('loadSavedProfilePresetsIntoSelect warn:', e); }
+  try { renderHomeRecentSaves(); } catch (e) { console.warn('renderHomeRecentSaves warn:', e); }
+  try { restoreSavedStateFromStorage(); } catch (e) { console.warn('restoreSavedStateFromStorage warn:', e); }
 });
 
 function initTargetLeadSelectOptions() {
-  const select = dom.formTargetLead || document.getElementById('form-target-lead');
+  const select = document.getElementById('form-target-lead');
   if (!select) return;
 
   select.innerHTML = '';
@@ -352,7 +365,7 @@ function initTargetLeadSelectOptions() {
   shuraOpt.textContent = '⚡ 【全勢力修羅場】（13位男主隨劇情推進動態交鋒 · 多雄爭奪 · 極限拉扯）';
   select.appendChild(shuraOpt);
 
-  // 13 位官方男主（完整呈現身分與年齡，不截字、不出現多餘點）
+  // 13 位官方男主
   Object.keys(OFFICIAL_DRIVE_CHARACTERS).forEach(key => {
     const lead = OFFICIAL_DRIVE_CHARACTERS[key];
     const opt = document.createElement('option');
@@ -506,7 +519,7 @@ function setupEventListeners() {
 
     // 中止與錯誤救援
     on('abort-generation-btn', 'click', handleAbortGeneration);
-    on('retry-turn-btn', 'click', handleRetryTurn);
+    on('retry-turn-btn', 'click', handleRetryLastTurn);
     on('dismiss-error-btn', 'click', dismissError);
     on('rebase-act-btn', 'click', handleActRebase);
 
@@ -594,35 +607,22 @@ function switchAuthTab(tab) {
 /**
  * ☁️ 非同步同步真實遊戲存檔至 Google Drive (Player_Saves) 與 Google Sheets (Master_Index)
  */
-/**
- * ☁️ 全自動即時背景同步遊戲存檔至 Google Drive (Player_Saves)
- */
 async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManual = false) {
   const saveState = saveStateObj || state.saveState;
   const chapterData = chapterDataObj || state.chapterData;
-  const playerProfile = state.playerProfile || (saveState && saveState.meta && saveState.meta.playerProfile) || getActivePlayerProfile();
+  const playerProfile = state.playerProfile || (saveState && saveState.meta && saveState.meta.playerProfile);
 
   if (!saveState && !chapterData) {
     if (isManual) alert('目前尚無進行中的遊戲進度可同步至雲端！');
     return;
   }
 
-  // 確保未登入玩家也有唯一的裝置雲端 ID
-  if (!state.userId) {
-    let guestId = localStorage.getItem('undercurrent_guest_id');
-    if (!guestId) {
-      guestId = 'guest_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
-      localStorage.setItem('undercurrent_guest_id', guestId);
-    }
-    state.userId = guestId;
-  }
-
   try {
-    const email = state.username ? (state.username.includes('@') ? state.username : `${state.username}@undercurrent.game`) : `${state.userId}@undercurrent.game`;
+    const email = state.username ? (state.username.includes('@') ? state.username : `${state.username}@undercurrent.game`) : 'player@undercurrent.game';
     const payload = {
       action: 'novel/save-state',
-      token: state.token || 'tok_' + state.userId,
-      userId: state.userId,
+      token: state.token || 'tok_player_' + (state.userId || 'guest'),
+      userId: state.userId || 'usr_player',
       email: email,
       saveState: saveState,
       chapter: chapterData,
@@ -631,43 +631,27 @@ async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManua
       namedSaves: getNamedSavesList()
     };
 
-    console.log('[Cloud Auto-Sync] 即時自動同步存檔至 Google Drive...', payload);
+    console.log('[Cloud Sync] Transmitting live game data to Google Drive...', payload);
 
-    // 更新介面同步狀態
-    const syncBadge = document.getElementById('cloud-sync-status-badge');
-    if (syncBadge) {
-      syncBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span><span class="text-amber-300">雲端同步中...</span>';
-    }
-
-    // 傳輸至 Google Apps Script Web App
+    // 嘗試向 Google Apps Script 後端推播存檔與小說章節
     fetch(state.gasApiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload),
-      mode: 'no-cors'
+      mode: 'no-cors' // Google Apps Script Web App 跨域支援
     }).then(() => {
-      const now = new Date();
-      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      console.log(`[Cloud Auto-Sync] 成功完成 Google Drive 自動存檔同步 (${timeStr})`);
-      
-      if (syncBadge) {
-        syncBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span><span class="text-emerald-300">雲端已自動同步 (${timeStr})</span>`;
-      }
-
+      console.log('[Cloud Sync] Successfully triggered Google Drive (Player_Saves) synchronization.');
       if (isManual) {
-        alert(`☁️ 【手動同步至雲端完成】\n已成功將您當前的「真實玩家人設 (Player_Profile.json)」、「完整小說正文 (Full_Novel.md)」、「長期劇情摘要 (Summary_Pool.md)」與「好感度存檔 (save_slot.json)」全數同步儲存至 Google Drive 的 Player_Saves 專屬資料夾中！\n（同步時間：${timeStr}，支援跨裝置無縫接續遊玩）`);
+        alert('☁️ 【雲端同步完成】\n已成功將您當前的「真實玩家人設 (Player_Profile.json)」、「完整小說正文 (Full_Novel.md)」、「長期劇情摘要 (Summary_Pool.md)」與「好感度存檔 (save_slot.json)」全數手動同步至雲端（可跨裝置遊戲）！');
       }
     }).catch(e => {
-      console.warn('[Cloud Auto-Sync] 背景同步提醒:', e.message);
-      if (syncBadge) {
-        syncBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-500"></span><span class="text-slate-400">本地已保存</span>';
-      }
+      console.warn('[Cloud Sync] Background cloud sync warning (silent fallback):', e.message);
       if (isManual) {
-        alert('雲端同步請求已發送至後台處理中（可跨裝置遊戲）。');
+        alert('雲端同步已發送至雲端後台處理中（可跨裝置遊戲）。');
       }
     });
   } catch (err) {
-    console.warn('[Cloud Auto-Sync] 略過同步:', err.message);
+    console.warn('[Cloud Sync] Sync dispatch skipped:', err.message);
     if (isManual) alert('同步請求發送失敗：' + err.message);
   }
 }
@@ -755,11 +739,20 @@ function updateUserBadgeUI() {
 // 4. 純 AI 即時零範本生成引擎 (Pure Real-Time AI Generation Engine)
 // =========================================================================
 
+const NARRATIVE_MODELS = [
+  'mistral-large-3',
+  'gemini-3.6-flash',
+  'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+  'gpt-5.6-luna',
+  'aion-3.0'
+];
+
 const LLM_CONFIG = {
   API_URL: 'https://api.banana2556.com/v1/chat/completions',
   API_KEY: 'sk-TcKczU9MQ5abSWYrF51eU85aQjZV6IzPqeypYYn9zVDoSram',
-  PRIMARY_MODEL: 'aion-rp-1.0',
-  FALLBACK_MODEL: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+  PRIMARY_MODEL: 'mistral-large-3',
+  FALLBACK_MODEL: 'gemini-3.6-flash',
+  MODELS: NARRATIVE_MODELS,
   TEMPERATURE: 0.88
 };
 
@@ -920,11 +913,11 @@ const CHARACTER_IDENTITY_FIREWALL = `
 `;
 
 const ROSTER_ONE_LINERS = [
-  { id: "01_徐令謙", name: "徐令謙", aliases: ["徐令謙", "二爺", "徐二少", "令謙", "天裕會"], role: "玄辰幫二把手 · 天裕會中樞", oneLiner: "台灣最大黑幫「玄辰幫」二把手 · 直屬堂口「天裕會」最高掌舵者，氣質優雅冷酷，手握洗錢暗帳與龐大地下勢力。" },
+  { id: "01_徐令謙", name: "徐令謙", aliases: ["徐令謙", "二爺", "徐二少", "令謙", "天裕會"], role: "黑道玄辰幫二把手 · 天裕會中樞 · 幕後制策者", oneLiner: "深沉狠戾的黑道制策者，金絲眼鏡後的眼神如刃，擅長以退為進的極致掌控與高位支配。" },
   { id: "02_韓正寰", name: "韓正寰", aliases: ["韓正寰", "韓檢", "韓主任", "正寰", "士林地檢署", "白日判官"], role: "士林地檢署主任檢察官 · 白日判官", oneLiner: "冷峻禁慾的司法利刃，手握法理與罪證，在正義守護與私慾佔有邊界極限拉扯。" },
   { id: "03_邵翊衡", name: "邵翊衡", aliases: ["邵翊衡", "邵秘書", "翊衡", "總統府機要秘書"], role: "總統府機要秘書 · 權力樞紐之影", oneLiner: "溫潤優雅的政壇操盤手，談笑間封鎖所有退路，帶著溫和面具的無聲支配者。" },
-  { id: "04_楊紹宸", name: "楊紹宸", aliases: ["楊紹宸", "楊董", "紹宸", "弘楊集團少東", "二哥", "楊二哥", "紹宸哥"], role: "弘楊集團少東 · 執行董事 · 物流總經理", oneLiner: "桀驁不馴的財閥繼承人，掌控跨國物流與碼頭貿易，佔有慾極強且作風凌厲。" },
-  { id: "05_徐宇寧", name: "徐宇寧", aliases: ["徐宇寧", "宇寧", "明隱牙醫", "徐醫師", "牙醫"], role: "明隱牙醫診所院長 · 牙科名醫 · 徐令謙堂弟", oneLiner: "明隱牙醫診所院長兼主治牙科醫師，徐令謙堂弟。身著整潔白袍與無框眼鏡，氣質溫文儒雅，空氣槍射擊全國高手。" },
+  { id: "04_楊紹宸", name: "楊紹宸", aliases: ["楊紹宸", "楊董", "紹宸", "弘楊集團少東"], role: "弘楊集團少東 · 執行董事 · 物流總經理", oneLiner: "桀驁不馴的財閥繼承人，掌控跨國物流與碼頭貿易，佔有慾極強且作風凌厲。" },
+  { id: "05_徐宇寧", name: "徐宇寧", aliases: ["徐宇寧", "宇寧", "明隱牙醫", "徐醫師", "牙醫"], role: "明隱牙醫診所院長 · 牙科名醫 · 空氣槍射擊高手 · 徐令謙堂弟", oneLiner: "專職牙醫師。白袍與無框眼鏡下的精緻支配者，溫文爾雅、細膩體貼，帶著令人窒息的專注與掌控。【絕非檢警/黑道】" },
   { id: "06_林政修", name: "林政修", aliases: ["林政修", "林次", "政修", "法務部次長"], role: "法務部政務次長 · 頂層權力掌舵者", oneLiner: "沉穩威嚴的政壇上位者，舉手投足皆是國家機器級別的絕對權力壓迫。" },
   { id: "07_沈湛然", name: "沈湛然", aliases: ["沈湛然", "沈醫師", "湛然", "台大精神科"], role: "台大醫院精神醫學部主治名醫 · 心理側寫專家", oneLiner: "洞悉人性的深淵凝視者，能輕易看穿防禦與隱密慾望，擅長潛意識引導與心理推拉。" },
   { id: "08_江瀚文", name: "江瀚文", aliases: ["江瀚文", "江執行長", "瀚文", "鼎曜傳媒"], role: "鼎曜媒體集團執行長 · 傳媒巨擘", oneLiner: "商界菁英傳媒大亨，擅長資本收購、輿論操控與鏡頭下的致命曖昧。" },
@@ -977,50 +970,8 @@ function detectActiveNPCs(lastProseText, playerChoice, primaryLeadKey, defaultSu
 /**
  * 三層角色提示詞組裝器 (Tier 1 主角 / Tier 2 在場配角 / Tier 3 世界名冊)
  */
-
-/**
- * 家族親屬與特定前置關係防火牆 (防止楊慕璃與二哥楊紹宸被寫成陌生人等 OOC 情況)
- */
-function getKinshipAndSpecialTiesPrompt(profile, primaryLeadKey, activeNPCs) {
-  const pName = (profile.name || '').trim();
-  const pProf = (profile.profession || '').trim();
-  const pBg = (profile.background || '').trim();
-  const allActiveLeadKeys = [(primaryLeadKey || '')].concat((activeNPCs || []).map(n => n.id || n.name));
-
-  const kinshipRules = [];
-
-  // 1. 楊慕璃 與 楊紹宸（兄妹血緣關係防火牆）
-  const isYangPlayer = pName.includes('楊慕璃') || pName.includes('慕璃') || pProf.includes('弘楊') || pBg.includes('楊家') || pBg.includes('弘楊');
-  const hasYangShaoChen = allActiveLeadKeys.some(k => k.includes('04_楊紹宸') || k.includes('楊紹宸'));
-
-  if (isYangPlayer && hasYangShaoChen) {
-    kinshipRules.push(`【★ 絕對前置家族血緣關係防火牆（嚴禁寫成初次見面的陌生人！）】：
-- 玩家角色【${pName || '楊慕璃'}】是台灣弘楊集團三房獨生女（24歲）。
-- 男主【楊紹宸】是弘楊集團大房次子 · 少東兼執行董事 · 物流總經理（28歲 · 楊慕璃同父異母的「二哥」）。
-- 【兩人既定同住深厚關係】：兩人同在陽明山腰楊家大宅同住多年，【絕非初次相識的陌生人！】
-- 稱謂規範：楊慕璃私下稱呼楊紹宸為「二哥」或「紹宸哥」；楊紹宸稱呼楊慕璃為「慕璃」或「小妹」。
-- 性格與性張力：楊紹宸表面冷靜自律、步步做局，但對妹妹楊慕璃帶有極度壓抑、強烈佔有慾的「重度妹控」情愫與禁忌推拉。他完全知悉慕璃的所有偏好與習慣（愛喝金萱與不甜白酒香檳、絕不喝咖啡、體質敏感動人）。
-- 絕對禁止：嚴禁出現「初次見面遞名片」、「禮貌性自我介紹」、「不認識對方是誰」等陌生人劇情！兩人對話與互動必須充滿家族默契、權謀共謀與禁忌性張力！`);
-  }
-
-  // 2. 徐宇寧 與 徐令謙（堂兄弟關係）
-  const hasXuLingQian = allActiveLeadKeys.some(k => k.includes('01_徐令謙') || k.includes('徐令謙'));
-  const hasXuYuNing = allActiveLeadKeys.some(k => k.includes('05_徐宇寧') || k.includes('徐宇寧'));
-  if (hasXuLingQian && hasXuYuNing) {
-    kinshipRules.push(`【★ 堂兄弟親屬關係】：徐宇寧（明隱牙醫院長）是徐令謙（玄辰幫二爺）的親堂弟。徐令謙是堂哥，徐宇寧學空氣槍射擊亦受徐令謙少年時期開導所啟蒙。`);
-  }
-
-  return kinshipRules.length > 0 ? ('\n=== 【特定家族血緣與人物羈絆】 ===\n' + kinshipRules.join('\n\n') + '\n') : '';
-}
-
-function assembleCharacterPromptBlock(primaryLeadKey, activeNPCs, isShura, profile = {}) {
+function assembleCharacterPromptBlock(primaryLeadKey, activeNPCs, isShura) {
   const blocks = [];
-
-  // 注入家族血緣防火牆（例如：楊慕璃與二哥楊紹宸）
-  const kinshipBlock = getKinshipAndSpecialTiesPrompt(profile, primaryLeadKey, activeNPCs);
-  if (kinshipBlock) {
-    blocks.push(kinshipBlock);
-  }
 
   if (isShura) {
     blocks.push('=== 【全勢力修羅場 (Tier 1)】 ===');
@@ -1066,7 +1017,7 @@ function buildFirstTurnPrompt(profile) {
 
   // 1. 動態偵測自訂情境中是否包含配角
   const activeNPCs = detectActiveNPCs('', customScenario, leadKey, profile.supportingLeads || []);
-  const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura, profile);
+  const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura);
 
   const systemPrompt = `你是一位專精成人女性情感小說與權謀黑幫的頂級角色扮演敘事者與RPG核心引擎。
 ${CHARACTER_IDENTITY_FIREWALL}
@@ -1132,7 +1083,7 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
 
   // 1. 動態偵測在場配角
   const activeNPCs = detectActiveNPCs(lastProseText, playerActionText, leadKey, profile.supportingLeads || []);
-  const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura, profile);
+  const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura);
 
   // 2. 組裝近期 2 回合精簡記憶
   const recentHistory = (historyList || []).slice(-2).map((h, i) => `【第 ${h.turn || (i + 1)} 回：${h.chapterTitle || '前篇'}】\n玩家行動：${h.chosenLabel || '無'}\n情節要點：${(h.prose || '').slice(0, 260)}...`).join('\n\n');
@@ -1246,7 +1197,7 @@ async function handleCharacterCreationSubmit(e) {
   if (e && e.preventDefault) e.preventDefault();
 
   const targetSelect = dom.formTargetLead || document.getElementById('form-target-lead');
-  const selectedOption = targetSelect?.options[targetSelect?.selectedIndex];
+  const selectedOption = (targetSelect && targetSelect.options && targetSelect.selectedIndex >= 0) ? targetSelect.options[targetSelect.selectedIndex] : null;
 
   const supportingCheckboxes = document.querySelectorAll('.supporting-lead-cb:checked');
   const supportingLeads = Array.from(supportingCheckboxes).map(cb => cb.value);
@@ -1814,8 +1765,600 @@ function renderProfileManagerList() {
     const card = document.createElement('div');
     card.className = 'bg-brand-card p-4 rounded-xl border border-brand-border hover:border-purple-500/60 transition space-y-2.5 shadow-md';
 
-        card.innerHTML = `
-      <div class="space-y-2">
+    card.innerHTML = `
+      <div class="flex items-center justify-between border-b border-brand-border/60 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="font-serif font-bold text-sm text-white">${d.name}</span>
+          <span class="text-[11px] px-2 py-0.5 rounded ${p.isDefault ? 'bg-brand-gold/15 text-brand-gold border border-brand-gold/30' : 'bg-purple-950/60 text-purple-300 border border-purple-800/40'}">
+            ${p.isDefault ? '官方預設' : '自訂人設'}
+          </span>
+          <span class="text-xs text-slate-400">${d.gender || '女'} ｜ ${d.age || '24'}歲</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button class="use-profile-btn px-2.5 py-1 rounded bg-brand-gold/15 hover:bg-brand-gold/30 text-brand-gold text-xs font-bold border border-brand-gold/30 transition cursor-pointer" data-key="${p.key}">
+            ▶ 套用開局
+          </button>
+          <button class="edit-profile-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-brand-border transition cursor-pointer" data-key="${p.key}">
+            ✏️ 編輯
+          </button>
+          ${!p.isDefault ? `
+            <button class="rename-profile-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white text-xs border border-brand-border transition cursor-pointer" data-key="${p.key}">
+              🏷️ 重新命名
+            </button>
+            <button class="delete-profile-btn px-2 py-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white text-xs border border-rose-800/40 transition cursor-pointer" data-key="${p.key}">
+              🗑️ 刪除
+            </button>
+          ` : ''}
+        </div>
+      </div>
+      <div class="text-xs text-slate-300"><strong>社會身分：</strong>${d.profession || '-'}</div>
+      <div class="text-xs text-slate-400 line-clamp-2"><strong>身世背景：</strong>${d.background || '-'}</div>
+      <div class="text-xs text-amber-200/90"><strong>攻略對象：</strong>${d.targetLeadName || '修羅場'} ｜ <strong>R-18：</strong>${d.allowR18 ? '開啟' : '關閉'}</div>
+      ${d.customScenario ? `<div class="text-[11px] text-slate-400 bg-brand-dark/60 p-2 rounded border border-brand-border/40"><strong>開場情境：</strong>${d.customScenario}</div>` : ''}
+    `;
+
+    card.querySelector('.use-profile-btn')?.addEventListener('click', () => {
+      closeProfileManagerModal();
+      loadProfilePresetIntoForm(p.key);
+      handleCharacterCreationSubmit();
+    });
+
+    card.querySelector('.edit-profile-btn')?.addEventListener('click', () => {
+      closeProfileManagerModal();
+      openCharacterCreationModal();
+      loadProfilePresetIntoForm(p.key);
+    });
+
+    card.querySelector('.rename-profile-btn')?.addEventListener('click', () => {
+      renameProfilePreset(p.key);
+    });
+
+    card.querySelector('.delete-profile-btn')?.addEventListener('click', () => {
+      deleteProfilePreset(p.key);
+    });
+
+    container.appendChild(card);
+  });
+}
+
+function loadSavedProfilePresetsIntoSelect() {
+  const select = dom.profilePresetsSelect;
+  if (!select) return;
+
+  const custom = getCustomPresets();
+  const options = select.options ? Array.from(select.options) : [];
+  options.forEach(opt => {
+    if (opt.value && opt.value.startsWith('custom_')) opt.remove();
+  });
+
+  Object.keys(custom).forEach(key => {
+    const prof = custom[key];
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = `📁 【自訂】${prof.name}（${(prof.profession || '').slice(0, 10)}...）`;
+    select.appendChild(opt);
+  });
+}
+
+function loadProfilePresetIntoForm(presetKey) {
+  let profile = DEFAULT_PRESETS[presetKey];
+  if (!profile) {
+    const custom = getCustomPresets();
+    profile = custom[presetKey];
+  }
+  if (!profile) return;
+
+  setFormValue('form-player-name', profile.name);
+  setFormValue('form-player-gender', profile.gender || '女');
+  setFormValue('form-player-age', profile.age || '24');
+  setFormValue('form-player-profession', profile.profession);
+  setFormValue('form-player-background', profile.background);
+  setFormValue('form-player-appearance', profile.appearance || '隨機');
+  setFormValue('form-player-taboos', profile.taboos || '無');
+  setFormValue('form-target-lead', profile.targetLead || '01_徐令謙');
+  setFormValue('form-allow-r18', profile.allowR18 !== false);
+  setFormValue('form-custom-scenario', profile.customScenario || '');
+}
+
+function saveCurrentFormAsPreset() {
+  const name = document.getElementById('form-player-name').value.trim();
+  if (!name) return alert('請先輸入角色姓名！');
+
+  const targetSelect = dom.formTargetLead || document.getElementById('form-target-lead');
+  const selectedOption = (targetSelect && targetSelect.options && targetSelect.selectedIndex >= 0) ? targetSelect.options[targetSelect.selectedIndex] : null;
+
+  const profile = {
+    name: name,
+    gender: document.getElementById('form-player-gender').value,
+    age: document.getElementById('form-player-age').value.trim() || '24',
+    profession: document.getElementById('form-player-profession').value.trim(),
+    background: document.getElementById('form-player-background').value.trim(),
+    appearance: document.getElementById('form-player-appearance').value.trim() || '隨機',
+    taboos: document.getElementById('form-player-taboos').value.trim() || '無',
+    targetLead: targetSelect.value,
+    targetLeadName: selectedOption?.getAttribute('data-name') || '徐令謙',
+    allowR18: document.getElementById('form-allow-r18').checked,
+    customScenario: document.getElementById('form-custom-scenario').value.trim()
+  };
+
+  const custom = getCustomPresets();
+  const key = 'custom_' + Date.now();
+  custom[key] = profile;
+  persistCustomPresets(custom);
+  
+  alert(`🎉 人設「${name}」已成功另存為自訂範本！`);
+}
+
+function renameProfilePreset(key) {
+  const custom = getCustomPresets();
+  const prof = custom[key];
+  if (!prof) return;
+
+  const newName = prompt('請輸入新的人設姓名：', prof.name);
+  if (newName && newName.trim()) {
+    prof.name = newName.trim();
+    custom[key] = prof;
+    persistCustomPresets(custom);
+    alert('已成功重新命名人設！');
+  }
+}
+
+function deleteProfilePreset(key) {
+  const custom = getCustomPresets();
+  const prof = custom[key];
+  if (!prof) return;
+
+  if (confirm(`確定要刪除自訂人設「${prof.name}」嗎？`)) {
+    delete custom[key];
+    persistCustomPresets(custom);
+    alert('已刪除該自訂人設。');
+  }
+}
+
+function exportProfiles() {
+  const custom = getCustomPresets();
+  const blob = new Blob([JSON.stringify(custom, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `UnderCurrent_Profiles_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importProfiles(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    try {
+      const imported = JSON.parse(evt.target.result);
+      const custom = getCustomPresets();
+      Object.assign(custom, imported);
+      persistCustomPresets(custom);
+      alert('🎉 成功匯入自訂人設範本！');
+    } catch (err) {
+      alert('人設檔案解析失敗：' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ==========================================
+// 8. 存檔庫核心管理 (Save Archives CRUD)
+// ==========================================
+
+function getNamedSavesList() {
+  try {
+    const raw = localStorage.getItem('undercurrent_named_saves');
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function persistNamedSavesList(saves) {
+  localStorage.setItem('undercurrent_named_saves', JSON.stringify(saves));
+  renderSaveArchivesList();
+  renderHomeRecentSaves();
+}
+
+function openSaveArchiveModal() {
+  if (dom.saveArchiveModal) {
+    dom.saveArchiveModal.style.display = 'flex';
+    if (dom.newSaveNameInput) {
+      const pName = state.saveState?.meta?.playerProfile?.name || '女主';
+      const targetName = state.saveState?.meta?.playerProfile?.targetLeadName || '主線';
+      const turn = state.saveState?.turnCount || 1;
+      dom.newSaveNameInput.value = `${pName}-${targetName}第${turn}回`;
+    }
+    renderSaveArchivesList();
+  }
+}
+
+function closeSaveArchiveModal() {
+  if (dom.saveArchiveModal) dom.saveArchiveModal.style.display = 'none';
+}
+
+function createNamedSave(saveName) {
+  const name = (saveName || '').trim();
+  if (!name) return alert('請輸入存檔名稱！');
+  if (!state.chapterData && (!state.chapterHistoryList || state.chapterHistoryList.length === 0)) {
+    return alert('當前尚未有遊戲進度可儲存！請先開啟新局。');
+  }
+
+  const saves = getNamedSavesList();
+  const profile = getActivePlayerProfile();
+  const lastChapter = state.chapterHistoryList[state.chapterHistoryList.length - 1] || state.chapterData;
+
+  const newSaveEntry = {
+    id: 'save_' + Date.now(),
+    name: name,
+    timestamp: new Date().toLocaleString('zh-TW', { hour12: false }),
+    turnCount: state.saveState?.turnCount || 1,
+    chapterTitle: lastChapter?.chapterTitle || '第 1 回',
+    playerProfile: profile,
+    saveState: state.saveState,
+    chapterData: state.chapterData,
+    chapterHistoryList: state.chapterHistoryList || []
+  };
+
+  saves.unshift(newSaveEntry);
+  persistNamedSavesList(saves);
+  alert(`🎉 存檔「${name}」已成功儲存至存檔庫！`);
+  syncStateToGoogleDriveCloud(state.saveState, state.chapterData);
+}
+
+function renameNamedSave(saveId) {
+  const saves = getNamedSavesList();
+  const target = saves.find(s => s.id === saveId);
+  if (!target) return;
+
+  const newName = prompt('請輸入新的存檔名稱：', target.name);
+  if (newName && newName.trim()) {
+    target.name = newName.trim();
+    persistNamedSavesList(saves);
+    alert('已成功重新命名存檔！');
+  }
+}
+
+function deleteNamedSave(saveId) {
+  const saves = getNamedSavesList();
+  const target = saves.find(s => s.id === saveId);
+  if (!target) return;
+
+  if (confirm(`確定要刪除存檔「${target.name}」嗎？`)) {
+    const remaining = saves.filter(s => s.id !== saveId);
+    persistNamedSavesList(remaining);
+    alert('已刪除該筆存檔。');
+  }
+}
+
+function loadNamedSave(saveId) {
+  const saves = getNamedSavesList();
+  const target = saves.find(s => s.id === saveId);
+  if (!target) return alert('找不到該筆存檔！');
+
+  state.saveState = target.saveState;
+  state.chapterData = target.chapterData;
+  state.chapterHistoryList = target.chapterHistoryList || [];
+
+  localStorage.setItem('undercurrent_current_save_state', JSON.stringify(state.saveState));
+  localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+  if (target.playerProfile) {
+    localStorage.setItem('undercurrent_current_player_profile', JSON.stringify(target.playerProfile));
+  }
+
+  closeSaveArchiveModal();
+  switchView('gameplay');
+  
+  renderStoryStream(state.chapterData);
+  renderSaveState();
+  updateGameplayBreadcrumb();
+
+  alert(`✦ 成功載入存檔「${target.name}」！`);
+}
+
+function renderSaveArchivesList() {
+  const container = dom.saveArchivesList;
+  if (!container) return;
+
+  const saves = getNamedSavesList();
+  const search = (dom.searchSaveInput?.value || '').toLowerCase().trim();
+  const countBadge = document.getElementById('save-count-badge');
+  if (countBadge) countBadge.textContent = `${saves.length} 個存檔槽位`;
+
+  container.innerHTML = '';
+
+  // 1. 如果當前有正在進行中的遊戲進度，在最上方提供【🟢 進行中的最新冒險進度 (AutoSave)】大卡片
+  if (state.chapterData && state.saveState && !search) {
+    const p = state.playerProfile || state.saveState?.meta?.playerProfile || {};
+    const turn = state.saveState?.turnCount || 1;
+    const lead = p.targetLeadName || p.targetLead || '主線';
+    const title = state.chapterData.chapterTitle || `第 ${turn} 回`;
+    const snippet = (state.chapterData.prose || '').replace(/\n+/g, ' ').slice(0, 110) + '……';
+
+    const activeCard = document.createElement('div');
+    activeCard.className = 'bg-gradient-to-r from-amber-950/40 via-brand-card to-amber-950/40 p-4 rounded-xl border border-brand-gold/60 shadow-lg space-y-2.5 relative overflow-hidden';
+
+    activeCard.innerHTML = `
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-brand-gold/30 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+          <span class="font-mono text-xs font-bold text-brand-gold bg-brand-gold/20 px-2 py-0.5 rounded border border-brand-gold/40">CURRENT · 進行中</span>
+          <span class="font-serif font-bold text-sm text-white">當前即時進度（第 ${turn} 回 · ${title}）</span>
+        </div>
+        <span class="text-[11px] text-amber-200/80 font-mono">剛剛動態更新</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300">
+        <div class="flex items-center gap-2">
+          <span class="text-slate-400">👤 主角女主：</span>
+          <span class="font-bold text-white">${p.name || '女主'}</span>
+          <span class="text-slate-500">（${p.age || '25'}歲 · ${p.occupation || '政經分析師'}）</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-slate-400">🎯 攻略男主：</span>
+          <span class="font-bold text-amber-300">${lead}</span>
+        </div>
+      </div>
+
+      <div class="text-xs text-slate-300 bg-brand-dark/70 p-2.5 rounded-lg border border-brand-border/60 italic leading-relaxed">
+        "${snippet}"
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <div class="text-[11px] text-slate-400">
+          * 隨時可點擊右側將此進度建立為永久獨立存檔或手動同步至雲端（可跨裝置遊戲）。
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="active-save-as-btn px-3 py-1.5 rounded-lg bg-brand-gold text-slate-950 font-black hover:bg-yellow-500 transition text-xs shadow cursor-pointer flex items-center gap-1">
+            <span>💾</span>
+            <span>儲存為新檔</span>
+          </button>
+          <button class="active-sync-drive-btn px-3 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-blue-100 font-bold transition text-xs border border-blue-600/50 cursor-pointer flex items-center gap-1">
+            <span>☁️</span>
+            <span>手動同步此局至雲端（可跨裝置遊戲）</span>
+          </button>
+          <button class="active-resume-btn px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold transition text-xs cursor-pointer flex items-center gap-1">
+            <span>▶</span>
+            <span>繼續遊玩</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    activeCard.querySelector('.active-save-as-btn')?.addEventListener('click', handleQuickSave);
+    activeCard.querySelector('.active-sync-drive-btn')?.addEventListener('click', () => syncStateToGoogleDriveCloud(state.saveState, state.chapterData, true));
+    activeCard.querySelector('.active-resume-btn')?.addEventListener('click', () => {
+      closeSaveArchiveModal();
+      switchView('gameplay');
+    });
+
+    container.appendChild(activeCard);
+  }
+
+  // 2. 篩選存檔清單
+  const filtered = saves.filter(s => {
+    if (!search) return true;
+    return (s.name || '').toLowerCase().includes(search) ||
+           (s.chapterTitle || '').toLowerCase().includes(search) ||
+           (s.playerProfile?.name || '').toLowerCase().includes(search) ||
+           (s.playerProfile?.targetLeadName || '').toLowerCase().includes(search);
+  });
+
+  if (filtered.length === 0 && (!state.chapterData || search)) {
+    container.innerHTML += '<div class="text-center text-slate-500 py-10 bg-brand-card/40 rounded-xl border border-brand-border/40">尚無符合條件的存檔紀錄</div>';
+    return;
+  }
+
+  // 3. 渲染所有存檔卡片 (大選單卡片風格)
+  filtered.forEach((s, idx) => {
+    const p = s.playerProfile || {};
+    const turn = s.turnCount || 1;
+    const lead = p.targetLeadName || p.targetLead || '主線';
+    const chTitle = s.chapterTitle || `第 ${turn} 回`;
+    const snippet = s.chapterData?.prose ? (s.chapterData.prose.replace(/\n+/g, ' ').slice(0, 110) + '……') : '（已儲存之分支劇情節點）';
+    const tension = s.saveState?.status?.tension || s.saveState?.tension || 0;
+    const tipsy = s.saveState?.status?.tipsy || s.saveState?.tipsy || 0;
+
+    const card = document.createElement('div');
+    card.className = 'bg-brand-card p-4 rounded-xl border border-brand-border hover:border-brand-gold/60 transition space-y-3 shadow-md group relative';
+
+    card.innerHTML = `
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-brand-border/70 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-xs font-black text-brand-gold bg-brand-gold/15 px-2 py-0.5 rounded border border-brand-gold/30">SLOT ${String(idx + 1).padStart(2, '0')}</span>
+          <span class="font-serif font-black text-sm text-white group-hover:text-brand-gold transition">${s.name}</span>
+        </div>
+        <div class="flex items-center gap-2 font-mono text-[11px] text-slate-400">
+          <span>🕒</span>
+          <span>${s.timestamp}</span>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3 text-xs">
+        <div class="flex items-center gap-1.5 bg-brand-dark/80 px-2.5 py-1 rounded border border-brand-border/60">
+          <span class="text-slate-400">👤 女主：</span>
+          <span class="font-bold text-white">${p.name || '女主'}</span>
+        </div>
+        <div class="flex items-center gap-1.5 bg-brand-dark/80 px-2.5 py-1 rounded border border-brand-border/60">
+          <span class="text-slate-400">🎯 攻略：</span>
+          <span class="font-bold text-amber-300">${lead}</span>
+        </div>
+        <div class="flex items-center gap-1.5 bg-brand-dark/80 px-2.5 py-1 rounded border border-brand-border/60">
+          <span class="text-slate-400">📖 進度：</span>
+          <span class="font-bold text-sky-300">第 ${turn} 回（${chTitle}）</span>
+        </div>
+        <div class="flex items-center gap-2 text-[11px] text-slate-400 ml-auto">
+          <span>🌡️ 張力: <b class="text-rose-400">${tension}%</b></span>
+          <span>🍷 微醺: <b class="text-amber-400">${tipsy}%</b></span>
+        </div>
+      </div>
+
+      <div class="text-xs text-slate-300 bg-brand-dark/60 p-2.5 rounded-lg border border-brand-border/40 italic leading-relaxed">
+        "${snippet}"
+      </div>
+
+      <div class="flex flex-wrap items-center justify-end gap-2 pt-1 border-t border-brand-border/40">
+        <button class="load-archive-btn px-4 py-1.5 rounded-lg bg-brand-gold text-slate-950 font-black hover:bg-yellow-500 transition text-xs shadow-md cursor-pointer flex items-center gap-1" data-id="${s.id}">
+          <span>▶</span>
+          <span>讀取載入此存檔</span>
+        </button>
+        <button class="rename-archive-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white transition text-xs border border-brand-border cursor-pointer flex items-center gap-1" data-id="${s.id}">
+          <span>✏️</span>
+          <span>重新命名</span>
+        </button>
+        <button class="sync-single-archive-btn px-3 py-1.5 rounded-lg bg-blue-950/70 hover:bg-blue-900 text-blue-200 hover:text-white transition text-xs border border-blue-700/50 cursor-pointer flex items-center gap-1" data-id="${s.id}">
+          <span>☁️</span>
+          <span>手動同步此檔至雲端（可跨裝置遊戲）</span>
+        </button>
+        <button class="delete-archive-btn px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white transition text-xs border border-rose-800/40 cursor-pointer flex items-center gap-1" data-id="${s.id}">
+          <span>🗑️</span>
+          <span>刪除</span>
+        </button>
+      </div>
+    `;
+
+    card.querySelector('.load-archive-btn')?.addEventListener('click', () => loadNamedSave(s.id));
+    card.querySelector('.rename-archive-btn')?.addEventListener('click', () => renameNamedSave(s.id));
+    card.querySelector('.sync-single-archive-btn')?.addEventListener('click', () => {
+      syncStateToGoogleDriveCloud(s.saveState, s.chapterData, true);
+    });
+    card.querySelector('.delete-archive-btn')?.addEventListener('click', () => deleteNamedSave(s.id));
+
+    container.appendChild(card);
+  });
+}
+
+function renderHomeRecentSaves() {
+  const container = dom.homeRecentSavesList;
+  if (!container) return;
+
+  const saves = getNamedSavesList();
+  container.innerHTML = '';
+
+  if (saves.length === 0) {
+    container.innerHTML = '<div class="text-xs text-slate-500 py-3 text-center">尚無存檔紀錄，點擊上方【開啟全新局】即刻啟程！</div>';
+    return;
+  }
+
+  saves.slice(0, 3).forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'flex items-center justify-between p-2.5 rounded-lg bg-brand-dark/80 border border-brand-border/60 hover:border-brand-gold/40 transition cursor-pointer text-xs';
+    
+    row.innerHTML = `
+      <div class="flex items-center gap-2">
+        <span class="text-brand-gold">💾</span>
+        <span class="font-bold text-white">${s.name}</span>
+        <span class="text-[11px] text-slate-400">（第 ${s.turnCount || 1} 回 · ${s.playerProfile?.targetLeadName || '主線'}）</span>
+      </div>
+      <span class="font-mono text-[11px] text-slate-500">${s.timestamp}</span>
+    `;
+
+    row.addEventListener('click', () => loadNamedSave(s.id));
+    container.appendChild(row);
+  });
+}
+
+function handleContinueGame() {
+  if (state.chapterHistoryList && state.chapterHistoryList.length > 0 && state.chapterData) {
+    switchView('gameplay');
+  } else {
+    const saves = getNamedSavesList();
+    if (saves.length > 0) {
+      openSaveArchiveModal();
+    } else {
+      alert('目前尚無進行中的冒險進度，請先開啟全新局創角！');
+      openCharacterCreationModal();
+    }
+  }
+}
+
+function handleQuickSave() {
+  if (!state.chapterData) return alert('目前尚無進行中的故事進度可存檔！');
+  const pName = state.saveState?.meta?.playerProfile?.name || '女主';
+  const targetName = state.saveState?.meta?.playerProfile?.targetLeadName || '主線';
+  const turn = state.saveState?.turnCount || 1;
+  const autoName = `${pName}-${targetName}第${turn}回`;
+  createNamedSave(autoName);
+}
+
+// ==========================================
+// 8.5 遊戲指南、系統說明與角色全景圖鑑 (Game Guide & Roster Gallery)
+// ==========================================
+
+function openGameGuideModal(initialTab = 'gameplay') {
+  if (dom.gameGuideModal) {
+    dom.gameGuideModal.style.display = 'flex';
+    switchGuideTab(initialTab);
+  }
+}
+
+function closeGameGuideModal() {
+  if (dom.gameGuideModal) dom.gameGuideModal.style.display = 'none';
+}
+
+function switchGuideTab(tabName) {
+  const tabs = {
+    gameplay: { btn: dom.guideTabGameplayBtn, panel: dom.guidePanelGameplay },
+    system: { btn: dom.guideTabSystemBtn, panel: dom.guidePanelSystem },
+    roster: { btn: dom.guideTabRosterBtn, panel: dom.guidePanelRoster }
+  };
+
+  Object.keys(tabs).forEach(k => {
+    const t = tabs[k];
+    if (t.btn) {
+      if (k === tabName) {
+        t.btn.classList.add('border-brand-gold', 'text-brand-gold');
+        t.btn.classList.remove('border-transparent', 'text-slate-400');
+      } else {
+        t.btn.classList.remove('border-brand-gold', 'text-brand-gold');
+        t.btn.classList.add('border-transparent', 'text-slate-400');
+      }
+    }
+    if (t.panel) {
+      t.panel.style.display = (k === tabName) ? 'block' : 'none';
+    }
+  });
+
+  if (tabName === 'roster') {
+    renderRosterGallery();
+  }
+}
+
+function renderRosterGallery() {
+  const container = dom.rosterGalleryList;
+  if (!container) return;
+
+  const search = (dom.searchRosterInput?.value || '').toLowerCase().trim();
+  container.innerHTML = '';
+
+  const charKeys = Object.keys(OFFICIAL_DRIVE_CHARACTERS);
+  const filteredKeys = charKeys.filter(k => {
+    const c = OFFICIAL_DRIVE_CHARACTERS[k];
+    if (!search) return true;
+    return c.name.toLowerCase().includes(search) ||
+           c.identityRole.toLowerCase().includes(search) ||
+           c.summary.toLowerCase().includes(search) ||
+           c.title.toLowerCase().includes(search);
+  });
+
+  if (filteredKeys.length === 0) {
+    container.innerHTML = '<div class="col-span-full text-center text-slate-500 py-6">找不到相符的角色資料</div>';
+    return;
+  }
+
+  filteredKeys.forEach(k => {
+    const c = OFFICIAL_DRIVE_CHARACTERS[k];
+    const rMatch = ROSTER_ONE_LINERS.find(r => r.id === k || r.name === c.name);
+    const oneLiner = rMatch ? rMatch.oneLiner : c.summary;
+
+    const card = document.createElement('div');
+    card.className = 'bg-brand-card p-3.5 rounded-xl border border-brand-border hover:border-brand-gold/60 transition space-y-2 flex flex-col justify-between shadow-md group';
+
+    card.innerHTML = `
+      <div class="space-y-1.5">
         <div class="flex items-center justify-between border-b border-brand-border/60 pb-1.5">
           <div class="flex items-center gap-2">
             <span class="font-mono text-xs font-bold text-brand-gold bg-brand-gold/15 px-1.5 py-0.5 rounded border border-brand-gold/30">${k.split('_')[0]}</span>
@@ -1824,8 +2367,14 @@ function renderProfileManagerList() {
           </div>
           <span class="text-[10px] font-bold text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">官方男主</span>
         </div>
-        <div class="text-xs text-slate-200 leading-relaxed font-sans bg-brand-dark/50 p-2.5 rounded-lg border border-brand-border/40">
+        <div class="text-[11px] font-bold text-amber-200/90 leading-tight">
+          ${c.identityRole}
+        </div>
+        <div class="text-xs text-slate-300 leading-relaxed pt-1">
           ${oneLiner}
+        </div>
+        <div class="text-[11px] text-slate-400 bg-brand-dark/60 p-2 rounded-lg border border-brand-border/40 mt-1 leading-normal">
+          ${c.summary}
         </div>
       </div>
       <div class="pt-2 flex items-center justify-end">
@@ -2153,4 +2702,31 @@ function hideLoading() {
     dom.loadingOverlay.style.display = 'none';
   }
   state.currentAbortController = null;
+}
+
+
+if (typeof window !== 'undefined') {
+  window.OFFICIAL_DRIVE_CHARACTERS = OFFICIAL_DRIVE_CHARACTERS;
+  window.NARRATIVE_MODELS = NARRATIVE_MODELS;
+  window.state = state;
+  window.DEFAULT_PRESETS = DEFAULT_PRESETS;
+  window.openCharacterCreationModal = openCharacterCreationModal;
+  window.closeCharacterCreationModal = closeCharacterCreationModal;
+  window.openSaveArchiveModal = openSaveArchiveModal;
+  window.closeSaveArchiveModal = closeSaveArchiveModal;
+  window.openProfileManagerModal = openProfileManagerModal;
+  window.closeProfileManagerModal = closeProfileManagerModal;
+  window.openDrawer = openDrawer;
+  window.closeDrawer = closeDrawer;
+  window.createNamedSave = createNamedSave;
+  window.saveCurrentFormAsPreset = saveCurrentFormAsPreset;
+  window.getKinshipAndSpecialTiesPrompt = getKinshipAndSpecialTiesPrompt;
+  window.dismissError = dismissError;
+  window.handleRetryLastTurn = handleRetryLastTurn;
+}
+
+
+function dismissError() {
+  const banner = document.getElementById('error-recovery-banner');
+  if (banner) banner.style.display = 'none';
 }
