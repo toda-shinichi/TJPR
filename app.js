@@ -2672,6 +2672,7 @@ function importAllSaves(e) {
 function openCharacterCreationModal() {
   if (dom.charCreationModal) {
     dom.charCreationModal.style.display = 'flex';
+    dom.charCreationModal.scrollTop = 0;
     loadSavedProfilePresetsIntoSelect();
     const profile = getActivePlayerProfile();
     if (profile) {
