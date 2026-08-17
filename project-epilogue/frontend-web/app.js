@@ -57,10 +57,10 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "name": "徐宇寧",
     "fullName": "徐宇寧",
     "age": "28歲",
-    "title": "明隱牙醫診所院長 · 牙醫師",
+    "title": "明隱牙醫診所院長 · 牙科權威醫師 · 空氣槍射擊高手",
     "file": "05_徐宇寧.md",
-    "identityRole": "溫文爾雅的頂級牙醫院長，徐家長房長孫，看似溫柔實則深沉掌控。",
-    "summary": "28歲，ISFJ。白袍下的精緻支配者，細膩體貼卻帶著令人窒息的專注。"
+    "identityRole": "明隱牙醫診所院長兼主治牙科醫師，徐家長房長孫（徐令謙堂弟）。身著整潔白袍與無框眼鏡，氣質溫文儒雅，空氣槍射擊全國高手。【絕對身分防火牆】：徐宇寧是專職牙醫師與診所院長，【絕對不是檢察官、警察或黑道】！全劇唯一的檢察官是韓正寰。",
+    "summary": "28歲，ISFJ。白袍下的精緻支配者，細膩體貼、潔癖溫柔，帶著令人窒息的專注與深沉掌控欲。診所密室配備專業精密儀器。"
   },
   "06_林政修": {
     "key": "06_林政修",
@@ -756,6 +756,7 @@ async function waitForRpmCooldown() {
  */
 async function generateStoryFromLLM(systemPrompt, userPrompt) {
   const models = [
+    'mistral-large-3',
     'aion-rp-1.0',
     'cognitivecomputations/dolphin-mistral-24b-venice-edition',
     'gpt-5.6-luna',
@@ -767,13 +768,6 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
   for (let mIdx = 0; mIdx < models.length; mIdx++) {
     const model = models[mIdx];
     try {
-      if (dom.loadingText) {
-        dom.loadingText.textContent = `以太筆觸流轉中，AI 主筆作家正在為您現場創作……`;
-      }
-      if (dom.loadingSubtext) {
-        dom.loadingSubtext.textContent = `無預設範本 · 100% 依據您的自訂人設與即時抉擇創作長篇情節……`;
-      }
-
       const controller = new AbortController();
       state.currentAbortController = controller;
       const timeoutId = setTimeout(() => controller.abort(), 22000); // 22 秒極速換線保護
@@ -842,12 +836,29 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
 // 4.5 三層角色動態注入引擎與長期滾動摘要池 (Tiered Lore & Memory Pipeline)
 // =========================================================================
 
+const CHARACTER_IDENTITY_FIREWALL = `
+【13 位官方男主身分與職業不可撼動防火牆（嚴禁混淆與張冠李戴）】：
+1. 徐令謙（35歲）：玄辰幫二把手 · 直屬堂口天裕會首領 · 德行法律事務所顧問。【黑道商業教父，絕非檢警】
+2. 韓正寰（34歲）：臺灣士林地方檢察署重大刑案主任檢察官 · 白日判官。【唯一檢察官，鐵腕司法】
+3. 邵翊衡（37歲）：昱合策略執行長 · 政媒幕後操盤者。【頂級輿情顧問/政壇策士】
+4. 楊紹宸（28歲）：弘楊集團少東 · 執行董事 · 物流貿易事業群總經理。【財閥掌權者，掌控灰色碼頭通道】
+5. 徐宇寧（28歲）：明隱牙醫診所院長兼主治牙醫師 · 空氣槍射擊高手 · 徐令謙堂弟。【專職牙醫師，穿白袍與無框眼鏡，溫文爾雅與窒息掌控，【絕對不是檢察官、警察或黑道！】】
+6. 林政修（41歲）：法務部政務次長（林次）。【司法高官】
+7. 沈湛然（32歲）：中研院歷史語言研究所研究員 · 古文字文獻學家。【學者名士】
+8. 江瀚文（36歲）：鼎曜媒體集團執行長。【傳媒大亨】
+9. 吳衛廷（38歲）：立法委員 · 在野黨立法院首席幹事長/黨鞭。【在野黨實力派立委，唯一可講粗話】
+10. 徐承勳（48歲）：中華民國副總統。【國家副元首/政壇巨擘】
+11. 徐耀南（57歲）：榮南營造集團董事長（榮南王）。【營造地產巨擘】
+12. 徐若宸（22歲）：榮南營造接班人 · 中興大學企管所研究生（徐耀南長子）。【豪門清雅貴公子】
+13. 徐予澈（29歲）：亞洲偶像男團 HapSTer 主唱兼領舞（藝名徐泰希 / 化名 Hans）。【舞台偶像】
+`;
+
 const ROSTER_ONE_LINERS = [
   { id: "01_徐令謙", name: "徐令謙", aliases: ["徐令謙", "二爺", "徐二少", "令謙", "天裕會"], role: "黑道玄辰幫二把手 · 天裕會中樞 · 幕後制策者", oneLiner: "深沉狠戾的黑道制策者，金絲眼鏡後的眼神如刃，擅長以退為進的極致掌控與高位支配。" },
   { id: "02_韓正寰", name: "韓正寰", aliases: ["韓正寰", "韓檢", "韓主任", "正寰", "士林地檢署", "白日判官"], role: "士林地檢署主任檢察官 · 白日判官", oneLiner: "冷峻禁慾的司法利刃，手握法理與罪證，在正義守護與私慾佔有邊界極限拉扯。" },
   { id: "03_邵翊衡", name: "邵翊衡", aliases: ["邵翊衡", "邵秘書", "翊衡", "總統府機要秘書"], role: "總統府機要秘書 · 權力樞紐之影", oneLiner: "溫潤優雅的政壇操盤手，談笑間封鎖所有退路，帶著溫和面具的無聲支配者。" },
   { id: "04_楊紹宸", name: "楊紹宸", aliases: ["楊紹宸", "楊董", "紹宸", "弘楊集團少東"], role: "弘楊集團少東 · 執行董事 · 物流總經理", oneLiner: "桀驁不馴的財閥繼承人，掌控跨國物流與碼頭貿易，佔有慾極強且作風凌厲。" },
-  { id: "05_徐宇寧", name: "徐宇寧", aliases: ["徐宇寧", "宇寧", "明隱牙醫", "徐醫師"], role: "明隱牙醫診所院長 · 牙醫師 · 徐家長房長孫", oneLiner: "白袍下的精緻支配者，溫文爾雅、細膩體貼，帶著令人窒息的專注與掌控。" },
+  { id: "05_徐宇寧", name: "徐宇寧", aliases: ["徐宇寧", "宇寧", "明隱牙醫", "徐醫師", "牙醫"], role: "明隱牙醫診所院長 · 牙科名醫 · 空氣槍射擊高手 · 徐令謙堂弟", oneLiner: "專職牙醫師。白袍與無框眼鏡下的精緻支配者，溫文爾雅、細膩體貼，帶著令人窒息的專注與掌控。【絕非檢警/黑道】" },
   { id: "06_林政修", name: "林政修", aliases: ["林政修", "林次", "政修", "法務部次長"], role: "法務部政務次長 · 頂層權力掌舵者", oneLiner: "沉穩威嚴的政壇上位者，舉手投足皆是國家機器級別的絕對權力壓迫。" },
   { id: "07_沈湛然", name: "沈湛然", aliases: ["沈湛然", "沈醫師", "湛然", "台大精神科"], role: "台大醫院精神醫學部主治名醫 · 心理側寫專家", oneLiner: "洞悉人性的深淵凝視者，能輕易看穿防禦與隱密慾望，擅長潛意識引導與心理推拉。" },
   { id: "08_江瀚文", name: "江瀚文", aliases: ["江瀚文", "江執行長", "瀚文", "鼎曜傳媒"], role: "鼎曜媒體集團執行長 · 傳媒巨擘", oneLiner: "商界菁英傳媒大亨，擅長資本收購、輿論操控與鏡頭下的致命曖昧。" },
@@ -865,7 +876,6 @@ function detectActiveNPCs(lastProseText, playerChoice, primaryLeadKey, defaultSu
   const scanTarget = ((playerChoice || '') + ' ' + ((lastProseText || '').slice(-600))).toLowerCase();
   const activeNPCs = [];
 
-  // 1. 優先動態掃描正文與對白中被提及/登場的 T3 人物
   for (let i = 0; i < ROSTER_ONE_LINERS.length; i++) {
     const charObj = ROSTER_ONE_LINERS[i];
     if (charObj.id === primaryLeadKey || charObj.name === primaryLeadKey) continue;
@@ -880,11 +890,10 @@ function detectActiveNPCs(lastProseText, playerChoice, primaryLeadKey, defaultSu
 
     if (isMentioned) {
       activeNPCs.push(charObj);
-      if (activeNPCs.length >= 2) break; // 上限 2 位，避免 Token 膨脹
+      if (activeNPCs.length >= 2) break;
     }
   }
 
-  // 2. 若當前文本無明確提及，且開局有勾選優先交織配角，則將優先配角納入 Tier 2 備選
   if (activeNPCs.length === 0 && defaultSupportingLeads && defaultSupportingLeads.length > 0) {
     for (let k = 0; k < defaultSupportingLeads.length; k++) {
       const sKey = defaultSupportingLeads[k];
@@ -952,28 +961,32 @@ function buildFirstTurnPrompt(profile) {
   const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura);
 
   const systemPrompt = `你是一位專精成人女性情感小說與權謀黑幫的頂級角色扮演敘事者與RPG核心引擎。
+${CHARACTER_IDENTITY_FIREWALL}
 請遵守《情慾文學指引》與《系統核心指令》：
-1. 【嚴格身分防火牆】：
-   - 徐令謙是「黑道玄辰幫二把手 · 天裕會中樞 · 幕後制策者」，絕對不是檢察官或警察！（士林地檢署檢察官是韓正寰）。
-   - 韓正寰是「士林地檢署主任檢察官 · 白日判官」。
-   - 徐承勳是「中華民國副總統」。
-   絕不可混淆男主身分！
-2. 風格與成人情慾（R-18）：極致性張力、高位推拉、寫實直白描寫肉體交纏、支配與臣服、五感具象（體溫、喘息、香氣、眼神壓迫、肢體撫摸）、權謀殺伐與多方博弈，使用純台灣繁體中文。
-3. 每一次生成完全原創、字數達 1,000~1,500 字，絕不套用固定模板。
+1. 風格與成人情慾（R-18）：極致性張力、高位推拉、五感具象（體溫、喘息、香氣、眼神壓迫、肢體碰觸）、權謀殺伐與多方博弈，使用純台灣繁體中文。
+2. 每一次生成完全原創、字數達 1,000~1,500 字，絕不套用固定模板。
+3. 【數值真實性運算規則】：
+   - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
+   - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，數值必須保持 0！
+   - favorabilityDelta（好感度變動 -5~+10）：依據女主言行魅力給予增減（初次見面展現膽識給予 +2~+5）。
 4. 【三層角色設定集】：
 ${characterPromptBlock}
 
-5. 輸出必須為合法純 JSON 格式（不要包含任何 markdown 代碼標記）：
+5. 輸出必須為合法純 JSON 格式（不要包含任何 markdown 標記）：
 {
   "chapterTitle": "第 1 回．【原創吸睛標題】",
   "prose": "【1000~1500字極具性張力、權謀拉扯與成人情慾描寫的長篇小說正文】",
   "statusPanel": {
     "timeLocation": "具體時空地點（如：2026年5月12日 21:30 台北市士林區...）",
-    "tension": "張力值 [85%]",
-    "intoxication": "微醺度 [35%]",
-    "outfit": "角色著裝神態（若玩家寫隨機，請依職業為女主原創專屬高級迷人穿搭、體香與神態）",
-    "interaction": "肢體與眼神互動狀態（包含極限物理距離、微表情、體溫與觸摸）",
-    "inventory": "隨身攜帶之關鍵底牌或隨身碟",
+    "tension": 65,
+    "tensionLabel": "高壓對峙 · 步步緊逼",
+    "intoxication": 0,
+    "intoxicationLabel": "完全清醒",
+    "favorabilityDelta": 3,
+    "favorabilityReason": "展現從容膽識，引起男主探究欲",
+    "outfit": "角色著裝神態（依女主職業原創高級迷人穿搭、體香與神態）",
+    "interaction": "肢體接觸與眼神距離",
+    "inventory": "隨身攜帶之關鍵情報或物品",
     "rumors": "台北政媒黑白兩道最新暗流傳聞"
   },
   "choices": [
@@ -989,13 +1002,13 @@ ${characterPromptBlock}
 - 年齡：${profile.age || '24'}
 - 職業：${profile.profession || '政經公關總監'}
 - 身世背景：${profile.background || '遊走於台北政商黑白兩道'}
-- 外貌特徵：${profile.appearance || '隨機（請替我原創專屬高級迷人穿搭、體香與神態）'}
+- 外貌特徵：${profile.appearance || '隨機（請原創專屬高級迷人穿搭、體香與神態）'}
 - 禁忌標籤：${profile.taboos || '無'}
-- 成人情慾模式 (R-18)：開啟（包含露骨細緻的體溫、喘息、支配與肢體性張力）
+- 成人情慾模式 (R-18)：開啟
 
 - 玩家自訂開局情境：${customScenario || '深夜暴雨台北，帶著關鍵政商洗錢密錄暗帳初次入局'}
 
-請根據以上玩家自訂人設、官方男主真實黑幫/政商身分與開局情境，完全從零即時創作第 1 回長篇小說，精準呈現情境地點、男主眼神壓迫、性張力拉扯與三個全新抉擇選項！`;
+請根據以上設定與開局情境，完全從零即時創作第 1 回長篇小說，精準呈現情境地點、男主眼神壓迫、性張力拉扯與三個全新抉擇選項！`;
 
   return { systemPrompt, userPrompt };
 }
@@ -1009,32 +1022,41 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
   const lastProseText = lastChapter.prose || '';
   const playerActionText = customInput || choiceId;
 
-  // 1. 動態偵測在場配角 (Tier 2，含 T3 升階全量載入與開局優先配角)
+  // 1. 動態偵測在場配角
   const activeNPCs = detectActiveNPCs(lastProseText, playerActionText, leadKey, profile.supportingLeads || []);
   const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura);
 
-  // 2. 組裝近期 2 回合短期記憶
-  const recentHistory = (historyList || []).slice(-2).map((h, i) => `【第 ${h.turn || (i + 1)} 回：${h.chapterTitle || '前篇'}】\n玩家抉擇：${h.chosenLabel || '無'}\n情節摘記：${(h.prose || '').slice(0, 300)}...`).join('\n\n');
+  // 2. 組裝近期 2 回合精簡記憶
+  const recentHistory = (historyList || []).slice(-2).map((h, i) => `【第 ${h.turn || (i + 1)} 回：${h.chapterTitle || '前篇'}】\n玩家行動：${h.chosenLabel || '無'}\n情節要點：${(h.prose || '').slice(0, 260)}...`).join('\n\n');
 
-  // 3. 組裝長期滾動摘要池 (Summary Pool)
-  const summaryBlock = summaryPool ? `【歷史劇情滾動摘要池（長期記憶）】\n${summaryPool}\n\n` : '';
+  // 3. 組裝長期滾動摘要池
+  const summaryBlock = summaryPool ? `【長期劇情摘要池】\n${summaryPool}\n\n` : '';
 
   const systemPrompt = `你是一位專精成人女性情感小說與權謀黑幫的頂級角色扮演敘事者與RPG核心引擎。
+${CHARACTER_IDENTITY_FIREWALL}
 請遵守《情慾文學指引》與《系統核心指令》：
 1. 嚴格依據玩家剛才執行的最新行動/抉擇，即時推進後續 1,000~1,500 字長篇小說正文。
 2. 描寫要求：極致性張力、上位者男性佔有欲、五感溫度、喘息、支配與臣服、細節肢體碰觸、成人情慾拉扯與權謀博弈，使用純台灣繁體中文。
 3. 絕不重複前篇標題與對話，每次推進都是全新事件與衝突升級！
-4. 【三層角色設定集】：
+4. 【數值真實性運算規則】：
+   - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
+   - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，微醺度保持原值或隨時間代謝衰減 5%！
+   - favorabilityDelta（好感度變動 -5~+10）：依據女主此舉是否合乎該男主性格給予增減（精準博弈 +2~+5，重大浪漫/致命共犯 +8~+10，失誤冒犯 -2~-5）。
+5. 【三層角色設定集】：
 ${characterPromptBlock}
 
-5. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼標記）：
+6. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼標記）：
 {
   "chapterTitle": "第 1 幕 第 ${turnCount} 回：【全新章節標題】",
   "prose": "【1000~1500字緊接玩家行動推進的長篇小說正文】",
   "statusPanel": {
     "timeLocation": "時空地點",
-    "tension": "張力值 [XX%]",
-    "intoxication": "微醺度 [XX%]",
+    "tension": 70,
+    "tensionLabel": "高壓對峙",
+    "intoxication": 0,
+    "intoxicationLabel": "清醒",
+    "favorabilityDelta": 4,
+    "favorabilityReason": "機鋒應對擊中軟肋",
     "outfit": "角色著裝神態",
     "interaction": "肢體與眼神互動狀態",
     "inventory": "掌握情報物品",
@@ -1050,7 +1072,7 @@ ${characterPromptBlock}
   const userPrompt = `【玩家角色】姓名：${profile.name}，職業：${profile.profession}，攻略模式：${isShura ? '全勢力修羅場' : profile.targetLeadName}
 - 成人情慾模式 (R-18)：開啟
 【前情脈絡】
-${summaryBlock}${recentHistory || '正處於首次交鋒對峙中'}
+${summaryBlock}${recentHistory || '正處於交鋒對峙中'}
 
 【玩家本回最新行動】
 - 抉擇標籤或自訂行動：${playerActionText}
@@ -1061,9 +1083,6 @@ ${summaryBlock}${recentHistory || '正處於首次交鋒對峙中'}
   return { systemPrompt, userPrompt };
 }
 
-/**
- * ⚡ 5 回合背景滾動摘要池壓縮器 (Fast Auditor Summary Pipeline)
- */
 async function triggerRollingSummaryUpdate(turnCount) {
   if (!state.saveState || turnCount <= 1) return;
   console.log(`[MemoryPipeline] Triggering rolling summary compression for Turn ${turnCount}...`);
@@ -1310,6 +1329,36 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
 
     nextChapter.act = state.saveState.meta.currentAct || 1;
     nextChapter.turn = state.saveState.turnCount;
+
+    // 💡 真實數值解析與更新
+    if (nextChapter.statusPanel) {
+      const sp = nextChapter.statusPanel;
+      state.saveState.status = state.saveState.status || {};
+      
+      // 張力值解析
+      if (typeof sp.tension === 'number') {
+        state.saveState.status.tension = Math.max(0, Math.min(100, Math.round(sp.tension)));
+      } else if (typeof sp.tension === 'string') {
+        const num = parseInt(sp.tension.replace(/[^0-9]/g, ''), 10);
+        if (!isNaN(num)) state.saveState.status.tension = Math.max(0, Math.min(100, num));
+      }
+      
+      // 微醺度解析
+      if (typeof sp.intoxication === 'number') {
+        state.saveState.status.tipsy = Math.max(0, Math.min(100, Math.round(sp.intoxication)));
+      } else if (typeof sp.intoxication === 'string') {
+        const num = parseInt(sp.intoxication.replace(/[^0-9]/g, ''), 10);
+        if (!isNaN(num)) state.saveState.status.tipsy = Math.max(0, Math.min(100, num));
+      }
+      
+      // 好感度增減解析
+      const leadKey = profile.targetLeadName || profile.targetLead || '徐令謙';
+      state.saveState.relationships = state.saveState.relationships || {};
+      const curFav = state.saveState.relationships[leadKey] || 25;
+      const delta = typeof sp.favorabilityDelta === 'number' ? sp.favorabilityDelta : 3;
+      state.saveState.relationships[leadKey] = Math.max(0, Math.min(100, curFav + delta));
+    }
+
     nextChapter.chosenLabel = customInput || choiceId;
 
     state.chapterData = nextChapter;
@@ -1441,15 +1490,35 @@ function renderStoryStream(activeChapter) {
       故事載入中……
     </article>
 
-    <div id="stream-status-panel" class="bg-brand-dark/80 border border-brand-border rounded-xl p-4 text-xs font-sans space-y-2.5">
-      <div class="flex flex-wrap gap-x-4 gap-y-1 text-slate-300">
-        <div><strong>🕰 時空：</strong><span class="text-brand-gold">${activeChapter.statusPanel?.timeLocation || '-'}</span></div>
-        <div><strong>🌡 氛圍：</strong><span class="text-rose-400">${activeChapter.statusPanel?.tension || '張力 0%'}</span> ｜ <span class="text-amber-300">${activeChapter.statusPanel?.intoxication || '微醺 0%'}</span></div>
+    
+    <div id="stream-status-panel" class="bg-brand-dark/85 border border-brand-border rounded-xl p-3 sm:p-4 text-xs font-sans space-y-2.5 shadow-md">
+      <!-- 📱 數值即時標籤列 -->
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/70 border border-rose-700/50 text-rose-200">
+          <span>🌡️ 張力值：</span>
+          <span class="font-mono font-bold text-rose-300">${activeChapter.statusPanel?.tension !== undefined ? activeChapter.statusPanel.tension : 65}%</span>
+          <span class="text-[10px] text-rose-400/80">(${activeChapter.statusPanel?.tensionLabel || '高壓推拉'})</span>
+        </div>
+        <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/70 border border-amber-700/50 text-amber-200">
+          <span>🍷 微醺度：</span>
+          <span class="font-mono font-bold text-amber-300">${activeChapter.statusPanel?.intoxication !== undefined ? activeChapter.statusPanel.intoxication : 0}%</span>
+          <span class="text-[10px] text-amber-400/80">(${activeChapter.statusPanel?.intoxicationLabel || '清醒'})</span>
+        </div>
+        ${activeChapter.statusPanel?.favorabilityDelta ? `
+        <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/70 border border-emerald-700/50 text-emerald-200">
+          <span>❤️ 好感變動：</span>
+          <span class="font-mono font-bold text-emerald-300">${activeChapter.statusPanel.favorabilityDelta > 0 ? '+' : ''}${activeChapter.statusPanel.favorabilityDelta} pts</span>
+          ${activeChapter.statusPanel.favorabilityReason ? `<span class="text-[10px] text-emerald-400/80 hidden sm:inline">(${activeChapter.statusPanel.favorabilityReason})</span>` : ''}
+        </div>` : ''}
       </div>
-      <div class="text-slate-300"><strong>👔 著裝神態：</strong><span class="text-slate-200">${activeChapter.statusPanel?.outfit || '-'}</span></div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300 pt-1 border-t border-brand-border/40">
+        <div><strong>🕰 時空地點：</strong><span class="text-brand-gold">${activeChapter.statusPanel?.timeLocation || '台北市'}</span></div>
+        <div><strong>👔 著裝神態：</strong><span class="text-slate-200">${activeChapter.statusPanel?.outfit || '-'}</span></div>
+      </div>
       <div class="text-slate-300"><strong>👫 互動姿態：</strong><span class="text-slate-300">${activeChapter.statusPanel?.interaction || '-'}</span></div>
-      <div class="text-slate-300"><strong>🎒 掌握情報：</strong><span class="text-amber-200/90">${activeChapter.statusPanel?.inventory || '-'}</span></div>
-      <div class="text-slate-400"><strong>🌍 政媒傳聞：</strong><span class="italic text-slate-400">${activeChapter.statusPanel?.rumors || '-'}</span></div>
+      ${activeChapter.statusPanel?.inventory ? `<div class="text-slate-300"><strong>🎒 關鍵情報：</strong><span class="text-amber-200/90">${activeChapter.statusPanel.inventory}</span></div>` : ''}
+      ${activeChapter.statusPanel?.rumors ? `<div class="text-slate-400"><strong>🌍 政媒傳聞：</strong><span class="italic text-slate-400">${activeChapter.statusPanel.rumors}</span></div>` : ''}
     </div>
   `;
 
@@ -2356,30 +2425,55 @@ function renderSaveState() {
   if (dom.sanityDisplay) dom.sanityDisplay.textContent = p.sanity;
 
   const profile = getActivePlayerProfile();
-  if (dom.profileCardName) dom.profileCardName.textContent = `${profile.name}（${profile.profession || ''}）`;
+  if (dom.profileCardName) dom.profileCardName.textContent = `${profile.name || '女主'}（${profile.age || '24'}歲 · ${profile.profession || '政商人士'}）`;
   if (dom.profileCardLead) dom.profileCardLead.textContent = `攻略對象：${profile.targetLeadName || '修羅場'} ｜ R-18：${profile.allowR18 ? '開啟' : '關閉'}`;
 
   if (dom.relationshipsList) {
     dom.relationshipsList.innerHTML = '';
     const rels = state.saveState.relationships || {};
-    Object.keys(rels).forEach(name => {
-      const val = rels[name];
-      const div = document.createElement('div');
-      div.className = 'flex items-center justify-between';
-      div.innerHTML = `<span>${name}</span><span class="font-mono text-brand-gold font-bold">${val} pts</span>`;
-      dom.relationshipsList.appendChild(div);
-    });
+    
+    const leadNames = Object.keys(rels);
+    if (leadNames.length === 0) {
+      dom.relationshipsList.innerHTML = '<div class="text-slate-500 text-xs py-2">尚無人物好感度數據</div>';
+    } else {
+      leadNames.forEach(name => {
+        const val = Math.max(0, Math.min(100, rels[name] || 0));
+        let tierLabel = '初識審視';
+        let barColor = 'from-slate-600 to-slate-400';
+        if (val >= 90) { tierLabel = '靈肉共沉'; barColor = 'from-rose-600 to-pink-500'; }
+        else if (val >= 75) { tierLabel = '致命深陷'; barColor = 'from-rose-500 to-amber-500'; }
+        else if (val >= 50) { tierLabel = '曖昧交鋒'; barColor = 'from-amber-500 to-yellow-400'; }
+        else if (val >= 30) { tierLabel = '利益試探'; barColor = 'from-blue-500 to-cyan-400'; }
+
+        const div = document.createElement('div');
+        div.className = 'space-y-1 bg-brand-dark/60 p-2.5 rounded-lg border border-brand-border/60';
+        div.innerHTML = `
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-white">${name}</span>
+            <span class="font-mono text-brand-gold font-bold">${val} <span class="text-[10px] text-slate-400 font-sans">(${tierLabel})</span></span>
+          </div>
+          <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+            <div class="bg-gradient-to-r ${barColor} h-1.5 rounded-full transition-all duration-500" style="width: ${val}%"></div>
+          </div>
+        `;
+        dom.relationshipsList.appendChild(div);
+      });
+    }
   }
 
   if (dom.inventoryList) {
     dom.inventoryList.innerHTML = '';
     const inv = state.saveState.inventory || [];
-    inv.forEach(item => {
-      const div = document.createElement('div');
-      div.className = 'text-[11px] text-slate-300 flex items-center justify-between';
-      div.innerHTML = `<span>💼 ${item.name}</span><span class="text-slate-500">x${item.count || 1}</span>`;
-      dom.inventoryList.appendChild(div);
-    });
+    if (inv.length === 0) {
+      dom.inventoryList.innerHTML = '<div class="text-slate-500 text-xs py-1">暫無隨身特殊物品</div>';
+    } else {
+      inv.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'text-[11px] text-slate-300 flex items-center justify-between bg-brand-dark/40 px-2 py-1 rounded border border-brand-border/40';
+        div.innerHTML = `<span>💼 ${item.name || item}</span><span class="text-slate-500">x${item.count || 1}</span>`;
+        dom.inventoryList.appendChild(div);
+      });
+    }
   }
 }
 
@@ -2500,9 +2594,9 @@ const ROTATING_PROGRESS_STEPS = [
   '劇情故事產生中……',
   '場景世界建構中……',
   '人物言行確認中……',
-  '多方博弈與張力推拉校正中……',
-  '邏輯校正與情慾細節潤飾中……',
-  '章節排版與分支決策封裝中……'
+  '內容產出中……',
+  '邏輯校正中……',
+  '請稍候……'
 ];
 
 let loadingTimer = null;
@@ -2532,7 +2626,7 @@ function showLoading(initialText, initialSubtext) {
       if (dom.loadingText) {
         dom.loadingText.textContent = ROTATING_PROGRESS_STEPS[stepIndex];
       }
-    }, 1300);
+    }, 4000);
   }
 }
 

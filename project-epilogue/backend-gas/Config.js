@@ -24,12 +24,13 @@ const CONFIG = {
 
   // 雙模型配置
   MODELS: {
-    // 主要敘事模型 (Narrator: aion-rp-1.0 首選，dolphin-mistral-24b-venice-edition 備援)
+    // 主要敘事模型 (Narrator: mistral-large-3 首選)
     NARRATOR: {
-      PRIMARY: 'aion-rp-1.0',
+      PRIMARY: 'mistral-large-3',
       FALLBACK: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
       FALLBACK_2: 'gpt-5.6-luna',
       FALLBACK_3: 'aion-3.0',
+      FALLBACK_4: 'aion-rp-1.0',
       TEMPERATURE: 0.88,
       MAX_TOKENS: 3500,
       TOP_P: 0.95

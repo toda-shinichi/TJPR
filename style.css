@@ -2,51 +2,34 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  --bg-main: #0c0d12;
-  --bg-surface: #141620;
-  --bg-elevated: #1d2030;
-  --bg-card: rgba(26, 29, 44, 0.7);
+  --bg-main: #090a0f;
+  --bg-surface: #12141d;
+  --bg-elevated: #1a1d29;
+  --bg-card: rgba(23, 26, 38, 0.85);
   --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-active: rgba(220, 180, 120, 0.4);
+  --border-active: rgba(212, 175, 55, 0.5);
   
-  --text-main: #e6e8f0;
-  --text-muted: #949ab0;
-  --text-accent: #e5c07b;
+  --text-main: #e8ecf4;
+  --text-muted: #9ba3b8;
+  --text-accent: #f3d489;
   --accent-gold: #d4af37;
   --accent-blue: #61afef;
   --accent-crimson: #e06c75;
   --accent-emerald: #98c379;
   
   --font-serif: 'Noto Serif TC', serif;
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  --reader-font-size: 1.15rem;
-  --reader-line-height: 2.2;
+  --reader-font-size: 1.06rem;
+  --reader-line-height: 1.95;
 }
 
-/* 主題切換：復古羊皮紙 (Parchment Night) */
-body.theme-parchment {
-  --bg-main: #141210;
-  --bg-surface: #1e1a16;
-  --bg-elevated: #28231e;
-  --bg-card: rgba(38, 33, 27, 0.75);
-  --text-main: #e8ded4;
-  --text-muted: #ad9e8f;
-  --accent-gold: #e2a850;
-  --border-subtle: rgba(226, 168, 80, 0.12);
-}
-
-/* 主題切換：深邃星海 (Deep Navy) */
-body.theme-navy {
-  --bg-main: #090d14;
-  --bg-surface: #0f1520;
-  --bg-elevated: #151e2e;
-  --bg-card: rgba(21, 30, 46, 0.75);
-  --text-main: #dbe4f0;
-  --text-muted: #8ba0b8;
-  --accent-gold: #68b0f7;
-  --border-subtle: rgba(104, 176, 247, 0.15);
+@media (min-width: 640px) {
+  :root {
+    --reader-font-size: 1.15rem;
+    --reader-line-height: 2.15;
+  }
 }
 
 * {
@@ -56,42 +39,75 @@ body.theme-navy {
   -webkit-tap-highlight-color: transparent;
 }
 
-body {
+html, body {
+  width: 100%;
+  min-height: 100%;
   background-color: var(--bg-main);
   color: var(--text-main);
   font-family: var(--font-sans);
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
   overflow-x: hidden;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  -webkit-text-size-adjust: 100%;
 }
 
-/* 文章字體大小動態調整 */
+body {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* 📱 手機端防 iOS Safari 聚焦自動縮放：所有輸入框至少 16px */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
+/* 📱 手機端觸控優化 */
+button, a, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+}
+
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* 📖 小說閱讀流樣式 */
 .prose-tc {
+  font-family: var(--font-serif);
   font-size: var(--reader-font-size);
   line-height: var(--reader-line-height);
-  letter-spacing: 0.03em;
+  letter-spacing: 0.025em;
   color: var(--text-main);
 }
 
 .prose-tc p {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   text-indent: 2em;
   text-align: justify;
+  word-break: break-word;
+}
+
+.prose-tc p:last-child {
+  margin-bottom: 0.5rem;
+}
+
+/* 彈窗滑動回彈優化 */
+.modal-scroll-container {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* 捲軸美化 */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.2);
 }
 ::-webkit-scrollbar-thumb {
   background: rgba(212, 175, 55, 0.25);
-  border-radius: 3px;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(212, 175, 55, 0.5);
