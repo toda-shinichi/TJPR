@@ -3000,6 +3000,8 @@ if (typeof window !== 'undefined') {
   window.handleRetryLastTurn = handleRetryLastTurn;
   window.openFeedbackModal = openFeedbackModal;
   window.closeFeedbackModal = closeFeedbackModal;
+  window.openGameGuideModal = openGameGuideModal;
+  window.closeGameGuideModal = closeGameGuideModal;
   window.sendTelemetryError = sendTelemetryError;
   window.handleFeedbackSubmit = handleFeedbackSubmit;
   window.switchView = switchView;
