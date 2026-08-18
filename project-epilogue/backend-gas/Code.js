@@ -44,12 +44,16 @@ function doPost(e) {
     } else if (action === 'telemetry/submit-feedback') {
       var fbRes = TelemetryService.submitFeedback(payload);
       return createSuccessResponse(fbRes);
+    } else if (action === 'telemetry/init') {
+      var initRes = TelemetryService.initSpreadsheet();
+      return createSuccessResponse(initRes);
     } else if (action === 'admin/bootstrap') {
       var syncResult = bootstrapAllDriveFiles();
       try {
         StorageService.populateGlobalConfigsSheet();
+        TelemetryService.initSpreadsheet();
       } catch (e) {
-        console.warn('populateGlobalConfigsSheet error: ' + e.message);
+        console.warn('populateGlobalConfigsSheet/Telemetry error: ' + e.message);
       }
       return createSuccessResponse(syncResult);
     }

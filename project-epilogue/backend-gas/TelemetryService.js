@@ -14,24 +14,15 @@ var TelemetryService = (function() {
   var TELEMETRY_SHEET_NAME = '暗流_系統遙測與意見回饋中心';
 
   /**
-   * 取得或建立專屬的 Google 試算表
+   * 確保工作表結構（系統錯誤日誌 & 玩家意見回饋）與表頭格式健全
    */
-  function getOrCreateSpreadsheet() {
-    var masterFolder = DriveStorage.getMasterIndexFolder();
-    var files = masterFolder.getFilesByName(TELEMETRY_SHEET_NAME);
-    
-    var ss;
-    if (files.hasNext()) {
-      ss = SpreadsheetApp.open(files.next());
-    } else {
-      ss = SpreadsheetApp.create(TELEMETRY_SHEET_NAME);
-      var ssFile = DriveApp.getFileById(ss.getId());
-      masterFolder.addFile(ssFile);
-      DriveApp.getRootFolder().removeFile(ssFile);
-
-      // 初始化工作表 1: 錯誤日誌
-      var errSheet = ss.getActiveSheet();
-      errSheet.setName('系統錯誤日誌');
+  function ensureSheetStructure(ss) {
+    // 1. 檢查/建立 工作表 1: 系統錯誤日誌
+    var errSheet = ss.getSheetByName('系統錯誤日誌');
+    if (!errSheet) {
+      errSheet = ss.insertSheet('系統錯誤日誌');
+    }
+    if (errSheet.getLastRow() === 0) {
       errSheet.appendRow([
         '記錄時間 (台北時間)',
         '錯誤類別 (Category)',
@@ -45,9 +36,14 @@ var TelemetryService = (function() {
       ]);
       errSheet.getRange('A1:I1').setBackground('#7f1d1d').setFontColor('#ffffff').setFontWeight('bold');
       errSheet.setFrozenRows(1);
+    }
 
-      // 初始化工作表 2: 玩家意見回饋
-      var fbSheet = ss.insertSheet('玩家意見回饋');
+    // 2. 檢查/建立 工作表 2: 玩家意見回饋
+    var fbSheet = ss.getSheetByName('玩家意見回饋');
+    if (!fbSheet) {
+      fbSheet = ss.insertSheet('玩家意見回饋');
+    }
+    if (fbSheet.getLastRow() === 0) {
       fbSheet.appendRow([
         '提交時間 (台北時間)',
         '回饋類別 (Category)',
@@ -62,7 +58,42 @@ var TelemetryService = (function() {
       fbSheet.getRange('A1:I1').setBackground('#1e3a5f').setFontColor('#ffffff').setFontWeight('bold');
       fbSheet.setFrozenRows(1);
     }
+
+    // 3. 刪除多餘預設空白工作表 (如 "工作表1" 或 "Sheet1")
+    var defaultSheet = ss.getSheetByName('工作表1') || ss.getSheetByName('Sheet1');
+    if (defaultSheet && ss.getSheets().length > 1 && defaultSheet.getLastRow() === 0) {
+      try { ss.deleteSheet(defaultSheet); } catch (e) {}
+    }
+
     return ss;
+  }
+
+  /**
+   * 取得或建立專屬的 Google 試算表（全 Drive 搜尋或新建）
+   */
+  function getOrCreateSpreadsheet() {
+    var files = DriveApp.getFilesByName(TELEMETRY_SHEET_NAME);
+    var ss;
+    if (files.hasNext()) {
+      ss = SpreadsheetApp.open(files.next());
+    } else {
+      ss = SpreadsheetApp.create(TELEMETRY_SHEET_NAME);
+    }
+    return ensureSheetStructure(ss);
+  }
+
+  /**
+   * 強制立即初始化或修復試算表分頁與表頭
+   */
+  function initSpreadsheet() {
+    var ss = getOrCreateSpreadsheet();
+    var sheetNames = ss.getSheets().map(function(s) { return s.getName(); });
+    return {
+      success: true,
+      spreadsheetId: ss.getId(),
+      url: ss.getUrl(),
+      sheets: sheetNames
+    };
   }
 
   /**
@@ -113,31 +144,35 @@ var TelemetryService = (function() {
         details
       ]);
 
-      // 寄送 Email 通知管理員
-      var adminEmail = getAdminEmail();
-      if (adminEmail) {
-        var subject = '🚨【暗流警報】系統異常回報 - ' + category + ' (' + nowStr + ')';
-        var body = [
-          '《暗流》系統監控自動警報：',
-          '------------------------------------------------',
-          '⏰ 發生時間：' + nowStr,
-          '🏷️ 錯誤類別：' + category,
-          '⚠️ 錯誤訊息：' + message,
-          '🤖 調用模型：' + model,
-          '👤 玩家 ID / 信箱：' + userId,
-          '📖 遊戲進度：' + progress + ' ｜ 攻略對象：' + targetLead,
-          '📱 玩家裝置：' + userAgent,
-          '------------------------------------------------',
-          '📝 詳細資訊 / 堆疊：',
-          details,
-          '------------------------------------------------',
-          '📊 試算表完整紀錄：' + ss.getUrl()
-        ].join('\n');
+      // 嘗試寄送 Email 通知管理員（失敗不阻斷流程）
+      try {
+        var adminEmail = getAdminEmail();
+        if (adminEmail) {
+          var subject = '🚨【暗流警報】系統異常回報 - ' + category + ' (' + nowStr + ')';
+          var body = [
+            '《暗流》系統監控自動警報：',
+            '------------------------------------------------',
+            '⏰ 發生時間：' + nowStr,
+            '🏷️ 錯誤類別：' + category,
+            '⚠️ 錯誤訊息：' + message,
+            '🤖 調用模型：' + model,
+            '👤 玩家 ID / 信箱：' + userId,
+            '📖 遊戲進度：' + progress + ' ｜ 攻略對象：' + targetLead,
+            '📱 玩家裝置：' + userAgent,
+            '------------------------------------------------',
+            '📝 詳細資訊 / 堆疊：',
+            details,
+            '------------------------------------------------',
+            '📊 試算表完整紀錄：' + ss.getUrl()
+          ].join('\n');
 
-        MailApp.sendEmail(adminEmail, subject, body);
+          MailApp.sendEmail(adminEmail, subject, body);
+        }
+      } catch (mailErr) {
+        console.warn('Mail notification failed: ' + mailErr.message);
       }
 
-      return { success: true, loggedAt: nowStr };
+      return { success: true, loggedAt: nowStr, sheetUrl: ss.getUrl() };
     } catch (err) {
       console.error('Telemetry logError failed: ' + err.message);
       return { success: false, error: err.message };
@@ -178,29 +213,33 @@ var TelemetryService = (function() {
         diagnostics
       ]);
 
-      // 寄送 Email 通知管理員
-      var adminEmail = getAdminEmail();
-      if (adminEmail) {
-        var subject = '💬【暗流回饋】收到新的玩家意見 - ' + category + ' (' + contact + ')';
-        var body = [
-          '《暗流》收到新的玩家意見回饋：',
-          '------------------------------------------------',
-          '⏰ 提交時間：' + nowStr,
-          '🏷️ 回饋類別：' + category,
-          '⭐ 體感評分：' + rating,
-          '👤 玩家稱呼 / 信箱：' + contact,
-          '📖 遊戲進度：' + progress + ' ｜ 攻略對象：' + targetLead,
-          '------------------------------------------------',
-          '💬 玩家具體意見與建議：',
-          content,
-          '------------------------------------------------',
-          '🔧 附帶遊戲診斷數據：',
-          diagnostics ? diagnostics.slice(0, 500) + '...' : '（未附帶數據）',
-          '------------------------------------------------',
-          '📊 試算表完整紀錄：' + ss.getUrl()
-        ].join('\n');
+      // 嘗試寄送 Email 通知管理員（失敗不阻斷流程）
+      try {
+        var adminEmail = getAdminEmail();
+        if (adminEmail) {
+          var subject = '💬【暗流回饋】收到新的玩家意見 - ' + category + ' (' + contact + ')';
+          var body = [
+            '《暗流》收到新的玩家意見回饋：',
+            '------------------------------------------------',
+            '⏰ 提交時間：' + nowStr,
+            '🏷️ 回饋類別：' + category,
+            '⭐ 體感評分：' + rating,
+            '👤 玩家稱呼 / 信箱：' + contact,
+            '📖 遊戲進度：' + progress + ' ｜ 攻略對象：' + targetLead,
+            '------------------------------------------------',
+            '💬 玩家具體意見與建議：',
+            content,
+            '------------------------------------------------',
+            '🔧 附帶遊戲診斷數據：',
+            diagnostics ? diagnostics.slice(0, 500) + '...' : '（未附帶數據）',
+            '------------------------------------------------',
+            '📊 試算表完整紀錄：' + ss.getUrl()
+          ].join('\n');
 
-        MailApp.sendEmail(adminEmail, subject, body);
+          MailApp.sendEmail(adminEmail, subject, body);
+        }
+      } catch (mailErr) {
+        console.warn('Mail notification failed: ' + mailErr.message);
       }
 
       return { success: true, submittedAt: nowStr, sheetUrl: ss.getUrl() };
@@ -213,7 +252,8 @@ var TelemetryService = (function() {
   return {
     logError: logError,
     submitFeedback: submitFeedback,
-    getOrCreateSpreadsheet: getOrCreateSpreadsheet
+    getOrCreateSpreadsheet: getOrCreateSpreadsheet,
+    initSpreadsheet: initSpreadsheet
   };
 
 })();

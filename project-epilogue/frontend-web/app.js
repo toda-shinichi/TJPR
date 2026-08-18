@@ -362,7 +362,7 @@ const DEFAULT_PRESETS = {
 
 // 全域狀態
 const state = {
-  gasApiUrl: 'https://script.google.com/macros/s/AKfycbzg3xfoXqVMM90YoIlx4FLwHRg5qy2wu0kV2Bae8xI-kWuNWd_ZNVKuOANygFZKv7rBhQ/exec',
+  gasApiUrl: 'https://script.google.com/macros/s/AKfycbwjdNrRMUveqcxhN2K9Okz8afuBmKrziHnj9Zr5EnoCaX2dlXifACHppa2iJuNRFc0CxQ/exec',
   token: localStorage.getItem('undercurrent_auth_token') || '',
   userId: localStorage.getItem('undercurrent_user_id') || '',
   username: localStorage.getItem('undercurrent_user_name') || '',
@@ -3038,7 +3038,7 @@ async function sendTelemetryError(category, message, details = {}) {
 
     console.warn('[Telemetry Alert]', payload);
 
-    const gasUrl = (typeof state !== 'undefined' && state.gasApiUrl) || 'https://script.google.com/macros/s/AKfycbzg3xfoXqVMM90YoIlx4FLwHRg5qy2wu0kV2Bae8xI-kWuNWd_ZNVKuOANygFZKv7rBhQ/exec';
+    const gasUrl = (typeof state !== 'undefined' && state.gasApiUrl) || 'https://script.google.com/macros/s/AKfycbwjdNrRMUveqcxhN2K9Okz8afuBmKrziHnj9Zr5EnoCaX2dlXifACHppa2iJuNRFc0CxQ/exec';
     if (gasUrl) {
       fetch(gasUrl, {
         method: 'POST',
@@ -3132,7 +3132,7 @@ async function handleFeedbackSubmit(e) {
   };
 
   try {
-    const gasUrl = (typeof state !== 'undefined' && state.gasApiUrl) || 'https://script.google.com/macros/s/AKfycbzg3xfoXqVMM90YoIlx4FLwHRg5qy2wu0kV2Bae8xI-kWuNWd_ZNVKuOANygFZKv7rBhQ/exec';
+    const gasUrl = (typeof state !== 'undefined' && state.gasApiUrl) || 'https://script.google.com/macros/s/AKfycbwjdNrRMUveqcxhN2K9Okz8afuBmKrziHnj9Zr5EnoCaX2dlXifACHppa2iJuNRFc0CxQ/exec';
     if (gasUrl) {
       await fetch(gasUrl, {
         method: 'POST',
