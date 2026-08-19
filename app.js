@@ -1209,7 +1209,88 @@ async function waitForRpmCooldown() {
 /**
  * 核心大模型直接呼叫函數 (極速多模型 + 429 自癒機制)
  */
-async function generateStoryFromLLM(systemPrompt, userPrompt) {
+
+async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt, onStreamUpdate) {
+  const modelsToTry = [LLM_CONFIG.PRIMARY_MODEL, LLM_CONFIG.FALLBACK_MODEL, 'gemini-1.5-pro', 'gpt-4o-mini'];
+  
+  for (const model of modelsToTry) {
+    if (!model) continue;
+    try {
+      const response = await fetch(workerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: LLM_CONFIG.TEMPERATURE,
+          max_tokens: 2500,
+          stream: true
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Worker HTTP ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let fullContent = "";
+      let displayedProse = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.trim() === '') continue;
+          if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+            try {
+              const parsed = JSON.parse(line.slice(6));
+              const token = parsed.choices[0].delta.content || '';
+              fullContent += token;
+              
+              // 實時解析 JSON 中的 prose
+              const match = fullContent.match(/"prose"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"statusPanel"|"\s*,\s*"dynamic"|"\s*,\s*"choices"|"$|$)/);
+              if (match && onStreamUpdate) {
+                 const currentProse = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                 if (currentProse.length > displayedProse.length) {
+                   displayedProse = currentProse;
+                   onStreamUpdate(displayedProse);
+                 }
+              }
+            } catch (e) {
+               // ignore incomplete JSON chunks
+            }
+          }
+        }
+      }
+      
+      const finalParsed = parseJsonSafely(fullContent);
+      if (finalParsed && finalParsed.prose) {
+         return finalParsed;
+      } else {
+         if (displayedProse) return { prose: displayedProse, statusPanel: {}, choices: [] };
+      }
+    } catch (err) {
+      console.warn(`[Stream Error] Model ${model}:`, err.message);
+    }
+  }
+  throw new Error('Worker Streaming failed.');
+}
+
+async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = null) {
+  if (LLM_CONFIG.WORKER_URL) {
+    try {
+      const res = await generateStoryWithWorkerStream(LLM_CONFIG.WORKER_URL, systemPrompt, userPrompt, onStreamUpdate);
+      if (res) return res;
+    } catch(e) { console.warn('Worker error, fallback to GAS', e); }
+  }
   const models = [
     'mistral-large-3',
     'gemini-3.6-flash',
@@ -1708,7 +1789,23 @@ async function startNewGameWithProfile(profile) {
   let initialChapter = null;
   try {
     const { systemPrompt, userPrompt } = buildFirstTurnPrompt(profile);
-    initialChapter = await generateStoryFromLLM(systemPrompt, userPrompt);
+    
+    hideLoading();
+    const tempChapter = { act: 1, turn: 1, chosenLabel: '【正式開局】', prose: '', statusPanel: {}, choices: [] };
+    renderStoryStream(tempChapter);
+    const proseEl = document.getElementById('stream-prose-content');
+    if (proseEl) proseEl.innerHTML = '<span class="animate-pulse text-brand-gold">命運推演中……</span>';
+    
+    let isFirstToken = true;
+    initialChapter = await generateStoryFromLLM(systemPrompt, userPrompt, (streamedProse) => {
+         if (proseEl) {
+             if (isFirstToken) { proseEl.innerHTML = ''; isFirstToken = false; }
+             const ps = streamedProse.split('\n\n');
+             proseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p}</p>`).join('');
+             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+         }
+    });
+    initialChapter.skipTypewriter = true;
   } catch (aiErr) {
     console.error('[Pure AI] First turn generation error:', aiErr);
     alert('AI 大模型生成逾時，正在為您重新連接……');
@@ -1786,7 +1883,34 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
         state.chapterHistoryList || [],
         state.saveState.summaryPool || ''
       );
-      nextChapter = await generateStoryFromLLM(systemPrompt, userPrompt);
+      
+      // 先隱藏全螢幕 loading，直接渲染出空的對話框準備接收 stream
+      hideLoading();
+      const tempChapter = {
+        act: state.saveState.meta.currentAct || 1,
+        turn: state.saveState.turnCount,
+        chosenLabel: customInput || choiceLabel,
+        prose: '',
+        statusPanel: {},
+        choices: []
+      };
+      // 我們不把它放進 chapterHistoryList，直接呼叫 renderStoryStream 給它 activeChapter
+      renderStoryStream(tempChapter);
+      const proseEl = document.getElementById('stream-prose-content');
+      if (proseEl) proseEl.innerHTML = '<span class="animate-pulse text-brand-gold">命運推演中……</span>';
+      
+      let isFirstToken = true;
+      nextChapter = await generateStoryFromLLM(systemPrompt, userPrompt, (streamedProse) => {
+         if (proseEl) {
+             if (isFirstToken) { proseEl.innerHTML = ''; isFirstToken = false; }
+             // 轉換段落
+             const ps = streamedProse.split('\n\n');
+             proseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p}</p>`).join('');
+             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+         }
+      });
+      // 成功後，為了不觸發舊的 typewriter，我們給 nextChapter 加個 flag
+      nextChapter.skipTypewriter = true;
     } catch (llmErr) {
       console.warn('[Pure AI] Next turn LLM call failed, generating dynamic fallback turn:', llmErr);
       nextChapter = {
