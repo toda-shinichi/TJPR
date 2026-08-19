@@ -362,7 +362,7 @@ const DEFAULT_PRESETS = {
 
 // 全域狀態
 const state = {
-  gasApiUrl: 'https://script.google.com/macros/s/AKfycbwjdNrRMUveqcxhN2K9Okz8afuBmKrziHnj9Zr5EnoCaX2dlXifACHppa2iJuNRFc0CxQ/exec',
+  gasApiUrl: 'https://script.google.com/macros/s/AKfycby-MudkbcVPAfVDZk2B1zznDlOfjnJOqMB2A3586Ct3ZGq_CUNteKe1lZ4bbw8HwqS9sw/exec',
   token: localStorage.getItem('undercurrent_auth_token') || '',
   userId: localStorage.getItem('undercurrent_user_id') || '',
   username: localStorage.getItem('undercurrent_user_name') || '',
