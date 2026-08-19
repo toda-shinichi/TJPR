@@ -1388,7 +1388,7 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
             { role: 'user', content: userPrompt }
           ],
           temperature: LLM_CONFIG.TEMPERATURE,
-          max_tokens: 2500,
+          max_tokens: 4096,
           token: state.token,
           userId: state.userId
         }),
@@ -1580,7 +1580,7 @@ ${CHARACTER_IDENTITY_FIREWALL}
 
 請嚴格遵守《情慾文學指引》與《系統核心指令》：
 1. 風格與成人情慾（R-18）：極致性張力、高位推拉、五感具象（體溫、喘息、香氣、眼神壓迫、肢體碰觸）、權謀殺伐與多方博弈，使用純台灣繁體中文。
-2. 每一次生成完全原創、字數達 1,000~1,500 字，絕不套用固定模板。
+2. 【字數上限強制執行】prose 正文嚴格控制在 600~800 字以內，不得超過，絕不套用固定模板。
 3. 【數值真實性運算規則】：
    - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
    - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，數值必須保持 0！
@@ -1591,20 +1591,20 @@ ${characterPromptBlock}
 5. 輸出必須為合法純 JSON 格式（不要包含任何 markdown 標記）：
 {
   "chapterTitle": "第 1 回．【原創吸睛標題】",
-  "prose": "【600~800字極具性張力、權謀拉扯與成人情慾描寫的長篇小說正文】",
   "statusPanel": {
     "timeLocation": "具體時空地點（如：2026年5月12日 21:30 台北市士林區...）",
-    "tension": 65,
-    "tensionLabel": "高壓對峙 · 步步緊逼",
+    "tension": 【依劇情張力給出 0~100 整數，初次見面高壓對峙約 60~75】,
+    "tensionLabel": "【依 tension 數值原創描述，如：高壓對峙 · 步步緊逼】",
     "intoxication": 0,
     "intoxicationLabel": "完全清醒",
-    "favorabilityDelta": 3,
-    "favorabilityReason": "展現從容膽識，引起男主探究欲",
+    "favorabilityDelta": 【依主角言行給 -5~+10 整數】,
+    "favorabilityReason": "【原因說明】",
     "outfit": "角色著裝神態（依主角性別與職業原創高級迷人穿搭、香氣與神態）",
     "interaction": "肢體接觸與眼神距離",
     "inventory": "隨身攜帶之關鍵情報或物品",
     "rumors": "台北政媒黑白兩道最新暗流傳聞"
   },
+  "prose": "【600~800字極具性張力、權謀拉扯與成人情慾描寫的長篇小說正文】",
   "choices": [
     { "id": "A", "label": "[A] 【選項A完整行動與對白描述】", "risk": "low", "hint": "策略提示" },
     { "id": "B", "label": "[B] 【選項B完整行動與對白描述】", "risk": "medium", "hint": "策略提示" },
@@ -1657,7 +1657,7 @@ ${CHARACTER_IDENTITY_FIREWALL}
 4. 【血緣與親情既定事實】：楊慕璃與二哥楊紹宸同住陽明山大宅，熟知彼此生活習慣，嚴禁任何初次見面的陌生化描寫！
 
 請嚴格遵守《情慾文學指引》與《系統核心指令》：
-1. 嚴格依據玩家剛才執行的最新行動/抉擇，即時推進後續 1,000~1,500 字長篇小說正文。
+1. 嚴格依據玩家剛才執行的最新行動/抉擇，即時推進後續正文。【字數上限強制執行】prose 嚴格控制在 600~800 字以內，不得超過。
 2. 描寫要求：極致性張力、上位者男性佔有欲、五感溫度、喘息、支配與臣服、細節肢體碰觸、成人情慾拉扯與權謀博弈，使用純台灣繁體中文。
 3. 絕不重複前篇標題與對話，每次推進都是全新事件與衝突升級！
 4. 【數值真實性運算規則】：
