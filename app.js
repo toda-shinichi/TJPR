@@ -1257,7 +1257,7 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
             { role: 'user', content: userPrompt }
           ],
           temperature: LLM_CONFIG.TEMPERATURE,
-          max_tokens: 2500,
+          max_tokens: 4096,
           stream: true
         })
       });
@@ -1591,7 +1591,7 @@ ${characterPromptBlock}
 5. 輸出必須為合法純 JSON 格式（不要包含任何 markdown 標記）：
 {
   "chapterTitle": "第 1 回．【原創吸睛標題】",
-  "prose": "【1000~1500字極具性張力、權謀拉扯與成人情慾描寫的長篇小說正文】",
+  "prose": "【600~800字極具性張力、權謀拉扯與成人情慾描寫的長篇小說正文】",
   "statusPanel": {
     "timeLocation": "具體時空地點（如：2026年5月12日 21:30 台北市士林區...）",
     "tension": 65,
@@ -1670,7 +1670,7 @@ ${characterPromptBlock}
 6. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼標記）：
 {
   "chapterTitle": "第 1 幕 第 ${turnCount} 回：【全新章節標題】",
-  "prose": "【1000~1500字緊接玩家行動推進的長篇小說正文】",
+  "prose": "【600~800字緊接玩家行動推進的長篇小說正文】",
   "statusPanel": {
     "timeLocation": "時空地點",
     "tension": 70,
