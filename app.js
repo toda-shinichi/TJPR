@@ -1156,6 +1156,37 @@ const LLM_CONFIG = {
 /**
  * 健壯的 JSON 自動修復與解析器
  */
+
+/**
+ * 從任意文字中提取第一個完整的 JSON 物件（即使被 markdown 包住）
+ */
+function extractFirstJson(text) {
+  if (!text) return null;
+  // 移除 markdown code fence
+  let clean = text.replace(/^```(?:json)?\s*/im, '').replace(/```\s*$/m, '').trim();
+  
+  // 找第一個 { 和最後一個 }
+  const first = clean.indexOf('{');
+  const last = clean.lastIndexOf('}');
+  if (first === -1 || last === -1 || last <= first) return null;
+  
+  const jsonStr = clean.slice(first, last + 1);
+  try {
+    return JSON.parse(jsonStr);
+  } catch(e) {
+    // 嘗試修復常見問題：prose 裡面的換行沒有轉義
+    try {
+      // 把 "prose": "..." 裡面的原生換行換成 \n
+      const fixed = jsonStr.replace(/"prose"\s*:\s*"([\s\S]*?)"(?=\s*,\s*"[a-zA-Z])/, (m, p1) => {
+        return m.replace(p1, p1.replace(/\n/g, '\\n').replace(/\r/g, '').replace(/"/g, '\\"'));
+      });
+      return JSON.parse(fixed);
+    } catch(e2) {
+      return null;
+    }
+  }
+}
+
 function parseJsonSafely(rawText) {
   if (!rawText) throw new Error('Empty response from LLM');
   let clean = rawText.trim();
@@ -1286,27 +1317,34 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
       
       // Stream 結束，解析最終完整 JSON
       if (fullContent.length > 10) {
+        // 嘗試 1: parseJsonSafely
+        let finalParsed = null;
         try {
-          const finalParsed = parseJsonSafely(fullContent);
-          if (finalParsed && finalParsed.prose) {
-            console.log(`[Worker] Model ${model} succeeded, prose length: ${finalParsed.prose.length}`);
-            return finalParsed;
-          }
-        } catch(e) {
-          console.warn('[Worker] parseJsonSafely failed:', e.message, 'fullContent preview:', fullContent.slice(0, 200));
+          finalParsed = parseJsonSafely(fullContent);
+        } catch(e) { /* ignore */ }
+        
+        // 嘗試 2: extractFirstJson（更寬鬆，處理 markdown 包裹）
+        if (!finalParsed || !finalParsed.prose) {
+          finalParsed = extractFirstJson(fullContent);
         }
-        // 如果 parseJsonSafely 失敗，但我們有 proseStartIdx，用顯示中的文字
+        
+        if (finalParsed && finalParsed.prose) {
+          console.log(`[Worker] Model ${model} succeeded, prose: ${finalParsed.prose.length} chars, choices: ${(finalParsed.choices||[]).length}`);
+          return finalParsed;
+        }
+        
+        // 最後防線: 用已串流的 prose，但回傳空選項（讓 UI 顯示文字，選項之後由重新生成補上）
         if (proseStartIdx !== -1) {
           let rawSlice = fullContent.slice(proseStartIdx);
           rawSlice = rawSlice.replace(/",\s*"[a-zA-Z].*$/s, '');
           const displayProse = rawSlice.replace(/\\n/g, '\n').replace(/\\"/g, '"');
           if (displayProse.length > 50) {
-            console.log('[Worker] Using streamed prose fallback, length:', displayProse.length);
+            console.log('[Worker] JSON parse failed, using streamed prose, length:', displayProse.length);
             return { prose: displayProse, statusPanel: {}, choices: [], chapterTitle: '命運推演' };
           }
         }
       }
-      console.warn(`[Worker] Model ${model} stream finished but no usable content. fullContent length: ${fullContent.length}`);
+      console.warn(`[Worker] No usable content. fullContent(${fullContent.length}): ${fullContent.slice(0, 100)}`);
     } catch (err) {
       console.warn(`[Worker] Model ${model} error:`, err.message);
     }
@@ -1821,7 +1859,7 @@ async function startNewGameWithProfile(profile) {
     const { systemPrompt, userPrompt } = buildFirstTurnPrompt(profile);
     
     hideLoading();
-    const tempChapter = { act: 1, turn: 1, chosenLabel: '【正式開局】', prose: '', statusPanel: {}, choices: [] };
+    const tempChapter = { act: 1, turn: 1, chosenLabel: '【正式開局】', prose: '', statusPanel: null, choices: [] };
     renderStoryStream(tempChapter);
     const proseEl = document.getElementById('stream-prose-content');
     if (proseEl) proseEl.innerHTML = '<span class="animate-pulse text-brand-gold">命運推演中……</span>';
@@ -1923,7 +1961,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
         turn: state.saveState.turnCount,
         chosenLabel: customInput || choiceLabel,
         prose: '',
-        statusPanel: {},
+        statusPanel: null,
         choices: []
       };
       // 我們不把它放進 chapterHistoryList，直接呼叫 renderStoryStream 給它 activeChapter
@@ -3167,7 +3205,23 @@ async function handleRegenerateTurn() {
     showLoading('選項確認中……', '正在重新演算並構思第 1 回開局情節……');
     try {
       const { systemPrompt, userPrompt } = buildFirstTurnPrompt(profile);
-      const regeneratedChapter = await generateStoryFromLLM(systemPrompt, userPrompt);
+      // 先渲染空白卡片，立即隱藏 loading
+      hideLoading();
+      const regenTemp = { act: 1, turn: 1, chosenLabel: '【重新生成】', prose: '', statusPanel: null, choices: [] };
+      renderStoryStream(regenTemp);
+      const rProseEl = document.getElementById('stream-prose-content');
+      if (rProseEl) rProseEl.innerHTML = '<span class="animate-pulse text-brand-gold">重新推演命運中……</span>';
+      let rFirstToken = true, rDidStream = false;
+      const regeneratedChapter = await generateStoryFromLLM(systemPrompt, userPrompt, (streamedProse) => {
+        rDidStream = true;
+        if (rProseEl) {
+          if (rFirstToken) { rProseEl.innerHTML = ''; rFirstToken = false; }
+          const ps = streamedProse.split('\n\n');
+          rProseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p}</p>`).join('');
+          window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
+      });
+      if (rDidStream) regeneratedChapter.skipTypewriter = true;
       regeneratedChapter.act = 1;
       regeneratedChapter.turn = 1;
       regeneratedChapter.chosenLabel = '【正式開局】';
