@@ -1158,34 +1158,103 @@ const LLM_CONFIG = {
  */
 
 /**
- * 從任意文字中提取第一個完整的 JSON 物件（即使被 markdown 包住）
+ * 從任意 LLM 輸出文字中萃取遊戲資料（不依賴 JSON.parse，直接 regex 挖欄位）
+ * 解決模型把換行直接寫在 JSON 字串裡導致解析失敗的問題
  */
-function extractFirstJson(text) {
-  if (!text) return null;
-  // 移除 markdown code fence
-  let clean = text.replace(/^```(?:json)?\s*/im, '').replace(/```\s*$/m, '').trim();
-  
-  // 找第一個 { 和最後一個 }
-  const first = clean.indexOf('{');
-  const last = clean.lastIndexOf('}');
-  if (first === -1 || last === -1 || last <= first) return null;
-  
-  const jsonStr = clean.slice(first, last + 1);
+function extractGameData(rawText) {
+  if (!rawText) return null;
+
+  // 先嘗試標準 JSON parse（最快、最準確）
   try {
-    return JSON.parse(jsonStr);
-  } catch(e) {
-    // 嘗試修復常見問題：prose 裡面的換行沒有轉義
-    try {
-      // 把 "prose": "..." 裡面的原生換行換成 \n
-      const fixed = jsonStr.replace(/"prose"\s*:\s*"([\s\S]*?)"(?=\s*,\s*"[a-zA-Z])/, (m, p1) => {
-        return m.replace(p1, p1.replace(/\n/g, '\\n').replace(/\r/g, '').replace(/"/g, '\\"'));
-      });
-      return JSON.parse(fixed);
-    } catch(e2) {
-      return null;
+    const parsed = parseJsonSafely(rawText);
+    if (parsed && parsed.prose) return parsed;
+  } catch(e) {}
+
+  const result = {
+    chapterTitle: '',
+    prose: '',
+    statusPanel: {},
+    choices: []
+  };
+
+  // ── 萃取簡單字串/數字欄位 ──────────────────────────────────────────────────
+  const getStr = (key) => {
+    const m = rawText.match(new RegExp('"' + key + '"\\s*:\\s*"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"'));
+    return m ? m[1] : '';
+  };
+  const getNum = (key) => {
+    const m = rawText.match(new RegExp('"' + key + '"\\s*:\\s*(-?\\d+)'));
+    return m ? parseInt(m[1]) : null;
+  };
+
+  const title = getStr('chapterTitle');
+  if (title) result.chapterTitle = title;
+
+  const sp = result.statusPanel;
+  const tension = getNum('tension');
+  if (tension !== null) sp.tension = tension;
+  const intox = getNum('intoxication');
+  if (intox !== null) sp.intoxication = intox;
+  const favDelta = getNum('favorabilityDelta');
+  if (favDelta !== null) sp.favorabilityDelta = favDelta;
+
+  ['timeLocation','tensionLabel','intoxicationLabel','favorabilityReason',
+   'outfit','interaction','inventory','rumors'].forEach(key => {
+    const v = getStr(key);
+    if (v) sp[key] = v;
+  });
+
+  // ── 萃取 choices（找 "choices" 陣列區塊後用 regex 逐一解析）──────────────
+  const choicesIdx = rawText.indexOf('"choices"');
+  if (choicesIdx !== -1) {
+    const arrStart = rawText.indexOf('[', choicesIdx);
+    if (arrStart !== -1) {
+      // 找到配對的 ]
+      let depth = 0, arrEnd = -1;
+      for (let i = arrStart; i < rawText.length; i++) {
+        if (rawText[i] === '[') depth++;
+        else if (rawText[i] === ']') { depth--; if (depth === 0) { arrEnd = i; break; } }
+      }
+      const arrStr = rawText.slice(arrStart, arrEnd !== -1 ? arrEnd + 1 : rawText.length);
+      const choiceRx = /\{[^}]*?"id"\s*:\s*"(\w+)"[^}]*?"label"\s*:\s*"([^"]+)"[^}]*?"risk"\s*:\s*"([^"]+)"(?:[^}]*?"hint"\s*:\s*"([^"]*)")?[^}]*?\}/g;
+      for (const m of arrStr.matchAll(choiceRx)) {
+        result.choices.push({ id: m[1], label: m[2], risk: m[3], hint: m[4] || '' });
+      }
     }
   }
+
+  // ── 萃取 prose（逐字元掃描，正確處理 JSON 字串轉義）────────────────────────
+  const proseKeyIdx = rawText.indexOf('"prose"');
+  if (proseKeyIdx !== -1) {
+    const openQuote = rawText.indexOf('"', proseKeyIdx + 7);
+    if (openQuote !== -1) {
+      let i = openQuote + 1;
+      let proseRaw = '';
+      while (i < rawText.length) {
+        const ch = rawText[i];
+        if (ch === '\\') {
+          const next = rawText[i + 1];
+          if (next === 'n') { proseRaw += '\n'; i += 2; }
+          else if (next === '"') { proseRaw += '"'; i += 2; }
+          else if (next === '\\') { proseRaw += '\\'; i += 2; }
+          else { proseRaw += next; i += 2; }
+        } else if (ch === '"') {
+          break; // 找到結束引號
+        } else if (ch === '\n' || ch === '\r') {
+          proseRaw += '\n'; i++; // 直接的換行（非法但兼容）
+        } else {
+          proseRaw += ch; i++;
+        }
+      }
+      result.prose = proseRaw;
+    }
+  }
+
+  return result.prose.length > 20 ? result : null;
 }
+
+// 向後兼容 alias
+function extractFirstJson(text) { return extractGameData(text); }
 
 function parseJsonSafely(rawText) {
   if (!rawText) throw new Error('Empty response from LLM');
@@ -1325,7 +1394,7 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         
         // 嘗試 2: extractFirstJson（更寬鬆，處理 markdown 包裹）
         if (!finalParsed || !finalParsed.prose) {
-          finalParsed = extractFirstJson(fullContent);
+          finalParsed = extractGameData(fullContent);
         }
         
         if (finalParsed && finalParsed.prose) {
@@ -1870,9 +1939,13 @@ async function startNewGameWithProfile(profile) {
          didStream = true;
          if (proseEl) {
              if (isFirstToken) { proseEl.innerHTML = ''; isFirstToken = false; }
-             const ps = streamedProse.split('\n\n');
-             proseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p}</p>`).join('');
-             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+             const ps = streamedProse.split(/\n\n|\n/).filter(p => p.trim());
+             proseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p.trim()}</p>`).join('');
+             // 只在使用者已接近底部（150px內）才自動追蹤捲動，不強制鎖定閱讀位置
+             const distFromBottom = document.body.scrollHeight - window.scrollY - window.innerHeight;
+             if (distFromBottom < 150) {
+               window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+             }
          }
     });
     if (didStream) initialChapter.skipTypewriter = true;
@@ -1976,9 +2049,13 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
          if (proseEl) {
              if (isFirstToken) { proseEl.innerHTML = ''; isFirstToken = false; }
              // 轉換段落
-             const ps = streamedProse.split('\n\n');
-             proseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p}</p>`).join('');
-             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+             const ps = streamedProse.split(/\n\n|\n/).filter(p => p.trim());
+             proseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p.trim()}</p>`).join('');
+             // 只在使用者已接近底部（150px內）才自動追蹤捲動，不強制鎖定閱讀位置
+             const distFromBottom = document.body.scrollHeight - window.scrollY - window.innerHeight;
+             if (distFromBottom < 150) {
+               window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+             }
          }
       });
       if (didStream) nextChapter.skipTypewriter = true;
@@ -2097,7 +2174,7 @@ function renderStoryStream(activeChapter) {
     const section = document.createElement('section');
     section.className = 'bg-brand-surface/70 border border-brand-border/60 rounded-2xl p-5 sm:p-7 space-y-4 shadow-lg text-slate-300 opacity-90 transition';
 
-    const paragraphs = (past.prose || '').split('\n\n');
+    const paragraphs = (past.prose || '').split(/\n\n|\n/).filter(p => p.trim());
     const paragraphsHtml = paragraphs.map(p => `<p class="mb-4 leading-relaxed indent-6 sm:indent-8 select-text">${p.trim()}</p>`).join('');
 
     let decisionPill = past.chosenLabel && past.chosenLabel !== '【正式開局】' ? `
@@ -2206,8 +2283,8 @@ function renderStoryStream(activeChapter) {
   const cleanProse = activeChapter.prose || '';
 
   if (activeChapter.skipTypewriter) {
-    const ps = cleanProse.split('\\n\\n');
-    proseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p}</p>`).join('');
+    const ps = cleanProse.split(/\n\n|\n/).filter(p => p.trim());
+    proseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p.trim()}</p>`).join('');
     renderChoices(activeChapter.choices || []);
   } else {
     streamTypewriterEffect(cleanProse, proseEl, null, () => {
@@ -3216,7 +3293,7 @@ async function handleRegenerateTurn() {
         rDidStream = true;
         if (rProseEl) {
           if (rFirstToken) { rProseEl.innerHTML = ''; rFirstToken = false; }
-          const ps = streamedProse.split('\n\n');
+          const ps = streamedProse.split(/\n\n|\n/).filter(p => p.trim());
           rProseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p}</p>`).join('');
           window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
         }
