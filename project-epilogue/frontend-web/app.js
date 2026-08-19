@@ -1282,6 +1282,9 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
       }
     } catch (err) {
       console.warn(`[Stream Error] Model ${model}:`, err.message);
+      if (model === LLM_CONFIG.PRIMARY_MODEL) {
+        alert("Worker Proxy 連線失敗或被阻擋，正退回安全模式...\n原因: " + err.message);
+      }
     }
   }
   throw new Error('Worker Streaming failed.');
