@@ -1211,10 +1211,9 @@ async function waitForRpmCooldown() {
  */
 
 async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt, onStreamUpdate) {
-  const modelsToTry = [LLM_CONFIG.PRIMARY_MODEL, LLM_CONFIG.FALLBACK_MODEL, 'gemini-1.5-pro', 'gpt-4o-mini'];
+  const modelsToTry = [LLM_CONFIG.PRIMARY_MODEL, LLM_CONFIG.FALLBACK_MODEL].filter(Boolean);
   
   for (const model of modelsToTry) {
-    if (!model) continue;
     try {
       const response = await fetch(workerUrl, {
         method: 'POST',
@@ -1231,15 +1230,14 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`Worker HTTP ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Worker HTTP ${response.status}`);
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let fullContent = "";
-      let displayedProse = "";
       let buffer = "";
+      // 用來即時顯示的狀態
+      let proseStartIdx = -1; // 在 fullContent 中 prose 值起始的 index
 
       while (true) {
         const { done, value } = await reader.read();
@@ -1249,45 +1247,70 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         buffer += chunk;
         const lines = buffer.split('\n');
         buffer = lines.pop();
-        
+
         for (const line of lines) {
-          if (line.trim() === '') continue;
-          if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-            try {
-              const parsed = JSON.parse(line.slice(6));
-              const token = parsed.choices[0].delta.content || '';
-              fullContent += token;
-              
-              // 實時解析 JSON 中的 prose
-              const match = fullContent.match(/"prose"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"statusPanel"|"\s*,\s*"dynamic"|"\s*,\s*"choices"|"$|$)/);
-              if (match && onStreamUpdate) {
-                 const currentProse = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-                 if (currentProse.length > displayedProse.length) {
-                   displayedProse = currentProse;
-                   onStreamUpdate(displayedProse);
-                 }
+          if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+          try {
+            const parsed = JSON.parse(line.slice(6));
+            const token = parsed?.choices?.[0]?.delta?.content ?? '';
+            if (!token) continue;
+            fullContent += token;
+
+            // 即時顯示：找到 "prose": " 之後才開始串流
+            if (onStreamUpdate) {
+              if (proseStartIdx === -1) {
+                // 找 "prose" key 後面的開頭引號
+                const keyMatch = fullContent.match(/"prose"\s*:\s*"/);
+                if (keyMatch) {
+                  proseStartIdx = fullContent.indexOf(keyMatch[0]) + keyMatch[0].length;
+                }
               }
-            } catch (e) {
-               // ignore incomplete JSON chunks
+              if (proseStartIdx !== -1) {
+                // 從 proseStartIdx 開始，去掉結尾可能的 ", 或 "} 等
+                let rawSlice = fullContent.slice(proseStartIdx);
+                // 移除結尾的 JSON 結構（如果 prose 已結束）
+                rawSlice = rawSlice.replace(/",\s*"[a-zA-Z].*$/s, '');
+                // 解碼 JSON 轉義字元
+                const displayProse = rawSlice.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+                if (displayProse.length > 0) {
+                  onStreamUpdate(displayProse);
+                }
+              }
             }
+          } catch (e) {
+            // 忽略不完整的 JSON chunk
           }
         }
       }
       
-      const finalParsed = parseJsonSafely(fullContent);
-      if (finalParsed && finalParsed.prose) {
-         return finalParsed;
-      } else {
-         if (displayedProse) return { prose: displayedProse, statusPanel: {}, choices: [] };
+      // Stream 結束，解析最終完整 JSON
+      if (fullContent.length > 10) {
+        try {
+          const finalParsed = parseJsonSafely(fullContent);
+          if (finalParsed && finalParsed.prose) {
+            console.log(`[Worker] Model ${model} succeeded, prose length: ${finalParsed.prose.length}`);
+            return finalParsed;
+          }
+        } catch(e) {
+          console.warn('[Worker] parseJsonSafely failed:', e.message, 'fullContent preview:', fullContent.slice(0, 200));
+        }
+        // 如果 parseJsonSafely 失敗，但我們有 proseStartIdx，用顯示中的文字
+        if (proseStartIdx !== -1) {
+          let rawSlice = fullContent.slice(proseStartIdx);
+          rawSlice = rawSlice.replace(/",\s*"[a-zA-Z].*$/s, '');
+          const displayProse = rawSlice.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+          if (displayProse.length > 50) {
+            console.log('[Worker] Using streamed prose fallback, length:', displayProse.length);
+            return { prose: displayProse, statusPanel: {}, choices: [], chapterTitle: '命運推演' };
+          }
+        }
       }
+      console.warn(`[Worker] Model ${model} stream finished but no usable content. fullContent length: ${fullContent.length}`);
     } catch (err) {
-      console.warn(`[Stream Error] Model ${model}:`, err.message);
-      if (model === LLM_CONFIG.PRIMARY_MODEL) {
-        alert("Worker Proxy 連線失敗或被阻擋，正退回安全模式...\n原因: " + err.message);
-      }
+      console.warn(`[Worker] Model ${model} error:`, err.message);
     }
   }
-  throw new Error('Worker Streaming failed.');
+  throw new Error('Worker Streaming failed, falling back to GAS.');
 }
 
 async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = null) {
