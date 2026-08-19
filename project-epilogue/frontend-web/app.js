@@ -825,11 +825,14 @@ async function checkAuthAndInitUser() {
       state.driveFolderId = data.data.driveFolderId || state.driveFolderId;
       if (state.driveFolderId) localStorage.setItem('undercurrent_drive_folder_id', state.driveFolderId);
       console.log('[Auth] Token verified with cloud backend.');
+      updateUserBadgeUI('active');
     } else {
       console.warn('[Auth] Token verification failed, running in local mode.');
+      updateUserBadgeUI('expired');
     }
   } catch (err) {
     console.warn('[Auth] Cloud verification skipped (offline or unavailable):', err.message);
+    updateUserBadgeUI('offline');
   }
 }
 
@@ -1094,10 +1097,38 @@ if (typeof window !== 'undefined') {
   window.loadStateFromCloud = loadStateFromCloud;
 }
 
-function updateUserBadgeUI() {
+function updateUserBadgeUI(status = 'active') {
   const name = state.username || '未登入';
-  if (dom.usernameDisplay) dom.usernameDisplay.textContent = name;
-  if (dom.homeUsernameDisplay) dom.homeUsernameDisplay.textContent = name;
+  let displayText = name;
+  let colorClass = 'text-brand-gold';
+  
+  if (status === 'expired') {
+    displayText = '⚠️ ' + name + ' (已過期)';
+    colorClass = 'text-red-400';
+  } else if (status === 'offline') {
+    displayText = '☁️ ' + name + ' (離線)';
+    colorClass = 'text-gray-400';
+  }
+
+  const updateEl = (el) => {
+    if (!el) return;
+    el.textContent = displayText;
+    el.classList.remove('text-brand-gold', 'text-red-400', 'text-gray-400');
+    el.classList.add(colorClass);
+    
+    if (status === 'expired') {
+      el.style.cursor = 'pointer';
+      el.onclick = openAuthModal;
+      el.title = '點擊重新登入以啟用雲端同步';
+    } else {
+      el.style.cursor = '';
+      el.onclick = null;
+      el.title = '';
+    }
+  };
+
+  updateEl(dom.usernameDisplay);
+  updateEl(dom.homeUsernameDisplay);
 }
 
 // =========================================================================
