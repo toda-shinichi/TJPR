@@ -1800,7 +1800,9 @@ async function startNewGameWithProfile(profile) {
     if (proseEl) proseEl.innerHTML = '<span class="animate-pulse text-brand-gold">命運推演中……</span>';
     
     let isFirstToken = true;
+    let didStream = false;
     initialChapter = await generateStoryFromLLM(systemPrompt, userPrompt, (streamedProse) => {
+         didStream = true;
          if (proseEl) {
              if (isFirstToken) { proseEl.innerHTML = ''; isFirstToken = false; }
              const ps = streamedProse.split('\n\n');
@@ -1808,7 +1810,7 @@ async function startNewGameWithProfile(profile) {
              window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
          }
     });
-    initialChapter.skipTypewriter = true;
+    if (didStream) initialChapter.skipTypewriter = true;
   } catch (aiErr) {
     console.error('[Pure AI] First turn generation error:', aiErr);
     alert('AI 大模型生成逾時，正在為您重新連接……');
@@ -1903,7 +1905,9 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
       if (proseEl) proseEl.innerHTML = '<span class="animate-pulse text-brand-gold">命運推演中……</span>';
       
       let isFirstToken = true;
+      let didStream = false;
       nextChapter = await generateStoryFromLLM(systemPrompt, userPrompt, (streamedProse) => {
+         didStream = true;
          if (proseEl) {
              if (isFirstToken) { proseEl.innerHTML = ''; isFirstToken = false; }
              // 轉換段落
@@ -1912,8 +1916,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
              window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
          }
       });
-      // 成功後，為了不觸發舊的 typewriter，我們給 nextChapter 加個 flag
-      nextChapter.skipTypewriter = true;
+      if (didStream) nextChapter.skipTypewriter = true;
     } catch (llmErr) {
       console.warn('[Pure AI] Next turn LLM call failed, generating dynamic fallback turn:', llmErr);
       nextChapter = {
