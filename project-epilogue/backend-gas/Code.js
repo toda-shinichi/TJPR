@@ -77,6 +77,9 @@ function doPost(e) {
           driveFolderId: userSession.driveFolderId
         });
 
+      case 'llm/proxy':
+        return handleLLMProxy(userSession, payload);
+
       case 'novel/init':
         return handleNovelInit(userSession, payload);
 
@@ -122,6 +125,7 @@ function testCreateTelemetrySheet() {
  */
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
+
 
   if (action === 'init-telemetry' || action === 'init-sheet') {
     try {
@@ -593,4 +597,19 @@ function adminPopulateEverything() {
 
   console.log('=== 全域雲端修復與資料庫填充完成 ===');
   return { success: true };
+}
+
+/**
+ * Pure LLM Proxy to hide API Key
+ */
+function handleLLMProxy(userSession, payload) {
+  try {
+    var result = AIService.callAPI(payload.model, payload.messages, {
+      temperature: payload.temperature,
+      max_tokens: payload.max_tokens
+    });
+    return createSuccessResponse(result);
+  } catch (e) {
+    return createErrorResponse('LLM Proxy failed: ' + e.message, 502);
+  }
 }

@@ -1145,7 +1145,7 @@ const NARRATIVE_MODELS = [
 
 const LLM_CONFIG = {
   API_URL: 'https://api.banana2556.com/v1/chat/completions',
-  API_KEY: 'sk-TcKczU9MQ5abSWYrF51eU85aQjZV6IzPqeypYYn9zVDoSram',
+  API_KEY: '', // 安全起見，已轉移至 GAS Proxy
   PRIMARY_MODEL: 'mistral-large-3',
   FALLBACK_MODEL: 'gemini-3.6-flash',
   MODELS: NARRATIVE_MODELS,
@@ -1217,9 +1217,7 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
     'aion-3.0',
     'gpt-5.6-luna'
   ];
-
   await waitForRpmCooldown();
-
   for (let mIdx = 0; mIdx < models.length; mIdx++) {
     const model = models[mIdx];
     try {
@@ -1227,68 +1225,52 @@ async function generateStoryFromLLM(systemPrompt, userPrompt) {
       state.currentAbortController = controller;
       const timeoutId = setTimeout(() => {
         if (controller) controller.abort();
-      }, 25000); // 25 秒極速換線保護
-
+      }, 50000); // 延長至 50 秒以配合 GAS 代理
       const fetchOptions = {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${LLM_CONFIG.API_KEY}`
+          'Content-Type': 'text/plain;charset=utf-8'
         },
         body: JSON.stringify({
+          action: 'llm/proxy',
           model: model,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ],
           temperature: LLM_CONFIG.TEMPERATURE,
-          max_tokens: 2500
-        })
+          max_tokens: 2500,
+          token: state.token,
+          userId: state.userId
+        }),
+        redirect: 'follow'
       };
       if (controller) {
         fetchOptions.signal = controller.signal;
       }
-
-      const response = await fetch(LLM_CONFIG.API_URL, fetchOptions);
+      const response = await fetch(state.gasApiUrl, fetchOptions);
       clearTimeout(timeoutId);
       lastRequestTimestamp = Date.now();
-
-      if (response.status === 429) {
-        console.warn(`[Pure AI] Rate Limit. Waiting 12s cooldown...`);
-        let cd = 12;
-        while (cd > 0) {
-          if (dom.loadingText) dom.loadingText.textContent = `筆觸冷卻中（剩餘 ${cd} 秒）……`;
-          if (dom.loadingSubtext) dom.loadingSubtext.textContent = '正在為您自動重試推進，請稍候……';
-          await new Promise(r => setTimeout(r, 1000));
-          cd--;
-        }
-        lastRequestTimestamp = Date.now();
-        continue;
-      }
-
       if (!response.ok) {
         const errText = await response.text();
         console.warn(`[Pure AI] Model ${model} HTTP ${response.status}: ${errText.slice(0, 100)}`);
         continue;
       }
-
       const data = await response.json();
-      const rawContent = data.choices?.[0]?.message?.content;
-      if (!rawContent) {
-        console.warn(`[Pure AI] Model ${model} returned empty content.`);
+      if (!data.success || !data.data || !data.data.content) {
+        console.warn(`[Pure AI] Model ${model} returned empty or failed content via proxy.`);
         continue;
       }
-
+      const rawContent = data.data.content;
       const parsed = parseJsonSafely(rawContent);
       if (parsed && parsed.prose) {
-        console.log(`[Pure AI] Successfully generated with model: ${model} (${parsed.prose.length} chars)`);
+        console.log(`[Pure AI] Successfully generated with model: ${model} via proxy (${parsed.prose.length} chars)`);
         return parsed;
       }
     } catch (err) {
       console.warn(`[Pure AI] Model ${model} attempt error:`, err.message);
     }
   }
-
   throw new Error('所有 AI 創作模型生成逾時或回傳格式異常，請檢查網路連線。');
 }
 
@@ -2032,11 +2014,11 @@ function renderStoryStream(activeChapter) {
     renderChoices(activeChapter.choices || []);
   });
 
-  setTimeout(() => {
-    if (activeSection && typeof activeSection.scrollIntoView === 'function') {
-      activeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, 100);
+//  setTimeout(() => {
+//    if (activeSection && typeof activeSection.scrollIntoView === 'function') {
+//      activeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+//    }
+//  }, 100);
 }
 
 function streamTypewriterEffect(fullText, targetEl, skipBtn, onComplete) {
@@ -2052,7 +2034,7 @@ function streamTypewriterEffect(fullText, targetEl, skipBtn, onComplete) {
   currentP.className = 'mb-6 indent-6 sm:indent-8';
   targetEl.appendChild(currentP);
 
-  const speedMs = 10;
+  const baseSpeedMs = 30;
 
   function typeNext() {
     if (state.skipTypewriterTriggered || !state.isTyping) {
@@ -2071,9 +2053,22 @@ function streamTypewriterEffect(fullText, targetEl, skipBtn, onComplete) {
     if (pIdx < paragraphs.length) {
       const curText = paragraphs[pIdx];
       if (charIdx < curText.length) {
-        currentP.textContent += curText.charAt(charIdx);
+        const char = curText.charAt(charIdx);
+        currentP.textContent += char;
         charIdx++;
-        state.typewriterTimer = setTimeout(typeNext, speedMs);
+        
+        // 智能標點符號停頓
+        let nextSpeed = baseSpeedMs;
+        if (char === '，' || char === '、') {
+          nextSpeed = 150;
+        } else if (char === '。' || char === '！' || char === '？' || char === '…') {
+          nextSpeed = 300;
+        } else {
+          // 隨機微調一般打字速度以增加擬真感
+          nextSpeed = baseSpeedMs + (Math.random() * 20 - 10);
+        }
+        
+        state.typewriterTimer = setTimeout(typeNext, nextSpeed);
       } else {
         pIdx++;
         charIdx = 0;
@@ -2081,7 +2076,7 @@ function streamTypewriterEffect(fullText, targetEl, skipBtn, onComplete) {
           currentP = document.createElement('p');
           currentP.className = 'mb-6 indent-6 sm:indent-8';
           targetEl.appendChild(currentP);
-          state.typewriterTimer = setTimeout(typeNext, speedMs * 3);
+          state.typewriterTimer = setTimeout(typeNext, 500); // 換行停頓更長
         } else {
           state.isTyping = false;
           if (onComplete) onComplete();
@@ -3088,15 +3083,13 @@ function startServerCooldown(seconds) {
   }, 1000);
 }
 
-const ROTATING_PROGRESS_STEPS = [
-  '選項確認中……',
-  '角色意向確認中……',
-  '劇情故事產生中……',
-  '場景世界建構中……',
-  '人物言行確認中……',
-  '內容產出中……',
-  '邏輯校正中……',
-  '請稍候……'
+const WAIT_ANIMATION_TEXTS = [
+  '他似乎正在斟酌用詞...',
+  '他沒有立刻回答...',
+  '他靜靜地看著你...',
+  '對方若有所思...',
+  '空氣中陷入短暫的沉默...',
+  '你們之間陷入了一陣安靜...'
 ];
 
 let loadingTimer = null;
@@ -3106,27 +3099,37 @@ function showLoading(initialText, initialSubtext) {
   if (dom.loadingOverlay) {
     dom.loadingOverlay.style.display = 'flex';
     
-    let stepIndex = 0;
-    if (dom.loadingText) dom.loadingText.textContent = initialText || ROTATING_PROGRESS_STEPS[0];
-    if (dom.loadingSubtext) dom.loadingSubtext.textContent = initialSubtext || '正在依照當前局勢動態演算與鋪陳情節……';
+    let stepIndex = Math.floor(Math.random() * WAIT_ANIMATION_TEXTS.length);
+    
+    if (dom.loadingText) {
+      dom.loadingText.textContent = WAIT_ANIMATION_TEXTS[stepIndex];
+      dom.loadingText.classList.add('animate-pulse', 'text-brand-gold');
+      dom.loadingText.style.transition = 'opacity 0.5s ease-in-out';
+    }
+    if (dom.loadingSubtext) {
+      dom.loadingSubtext.textContent = '暗流湧動，命運推演中……';
+    }
     
     let secondsElapsed = 0;
     const timerSpan = document.getElementById('loading-timer-badge');
-    if (timerSpan) timerSpan.textContent = `已耗時 0 秒`;
+    if (timerSpan) timerSpan.textContent = ''; // 隱藏生硬的計時器
 
     if (loadingTimer) clearInterval(loadingTimer);
     loadingTimer = setInterval(() => {
       secondsElapsed++;
-      if (timerSpan) timerSpan.textContent = `已耗時 ${secondsElapsed} 秒`;
     }, 1000);
 
     if (loadingStepInterval) clearInterval(loadingStepInterval);
     loadingStepInterval = setInterval(() => {
-      stepIndex = (stepIndex + 1) % ROTATING_PROGRESS_STEPS.length;
+      stepIndex = (stepIndex + 1) % WAIT_ANIMATION_TEXTS.length;
       if (dom.loadingText) {
-        dom.loadingText.textContent = ROTATING_PROGRESS_STEPS[stepIndex];
+        dom.loadingText.style.opacity = '0';
+        setTimeout(() => {
+          dom.loadingText.textContent = WAIT_ANIMATION_TEXTS[stepIndex];
+          dom.loadingText.style.opacity = '1';
+        }, 500);
       }
-    }, 4000);
+    }, 8000);
   }
 }
 
@@ -3141,6 +3144,10 @@ function hideLoading() {
   }
   if (dom.loadingOverlay) {
     dom.loadingOverlay.style.display = 'none';
+  }
+  if (dom.loadingText) {
+    dom.loadingText.style.opacity = '1';
+    dom.loadingText.classList.remove('animate-pulse', 'text-brand-gold');
   }
   state.currentAbortController = null;
 }

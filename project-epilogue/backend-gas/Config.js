@@ -14,7 +14,7 @@ const CONFIG = {
   // API 伺服器設定 (OpenAI 兼容端點)
   API: {
     BASE_URL: 'https://api.banana2556.com/v1/chat/completions',
-    API_KEY: 'sk-TcKczU9MQ5abSWYrF51eU85aQjZV6IzPqeypYYn9zVDoSram',
+    API_KEY: '', // 已安全轉移至 GAS 環境變數
     RPM_LIMIT: 5,                   // 每分鐘最多 5 次請求 (Rate Limit: 5 RPM)
     MIN_REQUEST_INTERVAL_MS: 12500, // 兩次請求間隔至少 12.5 秒 (60s/5 + 0.5s 緩衝)
     TIMEOUT_MS: 55000,              // Apps Script UrlFetchApp 55 秒逾時保護
