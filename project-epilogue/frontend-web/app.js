@@ -2134,9 +2134,15 @@ function renderStoryStream(activeChapter) {
   const proseEl = document.getElementById('stream-prose-content');
   const cleanProse = activeChapter.prose || '';
 
-  streamTypewriterEffect(cleanProse, proseEl, null, () => {
+  if (activeChapter.skipTypewriter) {
+    const ps = cleanProse.split('\\n\\n');
+    proseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p}</p>`).join('');
     renderChoices(activeChapter.choices || []);
-  });
+  } else {
+    streamTypewriterEffect(cleanProse, proseEl, null, () => {
+      renderChoices(activeChapter.choices || []);
+    });
+  }
 
 //  setTimeout(() => {
 //    if (activeSection && typeof activeSection.scrollIntoView === 'function') {
