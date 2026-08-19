@@ -1144,6 +1144,7 @@ const NARRATIVE_MODELS = [
 ];
 
 const LLM_CONFIG = {
+  WORKER_URL: 'https://tjpr-llm-proxy.todashinchi.workers.dev/',
   API_URL: 'https://api.banana2556.com/v1/chat/completions',
   API_KEY: '', // 安全起見，已轉移至 GAS Proxy
   PRIMARY_MODEL: 'mistral-large-3',
