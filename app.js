@@ -1239,13 +1239,16 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
       const decoder = new TextDecoder("utf-8");
       let fullContent = "";
       let displayedProse = "";
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         
         const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        buffer += chunk;
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
         
         for (const line of lines) {
           if (line.trim() === '') continue;
