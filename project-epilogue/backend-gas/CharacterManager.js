@@ -404,7 +404,7 @@ var CharacterManager = (function() {
     // 若無快取，嘗試從 Drive 讀取或使用內建名冊
     var roster = OFFICIAL_ROSTER;
     try {
-      if (typeof StorageService !== 'undefined' && StorageService.loadCharacterMarkdown) {
+      if (typeof StorageService !== 'undefined' && StorageService.getCharacterMarkdown) {
         // 可從 Drive 讀取自定義 Roster_Index.json
       }
     } catch (err) {
@@ -433,11 +433,11 @@ var CharacterManager = (function() {
 
     var content = '';
     try {
-      if (typeof StorageService !== 'undefined' && StorageService.loadCharacterMarkdown) {
-        content = StorageService.loadCharacterMarkdown(characterFileName);
+      if (typeof StorageService !== 'undefined' && StorageService.getCharacterMarkdown) {
+        content = StorageService.getCharacterMarkdown(characterFileName);
       }
     } catch (e) {
-      console.warn('StorageService.loadCharacterMarkdown error for ' + characterFileName + ':', e);
+      console.warn('StorageService.getCharacterMarkdown error for ' + characterFileName + ':', e);
     }
 
     // 若無內容，組裝預設官方骨架

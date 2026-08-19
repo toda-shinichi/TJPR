@@ -796,18 +796,40 @@ function closeDrawer() {
 // 3. 帳號門禁與認證管理 (Authentication)
 // ==========================================
 
-function checkAuthAndInitUser() {
+async function checkAuthAndInitUser() {
   const storedUser = localStorage.getItem('undercurrent_user_name');
   const storedToken = localStorage.getItem('undercurrent_auth_token');
   
   if (!storedUser || !storedToken) {
     openAuthModal();
-  } else {
-    state.username = storedUser;
-    state.token = storedToken;
-    state.userId = localStorage.getItem('undercurrent_user_id') || ('usr_' + Date.now());
-    updateUserBadgeUI();
-    closeAuthModal();
+    return;
+  }
+
+  state.username = storedUser;
+  state.token = storedToken;
+  state.userId = localStorage.getItem('undercurrent_user_id') || ('usr_' + Date.now());
+  state.driveFolderId = localStorage.getItem('undercurrent_drive_folder_id') || '';
+  updateUserBadgeUI();
+  closeAuthModal();
+
+  // Background token verification (non-blocking)
+  try {
+    const res = await fetch(state.gasApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'auth/verify', token: storedToken, userId: state.userId }),
+      redirect: 'follow'
+    });
+    const data = await res.json();
+    if (data.success && data.data) {
+      state.driveFolderId = data.data.driveFolderId || state.driveFolderId;
+      if (state.driveFolderId) localStorage.setItem('undercurrent_drive_folder_id', state.driveFolderId);
+      console.log('[Auth] Token verified with cloud backend.');
+    } else {
+      console.warn('[Auth] Token verification failed, running in local mode.');
+    }
+  } catch (err) {
+    console.warn('[Auth] Cloud verification skipped (offline or unavailable):', err.message);
   }
 }
 
@@ -863,65 +885,122 @@ async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManua
 
     console.log('[Cloud Sync] Transmitting live game data to Google Drive...', payload);
 
-    // 嘗試向 Google Apps Script 後端推播存檔與小說章節
-    fetch(state.gasApiUrl, {
+    const res = await fetch(state.gasApiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload),
-      mode: 'no-cors' // Google Apps Script Web App 跨域支援
-    }).then(() => {
-      console.log('[Cloud Sync] Successfully triggered Google Drive (Player_Saves) synchronization.');
-      if (isManual) {
-        alert('☁️ 【雲端同步完成】\n已成功將您當前的「真實玩家人設 (Player_Profile.json)」、「完整小說正文 (Full_Novel.md)」、「長期劇情摘要 (Summary_Pool.md)」與「好感度存檔 (save_slot.json)」全數手動同步至雲端（可跨裝置遊戲）！');
-      }
-    }).catch(e => {
-      console.warn('[Cloud Sync] Background cloud sync warning (silent fallback):', e.message);
-      if (isManual) {
-        alert('雲端同步已發送至雲端後台處理中（可跨裝置遊戲）。');
-      }
+      redirect: 'follow'
     });
+
+    const data = await res.json();
+    if (data.success) {
+      console.log('[Cloud Sync] Successfully synchronized to Google Drive.');
+      if (isManual) {
+        alert('雲端同步完成！遊戲進度已成功儲存至 Google Drive。');
+      }
+    } else {
+      console.warn('[Cloud Sync] Backend returned error:', data.error);
+      if (isManual) {
+        alert('雲端同步失敗：' + (data.error?.message || '伺服器回應異常') + '\n遊戲進度已保存於本機。');
+      }
+    }
   } catch (err) {
-    console.warn('[Cloud Sync] Sync dispatch skipped:', err.message);
-    if (isManual) alert('同步請求發送失敗：' + err.message);
+    console.warn('[Cloud Sync] Sync failed:', err.message);
+    if (isManual) {
+      alert('雲端伺服器暫時無法連線，遊戲進度已保存於本機。\n錯誤：' + err.message);
+    }
   }
 }
 
-function handleLogin(e) {
+async function handleLogin(e) {
   e.preventDefault();
   const username = document.getElementById('login-username').value.trim();
   const pass = document.getElementById('login-password').value.trim();
   if (!username || !pass) return alert('請輸入帳號與密碼！');
 
-  state.username = username;
-  state.token = 'tok_' + Date.now();
-  state.userId = 'usr_' + btoa(encodeURIComponent(username)).slice(0, 12);
-  
-  localStorage.setItem('undercurrent_user_name', state.username);
-  localStorage.setItem('undercurrent_auth_token', state.token);
-  localStorage.setItem('undercurrent_user_id', state.userId);
-  
-  updateUserBadgeUI();
-  closeAuthModal();
-  alert(`✦ 歡迎回來，${username}！已成功登入。`);
+  const email = username.includes('@') ? username : `${username}@undercurrent.game`;
+  const submitBtn = document.querySelector('#login-form button[type="submit"]');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '登入中...'; }
+
+  try {
+    const res = await fetch(state.gasApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'auth/login', email: email, password: pass }),
+      redirect: 'follow'
+    });
+    const data = await res.json();
+    if (data.success && data.data && data.data.token) {
+      state.username = username;
+      state.token = data.data.token;
+      state.userId = data.data.userId;
+      state.driveFolderId = data.data.driveFolderId || '';
+      localStorage.setItem('undercurrent_user_name', state.username);
+      localStorage.setItem('undercurrent_auth_token', state.token);
+      localStorage.setItem('undercurrent_user_id', state.userId);
+      if (state.driveFolderId) localStorage.setItem('undercurrent_drive_folder_id', state.driveFolderId);
+      updateUserBadgeUI();
+      closeAuthModal();
+      alert('歡迎回來，' + username + '！已成功登入。');
+    } else {
+      alert('登入失敗：' + (data.error?.message || '帳號或密碼錯誤，請重新輸入。'));
+    }
+  } catch (err) {
+    console.error('[Login Error]', err);
+    // Fallback to local-only mode
+    state.username = username;
+    state.token = 'tok_local_' + Date.now();
+    state.userId = 'usr_' + btoa(encodeURIComponent(username)).slice(0, 12);
+    localStorage.setItem('undercurrent_user_name', state.username);
+    localStorage.setItem('undercurrent_auth_token', state.token);
+    localStorage.setItem('undercurrent_user_id', state.userId);
+    updateUserBadgeUI();
+    closeAuthModal();
+    alert('雲端伺服器暫時無法連線，已以本機模式登入。遊戲進度僅儲存於本機。');
+  } finally {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '登入'; }
+  }
 }
 
-function handleRegister(e) {
+async function handleRegister(e) {
   e.preventDefault();
   const username = document.getElementById('reg-username').value.trim();
   const pass = document.getElementById('reg-password').value.trim();
   if (!username || !pass || pass.length < 6) return alert('請輸入完整帳號與至少 6 碼密碼！');
 
-  state.username = username;
-  state.token = 'tok_' + Date.now();
-  state.userId = 'usr_' + btoa(encodeURIComponent(username)).slice(0, 12);
-  
-  localStorage.setItem('undercurrent_user_name', state.username);
-  localStorage.setItem('undercurrent_auth_token', state.token);
-  localStorage.setItem('undercurrent_user_id', state.userId);
-  
-  updateUserBadgeUI();
-  closeAuthModal();
-  alert(`🎉 恭喜註冊成功！歡迎踏入《暗流》，${username}。`);
+  const email = username.includes('@') ? username : `${username}@undercurrent.game`;
+  const submitBtn = document.querySelector('#register-form button[type="submit"]');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '註冊中...'; }
+
+  try {
+    const res = await fetch(state.gasApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'auth/register', email: email, password: pass }),
+      redirect: 'follow'
+    });
+    const data = await res.json();
+    if (data.success && data.data && data.data.token) {
+      state.username = username;
+      state.token = data.data.token;
+      state.userId = data.data.userId;
+      state.driveFolderId = data.data.driveFolderId || '';
+      localStorage.setItem('undercurrent_user_name', state.username);
+      localStorage.setItem('undercurrent_auth_token', state.token);
+      localStorage.setItem('undercurrent_user_id', state.userId);
+      if (state.driveFolderId) localStorage.setItem('undercurrent_drive_folder_id', state.driveFolderId);
+      updateUserBadgeUI();
+      closeAuthModal();
+      alert('註冊成功！歡迎踏入《暗流》，' + username + '。');
+    } else {
+      alert('註冊失敗：' + (data.error?.message || '伺服器回應異常，請稍後再試。'));
+    }
+  } catch (err) {
+    console.error('[Register Error]', err);
+    alert('無法連線至雲端伺服器，請檢查網路或稍後再試。\n錯誤：' + err.message);
+  } finally {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '立即註冊'; }
+  }
 }
 
 function handleLogout() {
@@ -935,11 +1014,21 @@ function handleLogout() {
   }
 }
 
-function handleDeleteAccount() {
-  const confirmName = prompt(`⚠️ 危險操作：註銷帳號將永久抹除您的身分與雲端全部存檔！\n\n若確定註銷，請在此輸入您的帳號名稱「${state.username}」：`);
+async function handleDeleteAccount() {
+  const confirmName = prompt('危險操作：註銷帳號將永久抹除您的身分與雲端全部存檔！\n\n若確定註銷，請在此輸入您的帳號名稱「' + state.username + '」：');
   if (confirmName === state.username) {
+    try {
+      await fetch(state.gasApiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'auth/delete-account', token: state.token, userId: state.userId }),
+        redirect: 'follow'
+      });
+    } catch (err) {
+      console.warn('[Delete Account] Cloud deletion may have failed:', err.message);
+    }
     localStorage.clear();
-    alert('您的帳號及所有本機檔案已全數註銷刪除。');
+    alert('您的帳號及所有檔案已全數註銷刪除。');
     location.reload();
   } else if (confirmName !== null) {
     alert('輸入名稱不相符，已取消註銷操作。');
@@ -957,6 +1046,52 @@ function handleClearAllData() {
     alert('本機存檔資料已清空重置。');
     location.reload();
   }
+}
+
+/**
+ * 從雲端載入存檔（跨裝置接續遊玩）
+ */
+async function loadStateFromCloud() {
+  if (!state.token || state.token.startsWith('tok_local_')) {
+    alert('您目前為本機模式，請先使用雲端帳號登入後再載入雲端存檔。');
+    return;
+  }
+
+  try {
+    const res = await fetch(state.gasApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'novel/load-state',
+        token: state.token,
+        userId: state.userId
+      }),
+      redirect: 'follow'
+    });
+    const data = await res.json();
+    if (data.success && data.data) {
+      const cloudSave = data.data;
+      if (cloudSave.saveState) {
+        state.saveState = cloudSave.saveState;
+        localStorage.setItem('undercurrent_current_save_state', JSON.stringify(cloudSave.saveState));
+      }
+      if (cloudSave.chapter) {
+        state.chapterData = cloudSave.chapter;
+        localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(cloudSave.chapter));
+      }
+      alert('雲端存檔已成功載入！可以繼續遊玩。');
+      console.log('[Cloud Load] State loaded from Google Drive.');
+    } else {
+      alert('雲端無可用存檔，或存檔讀取失敗：' + (data.error?.message || '無資料'));
+    }
+  } catch (err) {
+    console.error('[Cloud Load] Failed:', err);
+    alert('無法從雲端載入存檔：' + err.message);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.loadStateFromCloud = loadStateFromCloud;
 }
 
 function updateUserBadgeUI() {
@@ -3044,7 +3179,13 @@ async function sendTelemetryError(category, message, details = {}) {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload),
-        mode: 'cors'
+        redirect: 'follow'
+      }).then(res => res.json()).then(data => {
+        if (data.success) {
+          console.log('[Telemetry] Error logged to cloud successfully.');
+        } else {
+          console.warn('[Telemetry] Cloud logging returned error:', data.error);
+        }
       }).catch(err => console.warn('[Telemetry Sync Ignored]', err));
     }
   } catch (err) {
@@ -3134,21 +3275,27 @@ async function handleFeedbackSubmit(e) {
   try {
     const gasUrl = (typeof state !== 'undefined' && state.gasApiUrl) || 'https://script.google.com/macros/s/AKfycbwjdNrRMUveqcxhN2K9Okz8afuBmKrziHnj9Zr5EnoCaX2dlXifACHppa2iJuNRFc0CxQ/exec';
     if (gasUrl) {
-      await fetch(gasUrl, {
+      const res = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload),
-        mode: 'cors'
+        redirect: 'follow'
       });
+      const data = await res.json();
+      if (data.success) {
+        alert('感謝您的寶貴回饋！意見已成功同步至開發管理團隊。');
+      } else {
+        alert('回饋提交失敗：' + (data.error?.message || '伺服器回應異常，請稍後再試。'));
+      }
+    } else {
+      alert('系統尚未配置雲端端點，回饋已記錄於本機。');
     }
-
-    alert('感謝您的寶貴回饋！意見已成功同步至開發管理團隊。');
     closeFeedbackModal();
     const contentArea = document.getElementById('feedback-content');
     if (contentArea) contentArea.value = '';
   } catch (err) {
     console.error('Submit feedback error:', err);
-    alert('🎉 回饋已記錄至本機並排程傳送至雲端，感謝您的支持！');
+    alert('回饋提交失敗：無法連線至雲端伺服器。\n錯誤：' + err.message);
     closeFeedbackModal();
   } finally {
     if (submitBtn) {

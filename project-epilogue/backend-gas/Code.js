@@ -109,9 +109,36 @@ function doPost(e) {
 }
 
 /**
- * Main Web App GET Handler (Health Check & Diagnostics)
+ * 頂層測試與立即建立試算表函式（供 Apps Script 執行）
+ */
+function testCreateTelemetrySheet() {
+  var res = TelemetryService.initSpreadsheet();
+  Logger.log('Create result: ' + JSON.stringify(res));
+  return res;
+}
+
+/**
+ * Main Web App GET Handler (Health Check & Diagnostics & Init)
  */
 function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) || '';
+
+  if (action === 'init-telemetry' || action === 'init-sheet') {
+    try {
+      var initRes = TelemetryService.initSpreadsheet();
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'SUCCESS',
+        message: 'Telemetry spreadsheet created/verified successfully.',
+        data: initRes
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'ERROR',
+        message: err.message
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
   var responseData = {
     service: CONFIG.APP_NAME,
     version: CONFIG.VERSION,
@@ -175,7 +202,7 @@ function authenticateRequest(e, payload) {
       isValid: true,
       userId: 'master_admin',
       email: 'admin@epilogue.internal',
-      driveFolderId: getEnvProperty('DEFAULT_DRIVE_FOLDER_ID', '')
+      driveFolderId: (PropertiesService.getScriptProperties().getProperty('DEFAULT_DRIVE_FOLDER_ID') || CONFIG.DRIVE.SAVES_FOLDER_ID)
     };
   }
 
@@ -314,7 +341,7 @@ function handleRegister(payload) {
   var token = generateSessionToken(userId);
 
   // Create dedicated Drive workspace folder for user
-  var userFolderId = StorageService.createUserDriveFolder(userId);
+  var userFolderId = StorageService.getOrCreateUserDriveFolder(userId);
 
   StorageService.registerNewUser({
     userId: userId,
