@@ -959,7 +959,7 @@ async function handleLogin(e) {
     localStorage.setItem('undercurrent_user_id', state.userId);
     updateUserBadgeUI();
     closeAuthModal();
-    alert('雲端伺服器暫時無法連線，已以本機模式登入。遊戲進度僅儲存於本機。');
+    alert('雲端伺服器暫時無法連線，已以本機模式登入。遊戲進度僅儲存於本機。\n錯誤詳細：' + err.name + ' - ' + err.message);
   } finally {
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '登入'; }
   }
