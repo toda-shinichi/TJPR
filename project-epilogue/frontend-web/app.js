@@ -1750,6 +1750,9 @@ const NARRATIVE_MODELS = [
 
 const LLM_CONFIG = {
   WORKER_URL: 'https://tjpr-llm-proxy.todashinchi.workers.dev/',
+  // 連續多久收不到新資料才判定該模型失敗並切換備援。
+  // 這是「停滯」門檻，不是總時長上限 —— 正在正常吐字的串流不會被中斷。
+  STALL_TIMEOUT_MS: 25000,
   API_URL: 'https://api.banana2556.com/v1/chat/completions',
   API_KEY: '', // 安全起見，已轉移至 GAS Proxy
   PRIMARY_MODEL: 'mistral-large-3',
@@ -1986,9 +1989,24 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
       throwIfGenerationAborted();
       const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       state.currentAbortController = controller;
-      timeoutId = setTimeout(() => {
-        if (controller) controller.abort();
-      }, 50000);
+      // 逾時改為「停滯偵測」：先前是 50 秒的總時長硬上限，會把一個正常
+      // 吐字的串流從中間砍掉（實測 mistral-large-3 首字 3.5s、但要 67s 才寫完，
+      // 於是每回都在它身上白等 50 秒、最後仍改用備援的輸出）。
+      // 現在只在「連續一段時間收不到新資料」時判定失敗，健康的串流不會被中斷。
+      let lastChunkAt = Date.now();
+      const armStallTimer = () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          const idleMs = Date.now() - lastChunkAt;
+          if (idleMs >= LLM_CONFIG.STALL_TIMEOUT_MS - 50) {
+            console.warn(`[Worker] ${model} 停滯 ${Math.round(idleMs / 1000)}s 無回應，切換備援。`);
+            if (controller) controller.abort();
+          } else {
+            armStallTimer();
+          }
+        }, LLM_CONFIG.STALL_TIMEOUT_MS);
+      };
+      armStallTimer();
       const response = await fetch(workerUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2018,7 +2036,8 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         const { done, value } = await reader.read();
         if (done) break;
         throwIfGenerationAborted();
-        
+        lastChunkAt = Date.now();
+
         const chunk = decoder.decode(value, { stream: true });
         buffer += chunk;
         const lines = buffer.split('\n');
