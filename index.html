@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-TW" class="dark">
+<html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -17,19 +17,19 @@
         extend: {
           colors: {
             brand: {
-              gold: '#d4af37',
-              dark: '#0c0d12',
-              surface: '#141620',
-              card: '#1a1d2c',
-              border: '#2a2e42',
-              crimson: '#e06c75',
-              blue: '#61afef',
-              emerald: '#98c379'
+              gold: '#985f72',
+              dark: '#f7f3ef',
+              surface: '#fffdfa',
+              card: '#f3ebe7',
+              border: '#ddcfc9',
+              crimson: '#ad6578',
+              blue: '#6f8190',
+              emerald: '#6e8274'
             }
           },
           fontFamily: {
             serif: ['Noto Serif TC', 'serif'],
-            sans: ['Plus Jakarta Sans', 'sans-serif'],
+            sans: ['Noto Sans TC', 'Plus Jakarta Sans', 'sans-serif'],
             mono: ['JetBrains Mono', 'monospace']
           }
         }
@@ -40,11 +40,11 @@
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./style.css?v=61ff172d5e">
+  <link rel="stylesheet" href="./style.css?v=437f416f9a">
 </head>
-<body class="bg-[#0c0d12] text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-black">
+<body class="bg-brand-dark text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-white">
 
     <!-- 頂部通用導航列 (Mobile-First 專屬直覺式導航) -->
   <header class="sticky top-0 z-40 bg-brand-surface/95 backdrop-blur-md border-b border-brand-border px-3 sm:px-6 py-2.5 flex items-center justify-between shadow-lg">
@@ -1090,6 +1090,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=61ff172d5e" defer></script>
+    <script src="app.js?v=437f416f9a" defer></script>
 </body>
 </html>

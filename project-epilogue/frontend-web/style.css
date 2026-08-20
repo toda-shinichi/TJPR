@@ -1,28 +1,33 @@
 /* Project Epilogue - Mobile-First Interactive Novel Engine Styling */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
 :root {
-  --bg-main: #090a0f;
-  --bg-surface: #12141d;
-  --bg-elevated: #1a1d29;
-  --bg-card: rgba(23, 26, 38, 0.85);
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-active: rgba(212, 175, 55, 0.5);
-  
-  --text-main: #e8ecf4;
-  --text-muted: #9ba3b8;
-  --text-accent: #f3d489;
-  --accent-gold: #d4af37;
-  --accent-blue: #61afef;
-  --accent-crimson: #e06c75;
-  --accent-emerald: #98c379;
+  color-scheme: light;
+  --bg-main: #f7f3ef;
+  --bg-surface: #fffdfa;
+  --bg-elevated: #f3ebe7;
+  --bg-card: rgba(255, 253, 250, 0.9);
+  --border-subtle: rgba(112, 88, 96, 0.18);
+  --border-active: rgba(152, 95, 114, 0.48);
+
+  --text-main: #3c3438;
+  --text-secondary: #5f555a;
+  --text-muted: #766a70;
+  --text-accent: #8f5669;
+  --accent-gold: #985f72;
+  --accent-blue: #6f8190;
+  --accent-crimson: #ad6578;
+  --accent-emerald: #6e8274;
+  --accent-tea: #8b6953;
+  --tint-rose: #f5e8ec;
+  --tint-blue: #e9eff2;
+  --tint-sage: #e8efea;
+  --tint-violet: #f0e9f1;
   
   --font-serif: 'Noto Serif TC', serif;
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Noto Sans TC', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  --reader-font-size: 1.06rem;
-  --reader-line-height: 1.95;
+  --reader-font-size: 1.125rem;
+  --reader-line-height: 2.05;
 }
 
 /* 字級改由 JS 的 applyReaderFontSize() 以 px 寫入 --reader-font-size，
@@ -53,6 +58,13 @@ body {
   flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom, 16px);
   padding-top: env(safe-area-inset-top, 0px);
+  background:
+    radial-gradient(circle at 10% 4%, rgba(188, 132, 149, 0.12), transparent 31rem),
+    radial-gradient(circle at 92% 22%, rgba(120, 145, 128, 0.1), transparent 27rem),
+    linear-gradient(180deg, #faf7f4 0%, var(--bg-main) 46%, #f4eeea 100%);
+  font-size: 15px;
+  line-height: 1.65;
+  font-weight: 400;
 }
 
 /* 📱 手機端防 iOS Safari 聚焦自動縮放：所有輸入框至少 16px */
@@ -99,15 +111,15 @@ textarea:disabled,
 }
 
 .form-message.is-error {
-  color: #fecdd3;
-  background: rgba(76, 5, 25, 0.72);
-  border: 1px solid rgba(244, 63, 94, 0.38);
+  color: #874358;
+  background: #f9e9ee;
+  border: 1px solid #ddb3bf;
 }
 
 .form-message.is-success {
-  color: #d1fae5;
-  background: rgba(2, 44, 34, 0.72);
-  border: 1px solid rgba(16, 185, 129, 0.38);
+  color: #526b59;
+  background: #eaf3ec;
+  border: 1px solid #b9cdbd;
 }
 
 #toast-container > div {
@@ -131,12 +143,13 @@ textarea:disabled,
   font-family: var(--font-serif);
   font-size: var(--reader-font-size);
   line-height: var(--reader-line-height);
-  letter-spacing: 0.025em;
+  letter-spacing: 0.035em;
   color: var(--text-main);
 }
 
 .prose-tc p {
-  margin-bottom: 1.25rem;
+  max-width: 68ch;
+  margin: 0 auto 1.35rem;
   text-indent: 2em;
   text-align: justify;
   word-break: break-word;
@@ -158,13 +171,13 @@ textarea:disabled,
   padding-left: 0.35em;
 }
 
-/* 場景分隔：連續敘述中的換場給一條低調的金線，避免 700 字讀起來是一整塊 */
+/* 場景分隔：用低彩度灰粉線維持閱讀節奏，不搶正文視線。 */
 .prose-tc hr.scene-break {
   border: 0;
   height: 1px;
   width: 38%;
   margin: 2rem auto;
-  background: linear-gradient(to right, transparent, rgba(212, 175, 55, 0.45), transparent);
+  background: linear-gradient(to right, transparent, rgba(152, 95, 114, 0.42), transparent);
 }
 
 @media (max-width: 639px) {
@@ -203,12 +216,284 @@ textarea:disabled,
   height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(112, 88, 96, 0.08);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(212, 175, 55, 0.25);
+  background: rgba(152, 95, 114, 0.28);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(212, 175, 55, 0.5);
+  background: rgba(152, 95, 114, 0.5);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   暖調編輯式介面：讓所有既有畫面與 JS 動態產生元件共享同一套視覺語言
+   ────────────────────────────────────────────────────────────────────────── */
+::selection {
+  color: #fff;
+  background: var(--accent-gold);
+}
+
+a,
+button {
+  transition: color 180ms ease, background-color 180ms ease,
+    border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active {
+  transform: translateY(1px);
+}
+
+header {
+  background: rgba(255, 253, 250, 0.9) !important;
+  border-color: rgba(112, 88, 96, 0.16) !important;
+  box-shadow: 0 8px 28px rgba(80, 58, 67, 0.07) !important;
+}
+
+main {
+  max-width: 60rem !important;
+}
+
+.font-mono {
+  letter-spacing: 0.055em;
+}
+
+.text-xs {
+  font-size: 0.8125rem !important;
+  line-height: 1.55 !important;
+}
+
+.text-sm {
+  line-height: 1.7 !important;
+}
+
+/* 原介面為深色設計，以下將既有文字 utility 統一映射到淺色閱讀色階。 */
+body .text-white,
+body .text-slate-100 { color: var(--text-main) !important; }
+body .text-slate-950 { color: #30282c !important; }
+body .text-slate-900 { color: var(--text-main) !important; }
+body .text-slate-800 { color: #463d42 !important; }
+body .text-slate-700 { color: #51474c !important; }
+body .text-slate-600 { color: #655a60 !important; }
+body .text-slate-200 { color: #51474c !important; }
+body .text-slate-300 { color: #62575c !important; }
+body .text-slate-400 { color: #766a70 !important; }
+body .text-slate-500 { color: #766a70 !important; }
+body [class*="text-amber-1"],
+body [class*="text-yellow-"] { color: #7c5e4c !important; }
+body [class*="text-sky-"],
+body [class*="text-blue-"] { color: #5d7484 !important; }
+body [class*="text-emerald-"],
+body [class*="text-green-"] { color: #5f7967 !important; }
+body [class*="text-purple-"] { color: #806786 !important; }
+body [class*="text-rose-"],
+body [class*="text-red-"] { color: #9a5266 !important; }
+
+/* 實心按鈕保留白字，以符合 WCAG 對比需求。 */
+body .bg-brand-gold.text-white,
+body .bg-brand-gold.text-slate-950,
+body [class*="bg-rose-6"].text-white,
+body [class*="bg-red-6"].text-white,
+body [class*="bg-slate-7"].text-white,
+body [class*="bg-slate-8"].text-white {
+  color: #fff !important;
+}
+
+body .group:hover .group-hover\:text-slate-950 { color: #fff !important; }
+
+body .hover\:text-white:hover { color: #51474c !important; }
+body .hover\:text-yellow-300:hover,
+body .hover\:text-yellow-400:hover { color: #7f5261 !important; }
+
+/* 將舊有深色資訊底轉成低彩度色塊；包含 app.js 即時生成的內容。 */
+body [class*="bg-slate-8"],
+body [class*="bg-slate-9"] { background-color: #eee7e3 !important; }
+body [class*="bg-slate-7"] { background-color: #e5dbd6 !important; }
+body [class*="bg-amber-9"] { background-color: #f5ede4 !important; }
+body [class*="bg-sky-9"],
+body [class*="bg-blue-9"] { background-color: var(--tint-blue) !important; }
+body [class*="bg-emerald-9"],
+body [class*="bg-green-9"] { background-color: var(--tint-sage) !important; }
+body [class*="bg-purple-9"] { background-color: var(--tint-violet) !important; }
+body [class*="bg-rose-9"],
+body [class*="bg-red-9"] { background-color: var(--tint-rose) !important; }
+body [class*="border-slate-"] { border-color: #d8cbc5 !important; }
+body [class*="border-amber-"] { border-color: #d9c3ad !important; }
+body [class*="border-sky-"],
+body [class*="border-blue-"] { border-color: #bdcbd2 !important; }
+body [class*="border-emerald-"],
+body [class*="border-green-"] { border-color: #becdc2 !important; }
+body [class*="border-purple-"] { border-color: #d2c1d4 !important; }
+body [class*="border-rose-"],
+body [class*="border-red-"] { border-color: #dbb9c3 !important; }
+
+/* 彈窗遮罩維持足夠聚焦，但不再像黑幕般壓迫。 */
+body [class*="bg-black/"] {
+  background-color: rgba(67, 52, 59, 0.38) !important;
+  backdrop-filter: blur(5px);
+}
+
+#auth-modal,
+#app-dialog {
+  background-color: rgba(67, 52, 59, 0.42) !important;
+}
+
+#loading-overlay {
+  color: var(--text-main) !important;
+  background-color: rgba(250, 247, 244, 0.93) !important;
+}
+
+/* 表單：紙白輸入區、柔和邊界與清楚焦點。 */
+input,
+select,
+textarea {
+  color: var(--text-main) !important;
+  background-color: rgba(255, 255, 255, 0.88) !important;
+  border-color: #d7c9c3 !important;
+  border-radius: 0.75rem;
+}
+
+input::placeholder,
+textarea::placeholder { color: #a29599 !important; }
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent-gold) !important;
+  box-shadow: 0 0 0 3px rgba(152, 95, 114, 0.12) !important;
+  outline: none;
+}
+
+select option { color: var(--text-main); background: #fffdfa; }
+
+.shadow-md,
+.shadow-lg,
+.shadow-xl,
+.shadow-2xl {
+  box-shadow: 0 12px 34px rgba(80, 58, 67, 0.08) !important;
+}
+
+/* 首頁：更接近書封與女性雜誌的編輯式層次。 */
+#home-view > div:first-child {
+  padding-top: clamp(2.4rem, 7vw, 4.7rem) !important;
+  padding-bottom: clamp(2.2rem, 6vw, 4rem) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 253, 250, 0.96), rgba(246, 233, 237, 0.72)),
+    var(--bg-surface) !important;
+  border-color: rgba(152, 95, 114, 0.22) !important;
+  box-shadow: 0 20px 60px rgba(90, 61, 71, 0.09) !important;
+}
+
+#home-view h1 {
+  color: #895267 !important;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  text-shadow: none !important;
+}
+
+#home-view > div:first-child > p {
+  color: #6f5c63 !important;
+  max-width: 42rem;
+  font-style: normal;
+  line-height: 1.95 !important;
+}
+
+#home-view > .grid > div,
+#home-open-guide-btn,
+#home-view > div:last-child {
+  background: rgba(255, 253, 250, 0.82) !important;
+  border-color: rgba(112, 88, 96, 0.18) !important;
+  box-shadow: 0 12px 36px rgba(80, 58, 67, 0.065) !important;
+}
+
+#home-view > .grid > div {
+  min-height: 10.5rem;
+  padding: 1.5rem !important;
+}
+
+#home-view > .grid > div:hover,
+#home-open-guide-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(152, 95, 114, 0.42) !important;
+  box-shadow: 0 17px 42px rgba(80, 58, 67, 0.1) !important;
+}
+
+#home-open-guide-btn {
+  background: linear-gradient(120deg, #fffdfa, #f3eaf0 50%, #f1eee8) !important;
+}
+
+/* 遊戲閱讀區：章節像獨立紙頁，選項則像柔和的編輯註記。 */
+#gameplay-view {
+  max-width: 54rem;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+#gameplay-view > .sticky,
+#server-status-badge {
+  background: rgba(255, 253, 250, 0.9) !important;
+  border-color: rgba(112, 88, 96, 0.18) !important;
+}
+
+#novel-stream-container,
+#active-chapter-card {
+  border-color: rgba(112, 88, 96, 0.18) !important;
+}
+
+#active-chapter-card {
+  background: rgba(255, 253, 250, 0.94) !important;
+  box-shadow: 0 20px 56px rgba(80, 58, 67, 0.08) !important;
+}
+
+#choices-container button {
+  min-height: 3.25rem;
+  border-radius: 0.9rem !important;
+  border-color: rgba(112, 88, 96, 0.2) !important;
+  background: rgba(255, 253, 250, 0.88) !important;
+  box-shadow: 0 5px 18px rgba(80, 58, 67, 0.045);
+}
+
+#choices-container button:hover {
+  background: #f7ecef !important;
+  border-color: rgba(152, 95, 114, 0.5) !important;
+  transform: translateY(-1px);
+}
+
+#stream-status-panel {
+  background: linear-gradient(145deg, #f6efec, #fffdfa) !important;
+  border-color: rgba(152, 95, 114, 0.2) !important;
+}
+
+/* 抽屜與彈窗卡片保持紙張感。 */
+#status-drawer,
+#mobile-menu-drawer {
+  background-color: var(--bg-surface) !important;
+}
+
+[role="dialog"] > div,
+#auth-modal > div,
+#save-modal > div,
+#guide-modal > div {
+  border-color: rgba(112, 88, 96, 0.2) !important;
+  box-shadow: 0 24px 80px rgba(54, 39, 46, 0.17) !important;
+}
+
+#toast-container > div {
+  color: var(--text-main) !important;
+  background: rgba(255, 253, 250, 0.96) !important;
+  border-color: rgba(112, 88, 96, 0.2) !important;
+  box-shadow: 0 12px 34px rgba(80, 58, 67, 0.13) !important;
+}
+
+@media (max-width: 639px) {
+  body { font-size: 14.5px; }
+  main { padding: 0.8rem !important; }
+  button,
+  [role="button"] { min-height: 44px; }
+  #home-view > div:first-child { padding-right: 1.2rem !important; padding-left: 1.2rem !important; }
+  #home-view h1 { letter-spacing: 0.1em; }
+  #home-view > .grid > div { min-height: 0; padding: 1.25rem !important; }
+  .prose-tc { letter-spacing: 0.02em; line-height: 2; }
+  .prose-tc p { margin-bottom: 1.2rem; }
 }
