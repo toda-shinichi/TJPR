@@ -1758,7 +1758,12 @@ const LLM_CONFIG = {
   API_URL: 'https://api.banana2556.com/v1/chat/completions',
   API_KEY: '', // 安全起見，已轉移至 GAS Proxy
   PRIMARY_MODEL: 'mistral-large-3',
-  FALLBACK_MODEL: 'gemini-3.6-flash',
+  // 備援必須也是不會自我審查的模型。gemini-3.6-flash 會擋掉情慾內容，
+  // 而那是本作的核心 —— 放在備援第一位等於「主要模型一失手就被消音」。
+  // dolphin-mistral-24b-venice-edition 是未審查變體，速度也比 mistral 快。
+  FALLBACK_MODEL: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+  // 最後手段：會自我審查，僅在其餘全部失敗時使用，並會提示玩家。
+  CENSORING_MODELS: ['gemini-3.6-flash'],
   MODELS: NARRATIVE_MODELS,
   TEMPERATURE: 0.88
 };
@@ -2095,6 +2100,7 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         
         if (finalParsed && finalParsed.prose) {
           console.log(`[Worker] Model ${model} succeeded, prose: ${finalParsed.prose.length} chars, choices: ${(finalParsed.choices||[]).length}`);
+          warnIfCensoringModel(model);
           return finalParsed;
         }
         
@@ -2122,6 +2128,23 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
   throw new Error('Worker Streaming failed, falling back to GAS.');
 }
 
+/**
+ * 落到會自我審查的模型時提示玩家一次。
+ * 不提示的話，玩家只會發現「文風忽然變保守」卻不知道原因。
+ */
+let censoringModelWarned = false;
+function warnIfCensoringModel(model) {
+  if (!(LLM_CONFIG.CENSORING_MODELS || []).includes(model)) return;
+  if (censoringModelWarned) return;
+  censoringModelWarned = true;
+  notifyUser(
+    `目前由備援模型 ${model} 生成，該模型會自我審查、可能淡化情慾描寫。`
+    + '建議稍後重試以改回主要模型。',
+    'error',
+    9000
+  );
+}
+
 async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = null) {
   if (LLM_CONFIG.WORKER_URL) {
     try {
@@ -2132,12 +2155,15 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
       console.warn('Worker error, fallback to GAS', e);
     }
   }
+  // GAS 路徑的模型順序。刻意不放 mistral-large-3：它需要約 67 秒才寫完，
+  // 而 Apps Script 的 UrlFetchApp 約 60 秒就會斷，在這條路徑上永遠不可能成功，
+  // 擺在前面只是白等 50 秒。mistral 由 Worker 路徑負責。
+  // gemini-3.6-flash 放最後 —— 它會自我審查、擋掉情慾內容。
   const models = [
-    'mistral-large-3',
-    'gemini-3.6-flash',
     'cognitivecomputations/dolphin-mistral-24b-venice-edition',
     'aion-3.0',
-    'gpt-5.6-luna'
+    'gpt-5.6-luna',
+    'gemini-3.6-flash'
   ];
   await waitForRpmCooldown();
   for (let mIdx = 0; mIdx < models.length; mIdx++) {
@@ -2188,6 +2214,7 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
       const parsed = parseJsonSafely(rawContent);
       if (parsed && parsed.prose) {
         console.log(`[Pure AI] Successfully generated with model: ${model} via proxy (${parsed.prose.length} chars)`);
+        warnIfCensoringModel(model);
         return parsed;
       }
     } catch (err) {
