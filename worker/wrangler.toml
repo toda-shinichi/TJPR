@@ -1,0 +1,18 @@
+name = "tjpr-llm-proxy"
+main = "index.js"
+compatibility_date = "2026-08-20"
+
+# API_KEY 是 secret，絕不寫在這個檔案裡。設定方式：
+#   npx wrangler secret put API_KEY
+#
+# 選用：給伺服器端或測試腳本使用的共享密鑰（帶 X-Undercurrent-Key 標頭）。
+# 不設定時，所有沒有合法 Origin 的請求都會被拒絕。
+#   npx wrangler secret put CLIENT_SHARED_KEY
+#
+# 速率限制用的 KV namespace。建立方式：
+#   npx wrangler kv namespace create RATE_LIMIT_KV
+# 把回傳的 id 填到下面的 id = "" 裡即可。
+# 未填 id 時 Worker 會自動略過速率限制（不會因此掛掉）。
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = ""

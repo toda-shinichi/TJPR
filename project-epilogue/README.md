@@ -132,3 +132,55 @@ node debug_checks.js
 驗證項目包含：root 與部署副本一致性、`index.html` id 唯一性、HTML 轉義、
 段落切分規則一致性、回退還原、後端認證拒絕偽造 token、記憶管線好感度上限、
 卷末換窗重置行為。
+
+---
+
+## Cloudflare Worker（LLM 代理，主要生成路徑）
+
+原始碼：[`worker/index.js`](../worker/index.js)、設定：[`worker/wrangler.toml`](../worker/wrangler.toml)
+
+前端會**先**呼叫這個 Worker（`LLM_CONFIG.WORKER_URL`），失敗才退回 GAS Proxy。
+也就是說輪換 API 金鑰時這裡是第一優先，只改 GAS 不會生效。
+
+### 首次部署
+
+```bash
+cd worker
+
+# 1. 金鑰（secret，不進版控）
+npx wrangler secret put API_KEY
+
+# 2. 速率限制用的 KV namespace，把回傳的 id 填進 wrangler.toml
+npx wrangler kv namespace create RATE_LIMIT_KV
+
+# 3. 選用：給測試腳本／伺服器端使用的共享密鑰
+npx wrangler secret put CLIENT_SHARED_KEY
+
+# 4. 部署
+npx wrangler deploy
+```
+
+### 安全設計與其限制
+
+| 機制 | 作用 | 限制 |
+| --- | --- | --- |
+| Origin 白名單 | 擋掉直接拿 URL 呼叫的濫用 | curl 可偽造 Origin，**不是**真正的認證 |
+| 缺 Origin 一律拒絕 | 瀏覽器跨來源 POST 必定送 Origin，缺少代表非網頁來源 | 需 `CLIENT_SHARED_KEY` 才能從伺服器端呼叫 |
+| 模型白名單 | 避免有人指定任意昂貴模型 | 需隨 `LLM_CONFIG` 同步更新 |
+| `max_tokens` 夾制 4096 | 限制單次成本 | — |
+| KV 速率限制（每 IP 每分鐘 12 次） | 讓濫用成本可控 | 未綁 KV 時自動略過 |
+
+> ⚠️ **`ALLOWED_ORIGINS` 必須與前端實際部署網址一致**，否則會全面回 403。
+> 目前設定為 `https://toda-shinichi.github.io`（GitHub Pages）＋本機開發用的
+> `localhost:8731`。origin 不含路徑 —— project page 的 `/TJPR/` 不算在內。
+
+**尚未實作的真正認證**：讓 Worker 拿前端帶來的 `token` 去 GAS 的 `auth/verify`
+驗證，只有登入玩家能用。代價是每回多一次往返，目前以上述組合作為折衷。
+
+### 已知行為
+
+- 回應的 `Content-Type` 沿用上游，不再無條件寫死 `text/event-stream`
+  （否則上游回 JSON 錯誤時，前端的 SSE 解析器會拿到看不懂的內容、錯誤原因被吃掉）。
+- `stream` 一律強制為 `true`。
+- 未設定 `API_KEY` 時直接回 500 並明確說明，而不是把空金鑰送上游、
+  換回一句難以追查的「无效的令牌」。

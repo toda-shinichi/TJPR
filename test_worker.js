@@ -10,9 +10,14 @@ const payload = {
   stream: true
 };
 
+// Worker 現在會檢查 Origin：沒有合法 Origin 的請求一律 403（這正是要擋的濫用情境）。
+// 從 Node 測試時要自行帶上，或改用 X-Undercurrent-Key 搭配 CLIENT_SHARED_KEY secret。
 fetch(url, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    'Origin': 'http://localhost:8731'
+  },
   body: JSON.stringify(payload)
 }).then(async res => {
   console.log("Status:", res.status);
