@@ -459,10 +459,16 @@ function handleSaveState(userSession, payload) {
   if (!stateData) {
     return createErrorResponse('Missing saveState in payload.', 400);
   }
-  // Keep the resumable chapter payload together with save_slot.json. Full_Novel.md
-  // remains the human-readable archive, while these fields restore the live UI.
+  // save_slot.json 裡只保留「還原 UI 所需的最近視窗」，不是整局歷史。
+  // 先前是把用戶端的整份 chapterHistory 塞進來，在 mistral 每回約 1,400 字的
+  // 輸出量下，50 回就會讓這個檔案膨脹到數百 KB，而且每一回都要整份重寫。
+  // 完整正文由 Full_Novel.md 單向累積歸檔（見 StorageService.appendChapterToNovel）。
+  var RESUME_WINDOW = 12;
+  var incomingHistory = payload.chapterHistory || [];
   stateData._chapterData = payload.chapter || null;
-  stateData._chapterHistoryList = payload.chapterHistory || [];
+  stateData._chapterHistoryList = incomingHistory.length > RESUME_WINDOW
+    ? incomingHistory.slice(-RESUME_WINDOW)
+    : incomingHistory;
   var folderId = userSession.driveFolderId || StorageService.getOrCreateUserDriveFolder(userSession.userId);
   var saved = StorageService.saveSaveState(folderId, stateData, payload.chapter, payload.playerProfile, payload.chapterHistory);
   if (!saved) return createErrorResponse('Failed to persist save state.', 500);

@@ -322,24 +322,24 @@ var StorageService = (function() {
         folder.createFile('Memory_Archive.json', JSON.stringify(memoryArchive, null, 2), MimeType.PLAIN_TEXT);
       }
 
-      // 5. 寫入 / 更新 Full_Novel.md (真實連續小說對話與章節正文)
-      if (chapterHistoryArr && chapterHistoryArr.length > 0) {
-        var novelHeader = '# Project Epilogue — 完整小說故事紀錄\n*最後同步時間：' + new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) + '*\n\n---\n';
-        var novelBody = chapterHistoryArr.map(function(ch, idx) {
-          var title = ch.chapterTitle || ('第 ' + (ch.turnNumber || (idx + 1)) + ' 回');
-          var prose = ch.prose || ch.content || '';
-          return '## ' + title + '\n\n' + prose;
-        }).join('\n\n---\n\n');
-        
-        var fullNovelContent = novelHeader + novelBody + '\n\n---\n';
-        var novelFiles = folder.getFilesByName(CONFIG.STORAGE.NOVEL_FILE_NAME);
-        if (novelFiles.hasNext()) {
-          novelFiles.next().setContent(fullNovelContent);
-        } else {
-          folder.createFile(CONFIG.STORAGE.NOVEL_FILE_NAME, fullNovelContent, MimeType.PLAIN_TEXT);
-        }
-      } else if (chapterObj && chapterObj.prose) {
-        appendChapterToNovel(folderId, saveStateObj.turnCount || 1, chapterObj.chapterTitle || '最新回', chapterObj.prose);
+      // 5. 追加至 Full_Novel.md
+      //
+      // ⚠️ 這裡刻意【只追加、絕不整份覆寫】。
+      // 先前是用用戶端傳來的 chapterHistoryArr 重建整份檔案，這讓 Full_Novel.md
+      // 的內容完全受用戶端狀態擺布 —— 一旦前端為了節省 localStorage 而裁切歷史，
+      // 雲端這份唯一的完整檔案就會被截斷版覆寫，正文永久消失。
+      // 現在 Full_Novel.md 是唯一的完整歸檔，只會單向成長。
+      var chapterToAppend = chapterObj;
+      if (!chapterToAppend && chapterHistoryArr && chapterHistoryArr.length > 0) {
+        chapterToAppend = chapterHistoryArr[chapterHistoryArr.length - 1];
+      }
+      if (chapterToAppend && (chapterToAppend.prose || chapterToAppend.content)) {
+        appendChapterToNovel(
+          folderId,
+          chapterToAppend.turn || saveStateObj.turnCount || 1,
+          chapterToAppend.chapterTitle || '最新回',
+          chapterToAppend.prose || chapterToAppend.content
+        );
       }
 
       console.log('成功寫入真實遊戲資料至 Drive 存檔資料夾 (' + folderId + ')。');
@@ -356,11 +356,18 @@ var StorageService = (function() {
   function appendChapterToNovel(userFolderId, turnCount, chapterTitle, prose) {
     var folder = DriveApp.getFolderById(userFolderId);
     var files = folder.getFilesByName(CONFIG.STORAGE.NOVEL_FILE_NAME);
-    var chapterBlock = '\n\n## 第 ' + turnCount + ' 回合：' + chapterTitle + '\n\n' + prose + '\n\n---\n';
+    var marker = '## 第 ' + turnCount + ' 回合：';
+    var chapterBlock = '\n\n' + marker + chapterTitle + '\n\n' + prose + '\n\n---\n';
 
     if (files.hasNext()) {
       var file = files.next();
       var currentContent = file.getBlob().getDataAsString('UTF-8');
+      // 幂等保護：同一回合會被同步多次（推進完成後、摘要池更新後、玩家手動同步），
+      // 沒有這道檢查的話同一段正文會在歸檔裡重複出現好幾遍。
+      if (currentContent.indexOf(marker) !== -1) {
+        console.log('第 ' + turnCount + ' 回已存在於 Full_Novel.md，略過追加。');
+        return;
+      }
       file.setContent(currentContent + chapterBlock);
     } else {
       var header = '# Project Epilogue — 完整小說故事紀錄\n*建立時間：' + new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) + '*\n\n---\n';

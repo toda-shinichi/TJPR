@@ -1427,7 +1427,8 @@ async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManua
       saveState: saveState,
       chapter: chapterData,
       playerProfile: playerProfile,
-      chapterHistory: state.chapterHistoryList || [],
+      // 只帶最近視窗，不再每回合整份上傳（完整正文由後端 Full_Novel.md 累積歸檔）
+      chapterHistory: chapterWindow(state.chapterHistoryList),
       namedSaves: getNamedSavesList()
     };
 
@@ -1671,13 +1672,13 @@ async function loadStateFromCloud() {
           ? cloudSave.chapterHistory
           : [cloudSave.chapter];
         state.chapterHistoryList = cloudHistory;
-        safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(cloudHistory));
+        persistChapterHistory(cloudHistory);
       } else if (cloudSave.saveState) {
         // 雲端有存檔但沒有章節：必須清空本機舊章節，否則會把別局的正文與
         // 雲端的 turnCount 混在一起顯示。
         state.chapterData = null;
         state.chapterHistoryList = [];
-        safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify([]));
+        persistChapterHistory([]);
         notifyUser('雲端僅有數值存檔、無章節正文，已載入進度數值。', 'info', 5000);
       }
       if (state.chapterData) {
@@ -2387,7 +2388,7 @@ ${CHARACTER_IDENTITY_FIREWALL}
 
 請嚴格遵守《情慾文學指引》與《系統核心指令》：
 1. 風格與成人情慾（R-18）：極致性張力、高位推拉、五感具象（體溫、喘息、香氣、眼神壓迫、肢體碰觸）、權謀殺伐與多方博弈，使用純台灣繁體中文。
-2. 【字數上限強制執行】prose 正文嚴格控制在 600~800 字以內，不得超過，絕不套用固定模板。
+2. 【字數上限強制執行】prose 正文嚴格控制在 600~800 個中文字以內（以中文字元計數，標點不計），不得超過，絕不套用固定模板。
 3. 【數值真實性運算規則】：
    - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
    - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，數值必須保持 0！
@@ -2411,7 +2412,7 @@ ${characterPromptBlock}
     "inventory": "隨身攜帶之關鍵情報或物品",
     "rumors": "台北政媒黑白兩道最新暗流傳聞"
   },
-  "prose": "【600~800字極具性張力、權謀拉扯與成人情慾描寫的長篇小說正文】",
+  "prose": "【600~800 個中文字的極具性張力、權謀拉扯與成人情慾描寫長篇小說正文】",
   "choices": [
     { "id": "A", "label": "[A] 【選項A完整行動與對白描述】", "risk": "low", "hint": "策略提示" },
     { "id": "B", "label": "[B] 【選項B完整行動與對白描述】", "risk": "medium", "hint": "策略提示" },
@@ -2464,7 +2465,7 @@ ${CHARACTER_IDENTITY_FIREWALL}
 4. 【血緣與親情既定事實】：楊慕璃與二哥楊紹宸同住陽明山大宅，熟知彼此生活習慣，嚴禁任何初次見面的陌生化描寫！
 
 請嚴格遵守《情慾文學指引》與《系統核心指令》：
-1. 嚴格依據玩家剛才執行的最新行動/抉擇，即時推進後續正文。【字數上限強制執行】prose 嚴格控制在 600~800 字以內，不得超過。
+1. 嚴格依據玩家剛才執行的最新行動/抉擇，即時推進後續正文。【字數上限強制執行】prose 嚴格控制在 600~800 個中文字以內（以中文字元計數，標點不計），不得超過。
 2. 描寫要求：極致性張力、上位者男性佔有欲、五感溫度、喘息、支配與臣服、細節肢體碰觸、成人情慾拉扯與權謀博弈，使用純台灣繁體中文。
 3. 絕不重複前篇標題與對話，每次推進都是全新事件與衝突升級！
 4. 【數值真實性運算規則】：
@@ -2477,7 +2478,7 @@ ${characterPromptBlock}
 6. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼標記）：
 {
   "chapterTitle": "第 1 幕 第 ${turnCount} 回：【全新章節標題】",
-  "prose": "【600~800字緊接玩家行動推進的長篇小說正文】",
+  "prose": "【600~800 個中文字、緊接玩家行動推進的長篇小說正文】",
   "statusPanel": {
     "timeLocation": "時空地點",
     "tension": 70,
@@ -2552,7 +2553,7 @@ async function triggerRollingSummaryUpdate(turnCount) {
       const data = await response.json();
       const newSummary = data.success && data.data?.content?.trim();
       if (newSummary && newSummary.length > 20) {
-        state.saveState.summaryPool = newSummary;
+        state.saveState.summaryPool = clampSummaryPool(newSummary);
         safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
         console.log(`[MemoryPipeline] Summary Pool successfully updated (${newSummary.length} chars).`);
         syncStateToGoogleDriveCloud(state.saveState, state.chapterData);
@@ -2710,7 +2711,7 @@ async function startNewGameWithProfile(profile) {
       state.previousStateSnapshot = previousGameSnapshot.previousStateSnapshot;
       if (state.saveState) safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
       else localStorage.removeItem('undercurrent_current_save_state');
-      safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+      persistChapterHistory(state.chapterHistoryList);
       if (state.playerProfile) safeLocalStorageSet('undercurrent_current_player_profile', JSON.stringify(state.playerProfile));
       else localStorage.removeItem('undercurrent_current_player_profile');
       if (state.chapterData) {
@@ -2755,7 +2756,7 @@ async function startNewGameWithProfile(profile) {
 
   state.chapterData = initialChapter;
   state.chapterHistoryList = [initialChapter];
-  safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+  persistChapterHistory(state.chapterHistoryList);
   
   renderStoryStream(initialChapter);
   renderSaveState();
@@ -2926,7 +2927,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     state.chapterData = transactionSnapshot.chapterData;
     state.chapterHistoryList = transactionSnapshot.chapterHistoryList;
     safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
-    safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+    persistChapterHistory(state.chapterHistoryList);
     if (isGenerationAbortError(err)) {
       renderStoryStream(state.chapterData);
       renderSaveState();
@@ -2957,7 +2958,7 @@ function appendChapterToHistory(chapter, chosenLabel) {
     chosenLabel: chosenLabel || '玩家行動'
   });
   state.chapterHistoryList.push(record);
-  safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+  persistChapterHistory(state.chapterHistoryList);
 }
 
 // ==========================================
@@ -3781,6 +3782,69 @@ function importProfiles(e) {
 }
 
 // ==========================================
+// 8.0 長局容量管理 (Long-run Capacity Guards)
+// ==========================================
+
+/**
+ * 每個具名存檔、每次雲端同步要攜帶的章節視窗大小。
+ *
+ * 為什麼需要這個：mistral-large-3 每回輸出約 1,400 個中文字，
+ * chapterHistoryList 的 JSON 在 30 回時已達 209 KB、50 回 348 KB。
+ * 而先前「每個具名存檔各自複製一份完整歷史」＋「每回合整份 POST 到雲端」，
+ * 會讓 localStorage（約 5 MB）在十來個存檔後就爆掉，長局根本跑不到結束。
+ * 完整正文由後端的 Full_Novel.md 單向累積歸檔，這裡只需要足以還原畫面的視窗。
+ */
+const CHAPTER_WINDOW_SIZE = 12;
+
+/** 極舊章節保留的正文摘錄長度（供目錄與卡片顯示） */
+const ARCHIVED_PROSE_EXCERPT = 240;
+
+/** 本機保留完整正文的回合數；更舊的只留摘錄（完整版在雲端 Full_Novel.md） */
+const LOCAL_FULL_PROSE_TURNS = 30;
+
+/** 取出最近的章節視窗 */
+function chapterWindow(list, size = CHAPTER_WINDOW_SIZE) {
+  const arr = Array.isArray(list) ? list : [];
+  return arr.length > size ? arr.slice(-size) : arr.slice();
+}
+
+/**
+ * 為了寫入 localStorage 而壓縮章節列表：
+ * 最近 LOCAL_FULL_PROSE_TURNS 回保留完整正文，更舊的只留摘錄並標記。
+ * 回傳新陣列，不改動傳入的物件（畫面上顯示的資料不受影響）。
+ */
+function compactChaptersForStorage(list) {
+  const arr = Array.isArray(list) ? list : [];
+  if (arr.length <= LOCAL_FULL_PROSE_TURNS) return arr;
+  const cutoff = arr.length - LOCAL_FULL_PROSE_TURNS;
+  return arr.map((ch, idx) => {
+    if (idx >= cutoff || !ch || ch.proseArchived) return ch;
+    const prose = String(ch.prose || '');
+    if (prose.length <= ARCHIVED_PROSE_EXCERPT) return ch;
+    return Object.assign({}, ch, {
+      prose: prose.slice(0, ARCHIVED_PROSE_EXCERPT) + '……',
+      proseArchived: true
+    });
+  });
+}
+
+/** 統一的章節列表持久化入口，所有寫入都應該經過這裡 */
+function persistChapterHistory(list) {
+  return safeLocalStorageSet(
+    'undercurrent_full_story_chapters',
+    JSON.stringify(compactChaptersForStorage(list))
+  );
+}
+
+/** 摘要池上限：CONFIG.PIPELINE.SUMMARY_POOL_MAX_CHARS 對應的前端硬夾制 */
+const SUMMARY_POOL_MAX_CHARS = 2000;
+function clampSummaryPool(text) {
+  const str = String(text || '');
+  if (str.length <= SUMMARY_POOL_MAX_CHARS) return str;
+  return str.slice(0, SUMMARY_POOL_MAX_CHARS - 1) + '…';
+}
+
+// ==========================================
 // 8. 存檔庫核心管理 (Save Archives CRUD)
 // ==========================================
 
@@ -3860,7 +3924,9 @@ function createNamedSave(saveName) {
     playerProfile: profile,
     saveState: state.saveState,
     chapterData: state.chapterData,
-    chapterHistoryList: state.chapterHistoryList || []
+    // 只帶最近視窗：先前每個具名存檔都複製一份完整歷史，
+    // 長局時十來個存檔就會撞爆 localStorage 配額。
+    chapterHistoryList: chapterWindow(state.chapterHistoryList)
   };
 
   saves.unshift(newSaveEntry);
@@ -3907,7 +3973,7 @@ function loadNamedSave(saveId) {
   state.lastChoicePayload = null;
 
   safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
-  safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+  persistChapterHistory(state.chapterHistoryList);
   if (target.playerProfile) {
     safeLocalStorageSet('undercurrent_current_player_profile', JSON.stringify(target.playerProfile));
   }
@@ -4435,7 +4501,7 @@ function saveGameStateToSlot(slotId) {
   safeLocalStorageSet(`undercurrent_save_slot_${slotId}`, JSON.stringify({
     saveState: state.saveState,
     chapterData: state.chapterData,
-    chapterHistoryList: state.chapterHistoryList || [],
+    chapterHistoryList: chapterWindow(state.chapterHistoryList),
     savedAt: new Date().toISOString()
   }));
 }
@@ -4473,7 +4539,7 @@ async function handleRegenerateTurn() {
       regeneratedChapter.chosenLabel = '【正式開局】';
       state.chapterData = regeneratedChapter;
       state.chapterHistoryList = [regeneratedChapter];
-      safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+      persistChapterHistory(state.chapterHistoryList);
       renderStoryStream(regeneratedChapter);
       renderSaveState();
       saveGameStateToSlot('1');
@@ -4509,7 +4575,7 @@ function restorePreviousTurnForRetry() {
     state.chapterHistoryList.pop();
   }
   safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
-  safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+  persistChapterHistory(state.chapterHistoryList);
   return true;
 }
 
@@ -4521,7 +4587,7 @@ function handleUndoTurn() {
       state.chapterHistoryList.pop();
     }
     safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
-    safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+    persistChapterHistory(state.chapterHistoryList);
     state.previousStateSnapshot = null;
     state.lastChoicePayload = null;
     renderStoryStream(state.chapterData);
