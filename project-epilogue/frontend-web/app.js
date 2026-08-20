@@ -2400,6 +2400,147 @@ function warmLoreCache(profile) {
 }
 
 // =========================================================================
+// 4.45 上下文信封 (Context Envelope)
+// =========================================================================
+
+/**
+ * 每回都把完整脈絡重新送一次 —— 這個 API 是無狀態的，模型不會「記得」上一回，
+ * 第 40 回和第 1 回一樣都是從零重建整份提示詞。因此「定期重新餵」不是額外機制，
+ * 而是每回的必然；真正決定品質的是【餵了什麼、以及餵得夠不夠】。
+ *
+ * 先前的實測（第 41 回）顯示提示詞只用掉 128k 視窗的 17%，卻同時漏掉了：
+ *   - 近期劇情只餵 2 回 × 260 字元 = 520 字元（模型每回實際寫 1,458 字，只看到 18%）
+ *   - 好感度／HP／理智／道具／任務旗標完全沒送（數值迴路是斷的：
+ *     statusPanel 被解析進存檔，卻從來沒有餵回去）
+ *   - Act Dossier 沒送（卷末換窗清掉 turnHistory，換來的檔案卻沒進提示詞，
+ *     等於淨損失）
+ *   - 玩家的背景／外貌／雷區禁忌／自訂開場情境沒送
+ *
+ * 以下各區塊都有明確的字元上限，避免任何單一區塊在長局中失控膨脹。
+ */
+const CONTEXT_BUDGET = {
+  recentTurns: 3,              // 近期劇情回合數（全文，不截斷）
+  recentProsePerTurn: 1800,    // 單回正文上限（mistral 實測約 1,458 字，留餘裕）
+  actDossiers: 2,              // 保留最近幾幕的幕篇檔案
+  actDossierChars: 900,        // 單份幕篇檔案上限
+  playerProfileChars: 900,
+  liveStateChars: 800,
+  questFlagsShown: 4           // 任務旗標只列最新幾條，避免隨回合累積膨脹
+};
+
+function clampBlock(text, max) {
+  const str = String(text || '');
+  return str.length <= max ? str : str.slice(0, max - 1) + '…';
+}
+
+/** 玩家設定：先前 buildNextTurnPrompt 只送了姓名／性別／年齡／職業 */
+function buildPlayerProfileBlock(profile) {
+  const p = profile || {};
+  const isShura = p.targetLead === '修羅場' || p.targetLeadName === '修羅場';
+  const lines = [
+    '【玩家主角設定】',
+    `- 姓名：${p.name || '玩家'} ｜ 性別：${p.gender || '女'} ｜ 年齡：${p.age || '24'} 歲`,
+    `- 職業與身分：${p.profession || '政經公關總監'}`,
+    `- 身世背景：${p.background || '遊走於台北政商黑白兩道'}`,
+    `- 外貌與著裝：${p.appearance || '隨機（請維持一致的專屬穿搭、體香與神態）'}`,
+    `- 【雷區禁忌 · 絕對避免】：${p.taboos || '無特定雷區'}`,
+    `- 攻略模式：${isShura ? '全勢力修羅場' : (p.targetLeadName || '徐令謙')}`,
+    `- 成人情慾模式 (R-18)：${p.allowR18 === false ? '關閉（純情權謀 PG-15）' : '開啟'}`,
+    `- 【性別代名詞】：請嚴格依玩家性別（${p.gender || '女'}）使用正確人稱（男性用「他」、女性用「她」、非二元用合適稱謂）。`
+  ];
+  if (p.customScenario) {
+    lines.push(`- 開局自訂情境（本局的既定前提，不可推翻）：${p.customScenario}`);
+  }
+  return clampBlock(lines.join('\n'), CONTEXT_BUDGET.playerProfileChars);
+}
+
+/**
+ * 幕篇檔案。卷末換窗會清空 turnHistory 並把整幕壓成約 800 字的檔案，
+ * 但先前前端提示詞從不讀 actDossiers —— 換窗因此變成「刪掉上下文、
+ * 換來的東西沒送出去」的淨損失。
+ */
+function buildActDossierBlock(saveState) {
+  const dossiers = (saveState && Array.isArray(saveState.actDossiers)) ? saveState.actDossiers : [];
+  if (dossiers.length === 0) return '';
+  const recent = dossiers.slice(-CONTEXT_BUDGET.actDossiers);
+  const offset = dossiers.length - recent.length;
+  const parts = recent.map((d, i) =>
+    `── 第 ${offset + i + 1} 幕 幕篇檔案 ──\n${clampBlock(d, CONTEXT_BUDGET.actDossierChars)}`
+  );
+  return `【已完結幕篇的歷史檔案（早期劇情的權威濃縮，請視為既定事實）】\n${parts.join('\n\n')}\n`;
+}
+
+/**
+ * 近期劇情：最近 N 回的完整正文，並附上當時提供給玩家的三個選項
+ * —— 讓模型知道玩家是在什麼選項組合裡做出該抉擇的。
+ */
+function buildRecentHistoryBlock(historyList) {
+  const list = Array.isArray(historyList) ? historyList : [];
+  if (list.length === 0) return '【近期劇情】\n（本局剛開始，正處於交鋒對峙中）\n';
+
+  const recent = list.slice(-CONTEXT_BUDGET.recentTurns);
+  const parts = recent.map((h, i) => {
+    const turn = h.turn || (list.length - recent.length + i + 1);
+    const seg = [`── 第 ${turn} 回：${h.chapterTitle || '前篇'} ──`];
+    if (h.chosenLabel) seg.push(`【玩家當回行動】${h.chosenLabel}`);
+    const prose = clampBlock(h.prose, CONTEXT_BUDGET.recentProsePerTurn);
+    seg.push(`【正文】\n${prose}${h.proseArchived ? '\n（本回較早，正文已濃縮）' : ''}`);
+    const offered = (h.choices || []).map(c => c.label).filter(Boolean);
+    if (offered.length) {
+      seg.push(`【當回提供的選項】${offered.join(' ／ ')}`);
+    }
+    return seg.join('\n');
+  });
+  return `【近期劇情（最近 ${recent.length} 回全文，請確保情節與細節完全銜接）】\n${parts.join('\n\n')}\n`;
+}
+
+/**
+ * 當前數值狀態。先前完全沒有送出 —— makeChoice 會把模型回傳的 statusPanel
+ * 解析進 saveState（張力值、微醺度、好感度都存了），卻從來沒有餵回去，
+ * 所以模型每回都在憑空重新發明數值而非延續，好感度尤其明顯：
+ * 攻略了 40 回，模型並不知道現在是 38 還是 88。
+ */
+function buildLiveStateBlock(saveState, profile) {
+  const st = saveState || {};
+  const lines = ['【當前數值狀態（請延續這些數值，不要重新發明）】'];
+
+  const pro = st.protagonist || {};
+  lines.push(`- 生命值 ${pro.hp !== undefined ? pro.hp : 100} / 100 ｜ 理智值 ${pro.sanity !== undefined ? pro.sanity : 100} / 100`);
+
+  if (st.status && (st.status.tension !== undefined || st.status.tipsy !== undefined)) {
+    const bits = [];
+    if (st.status.tension !== undefined) bits.push(`張力值 ${st.status.tension}%`);
+    if (st.status.tipsy !== undefined) bits.push(`微醺度 ${st.status.tipsy}%`);
+    lines.push(`- 上回結束時：${bits.join(' ｜ ')}（本回請由此接續變化，微醺度未飲酒則衰減）`);
+  }
+
+  const rels = st.relationships && typeof st.relationships === 'object' ? st.relationships : {};
+  const relEntries = Object.keys(rels)
+    .map(k => [k, Number(rels[k])])
+    .filter(([, v]) => isFinite(v));
+  if (relEntries.length) {
+    const leadName = profile && profile.targetLeadName;
+    // 主攻對象排最前面，其餘依好感度由高到低
+    relEntries.sort((a, b) => (b[0] === leadName ? 1 : 0) - (a[0] === leadName ? 1 : 0) || b[1] - a[1]);
+    lines.push(`- 好感度累積：${relEntries.map(([k, v]) => `${k} ${v}/100`).join('、')}`);
+    lines.push('  （好感度是 40 回累積的結果，男主的態度親疏必須與此吻合，不可退回初識的疏離感）');
+  }
+
+  const inv = Array.isArray(st.inventory) ? st.inventory : [];
+  if (inv.length) {
+    lines.push(`- 持有道具：${inv.map(it => `${it.name || it}${it.count > 1 ? `×${it.count}` : ''}`).join('、')}`);
+  }
+
+  const flags = st.questFlags && typeof st.questFlags === 'object' ? st.questFlags : {};
+  const flagKeys = Object.keys(flags).slice(-CONTEXT_BUDGET.questFlagsShown);
+  if (flagKeys.length) {
+    lines.push(`- 任務進展：${flagKeys.map(k => `${k}＝${flags[k]}`).join('；')}`);
+  }
+
+  return clampBlock(lines.join('\n'), CONTEXT_BUDGET.liveStateChars);
+}
+
+// =========================================================================
 // 4.5 三層角色動態注入引擎與長期滾動摘要池 (Tiered Lore & Memory Pipeline)
 // =========================================================================
 
@@ -2684,7 +2825,7 @@ ${characterPromptBlock}
   return { systemPrompt, userPrompt };
 }
 
-function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyList, summaryPool) {
+function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyList, summaryPool, saveState = state.saveState) {
   const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
   const leadKey = profile.targetLead || '01_徐令謙';
   
@@ -2699,11 +2840,12 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
   fetchCharacterLore(activeNPCs.slice(0, LORE_TIER2_LIMIT).map(n => n.id)).catch(() => {});
   const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura);
 
-  // 2. 組裝近期 2 回合精簡記憶
-  const recentHistory = (historyList || []).slice(-2).map((h, i) => `【第 ${h.turn || (i + 1)} 回：${h.chapterTitle || '前篇'}】\n玩家行動：${h.chosenLabel || '無'}\n情節要點：${(h.prose || '').slice(0, 260)}...`).join('\n\n');
-
-  // 3. 組裝長期滾動摘要池
-  const summaryBlock = summaryPool ? `【長期劇情摘要池】\n${summaryPool}\n\n` : '';
+  // 2. 上下文信封各區塊（見 CONTEXT_BUDGET 的說明）
+  const playerBlock = buildPlayerProfileBlock(profile);
+  const dossierBlock = buildActDossierBlock(saveState);
+  const recentHistory = buildRecentHistoryBlock(historyList);
+  const liveStateBlock = buildLiveStateBlock(saveState, profile);
+  const summaryBlock = summaryPool ? `【長期劇情摘要池（中期劇情的濃縮事實）】\n${summaryPool}\n` : '';
 
   const systemPrompt = `你是一位專精沉浸式情感小說、權謀博弈與多方張力的頂級角色扮演敘事者與RPG核心引擎。
 ${CHARACTER_IDENTITY_FIREWALL}
@@ -2749,17 +2891,25 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
   ]
 }`;
 
-  const userPrompt = `【玩家主角設定】姓名：${profile.name}，性別：${profile.gender || '女'}，年齡：${profile.age || '24'}，職業：${profile.profession}，攻略模式：${isShura ? '全勢力修羅場' : profile.targetLeadName}
-- 成人情慾模式 (R-18)：開啟
-- 【性別代名詞與視角平權】：請嚴格依據玩家所選之性別（${profile.gender || '女'}）與姓名（${profile.name}）使用正確的人稱代名詞（男性玩家使用「他」，女性玩家使用「她」，非二元玩家使用合適稱謂），給予同等極致性張力與權謀交鋒！
-【前情脈絡】
-${summaryBlock}${recentHistory || '正處於交鋒對峙中'}
-
-【玩家本回最新行動】
-- 抉擇標籤或自訂行動：${playerActionText}
-- 當前進展至：第 ${turnCount} 回
-
-請緊接著玩家的最新行動，完全原創演繹對手男主的反應、眼神殺伐、近身肢體推拉與情慾爆發，並生成 3 個全新分支選項！`;
+  // 由遠而近排列：幕篇檔案 → 摘要池 → 近期全文 → 當前數值 → 本回行動。
+  // 最新且最需要精準銜接的資訊放在結尾，模型對結尾的注意力最強。
+  const userPrompt = [
+    playerBlock,
+    '',
+    `【目前進度】第 ${saveState?.meta?.currentAct || 1} 幕 · 第 ${turnCount} 回`,
+    '',
+    dossierBlock,
+    summaryBlock,
+    recentHistory,
+    '',
+    liveStateBlock,
+    '',
+    '【玩家本回最新行動】',
+    `- 抉擇標籤或自訂行動：${playerActionText}`,
+    '',
+    '請緊接著玩家的最新行動，完全原創演繹對手男主的反應、眼神殺伐、近身肢體推拉與情慾爆發，並生成 3 個全新分支選項！',
+    '務必與上方【近期劇情】的場景、時間、在場人物與物理位置完全銜接，不可跳接或重置場景。'
+  ].filter(part => part !== undefined && part !== null).join('\n');
 
   return { systemPrompt, userPrompt };
 }
