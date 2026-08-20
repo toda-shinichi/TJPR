@@ -112,6 +112,9 @@ function doPost(e) {
       case 'lore/get-characters':
         return handleGetCharacters(userSession, payload);
 
+      case 'lore/get-character':
+        return handleGetCharacterLore(userSession, payload);
+
       default:
         return createErrorResponse('Unknown API action: ' + action, 404);
     }
@@ -504,6 +507,45 @@ function handleNovelInit(userSession, payload) {
   };
   var initialStory = MemoryPipeline.initializeNewNovel(userSession, playerProfile);
   return createSuccessResponse(initialStory);
+}
+
+/**
+ * 調閱單一角色的完整 Markdown 人設（供前端在組提示詞時注入 Tier 1 / Tier 2）。
+ *
+ * 為什麼需要這個：前端先前完全依賴 app.js 裡硬編的 OFFICIAL_DRIVE_CHARACTERS，
+ * 那份只有約 7,000 字元，而 Drive 上的角色卡共 50,896 字元 —— 缺少了關係網絡、
+ * 家族背景、幕僚系統、宿敵設定與部分角色專屬的風格防火牆，長局中最容易造成
+ * 性格漂移的正是這些內容。
+ *
+ * payload: { ids: string[] } 或 { id: string }
+ * 回傳: { cards: { [id]: { id, name, markdown, chars } }, missing: string[] }
+ */
+function handleGetCharacterLore(userSession, payload) {
+  var ids = payload.ids || (payload.id ? [payload.id] : []);
+  if (!ids.length) {
+    return createErrorResponse('Missing "id" or "ids".', 400);
+  }
+  // 一次最多 4 張（Tier 1 一張 + Tier 2 上限兩張 + 一點餘裕），避免單次回應過大
+  ids = ids.slice(0, 4);
+
+  var cards = {};
+  var missing = [];
+  for (var i = 0; i < ids.length; i++) {
+    var id = String(ids[i] || '').trim();
+    if (!id) continue;
+    var md = StorageService.getCharacterMarkdown(id);
+    if (md) {
+      cards[id] = {
+        id: id,
+        name: id.replace(/^\d\d_/, ''),
+        markdown: md,
+        chars: md.length
+      };
+    } else {
+      missing.push(id);
+    }
+  }
+  return createSuccessResponse({ cards: cards, missing: missing });
 }
 
 /**

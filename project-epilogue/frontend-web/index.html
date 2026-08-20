@@ -42,7 +42,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./style.css?v=437f416f9a">
+  <link rel="stylesheet" href="./style.css?v=bea59a761d">
 </head>
 <body class="bg-brand-dark text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-white">
 
@@ -195,7 +195,7 @@
               <span class="text-[10px] font-mono bg-brand-gold/20 text-brand-gold px-2 py-0.5 rounded border border-brand-gold/30">GUIDE</span>
             </h3>
             <p class="text-xs text-slate-300 mt-1 leading-relaxed">
-              深入了解三層角色動態注入、長效記憶摘要池運作、自由對白行動機制，並瀏覽全部 13 位官方男主的完整身分與性格檔案。
+              快速掌握創角開局、自由行動、閱讀偏好、存檔與跨裝置同步，並瀏覽 13 位官方男主檔案。
             </p>
           </div>
         </div>
@@ -666,9 +666,9 @@
       <div class="flex justify-between items-center pb-3 border-b border-brand-border">
         <div>
           <h3 class="font-serif font-bold text-lg text-brand-gold flex items-center gap-2">
-            <span>《暗流》全域指南與 13 位男主角色圖鑑</span>
+            <span>《暗流》遊戲指南與 13 位男主圖鑑</span>
           </h3>
-          <p class="text-xs text-slate-400 mt-0.5">探索自由抉擇機制、三層人設注入、長效記憶架構與 13 位官方男主檔案。</p>
+          <p class="text-xs text-slate-400 mt-0.5">從創角、回合抉擇到存檔與閱讀設定；所有說明均依目前可用功能整理。</p>
         </div>
         <button id="close-game-guide-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -695,34 +695,33 @@
         <div id="guide-panel-gameplay" class="space-y-4">
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>✦ 1. 無預設腳本 · 100% 原創即時長篇創作</span>
+              <span>✦ 1. 先定義主角，再開始第一回</span>
             </h4>
             <p class="text-slate-300 text-xs">
-              《暗流》摒棄傳統文字遊戲預先寫好的固定分支。每一次回合推進，皆由無審查長篇專用大模型根據您的個人人設、抉擇與自訂輸入，現場即時創作 <strong>1,000 ~ 1,500 字</strong> 沉浸式長篇小說正文。
+              開局可設定主角姓名、年齡、職業、背景、外貌、界線、攻略對象與自訂情境；也可直接套用官方或自訂人設。系統會以這些設定生成第一回，沒有預先寫死的劇情分支。
             </p>
           </div>
 
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>✦ 2. 多重博弈與自由行動輸入</span>
+              <span>✦ 2. 選擇、自由行動與回合推進</span>
             </h4>
             <p class="text-slate-300 text-xs">
-              每一回合系統均為您提供 3 個策略選項，並附帶風險提示：
+              每回通常會提供 3 個依當前情境生成的選項；選項文字與提示是建議，真正的後果會由前情、人物關係與你的行動共同推演。
             </p>
             <ul class="list-disc list-inside space-y-1 text-slate-400 pl-1">
-              <li><strong class="text-emerald-400">[A] 穩健推進 (Low Risk)</strong>：在規則內步步為營，鞏固情報與底牌。</li>
-              <li><strong class="text-sky-400">[B] 言語試探 (Medium Risk)</strong>：話術機鋒拉扯，探查對方底線。</li>
-              <li><strong class="text-rose-400">[C] 極限誘惑/破局 (High Risk)</strong>：打破常規、傾身靠近、點燃性張力與衝突。</li>
-              <li><strong class="text-brand-gold">⚡ 自由行動輸入</strong>：在底部的文字輸入列中，輸入任何您想說的對白、肢體碰觸或突發行動，AI 將完全接續您的意志推演！</li>
+              <li><strong class="text-brand-gold">選擇行動</strong>：點選一項建議，讓故事依該行動延續。</li>
+              <li><strong class="text-brand-gold">自由行動</strong>：可輸入任意對白、觀察、試探或行動；Enter 送出，Shift+Enter 換行。</li>
+              <li><strong class="text-brand-gold">生成期間</strong>：可使用中止按鈕；若請求失敗，畫面會提供重試與問題回報，不會把未完成回合算入進度。</li>
             </ul>
           </div>
 
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>✦ 3. 政治、商戰、情慾與奇思異想的交織</span>
+              <span>✦ 3. 閱讀節奏與狀態面板</span>
             </h4>
             <p class="text-slate-300 text-xs">
-              遊戲涵蓋政界暗潮、法務地檢交鋒、百億集團商戰、黑道殺伐、私密診所支配、頂流偶像情感拉扯與露骨細緻的成人情慾 (R-18)。您可以選擇專攻單一男主，亦可開啟全勢力修羅場，體驗多方爭霸與情感修羅場！
+              在抉擇區可調整正文字級（16–26px）與顯示速度。每回結尾的狀態面板會整理時間地點、人物互動、道具、傳聞、張力與關係變化；右上角「狀態」可查看生命、理智與關係數值。這些內容適合在做下一步前快速回顧。
             </p>
           </div>
         </div>
@@ -731,39 +730,48 @@
         <div id="guide-panel-system" class="space-y-4" style="display:none;">
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>🎭 1. 三層角色動態注入引擎 (Tiered Lore System)</span>
+              <span>🎭 1. 角色設定與劇情脈絡</span>
             </h4>
             <ul class="space-y-1.5 text-slate-300 text-xs">
-              <li><strong class="text-brand-gold">Tier 1（核心攻略主角）</strong>：全量常駐完整的官方身分、MBTI、穿搭與嚴格身分防火牆（例如徐令謙絕不是檢察官，韓正寰才是白日判官）。</li>
-              <li><strong class="text-sky-400">Tier 2（動態在場配角）</strong>：一旦小說正文或您的對白中提及背景人物（如韓檢、林次、副總統），系統即刻從記憶體/雲端載入其<strong>全量完整 Markdown 設定</strong>，以配角身分在場推動衝突，絕不喧賓奪主。</li>
-              <li><strong class="text-slate-400">Tier 3（世界全景名冊）</strong>：其餘 11+ 位男主以勢力名冊常駐，世界持續在背景運轉利益暗流，絕不被世界遺忘。</li>
+              <li><strong class="text-brand-gold">攻略主線</strong>：開局選定的男主與主角人設會持續帶入後續回合。</li>
+              <li><strong class="text-sky-400">在場人物</strong>：系統會依當前場景與提及的人物補充相關設定，讓互動延續前情。</li>
+              <li><strong class="text-slate-400">角色圖鑑</strong>：可搜尋 13 位官方男主的姓名、勢力與職稱，並由圖鑑直接帶入創角畫面作為攻略對象。</li>
             </ul>
           </div>
 
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>🧠 2. 長期滾動摘要池與雙軌記憶 (Rolling Summary Pool)</span>
+              <span>🧠 2. 近期上下文與長期摘要</span>
             </h4>
             <p class="text-slate-300 text-xs">
-              下筆前必讀「歷史滾動摘要池」＋「近期 2 回合對話」。每逢 5 的倍數回合（第 5、10、15 回...），背景將自動調用輕量模型（1.5 秒）將歷史脈絡濃縮為高密度大事紀，確保長篇小說在百回後仍邏輯連貫、伏筆不丟失。
+              每次推進會參考近期回合與既有劇情摘要；在雲端帳號模式下，系統約每 5 回合於背景更新一次摘要，保留關鍵事件、人物關係、道具與承諾。摘要用來維持長篇連貫，但仍建議在重要節點建立具名存檔。
             </p>
           </div>
 
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>💾 3. 存檔庫管理與手動同步至雲端（可跨裝置遊戲）</span>
+              <span>💾 3. 自動進度、具名存檔與備份</span>
             </h4>
             <p class="text-slate-300 text-xs">
-              支援無限自訂命名的存檔插槽，隨時可重新命名、搜尋、讀取載入或刪除。同時支援【手動同步至雲端（可跨裝置遊戲）】，保障進度永不遺失並可在手機與電腦無縫接續遊玩。
+              進行中的冒險會自動保留在本機；存檔庫可建立、搜尋、重新命名、載入與刪除具名存檔，也可匯出／匯入 JSON 備份。為控制長篇容量，具名存檔會保留最近的章節視窗；重大分歧前建議另存一份具名存檔。
             </p>
           </div>
 
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>📊 4. 即時狀態抽屜與好感度矩陣</span>
+              <span>☁️ 4. 雲端同步與跨裝置接續</span>
             </h4>
             <p class="text-slate-300 text-xs">
-              點擊右上角狀態圖示即可展開右側抽屜，查看玩家主角生命值 (HP)、理智值 (SAN)、13 位男主的好感度數值、隨身背包物品與最新暗流傳聞。
+              使用雲端帳號登入後，開局與成功推進回合會嘗試同步；也可在存檔庫或頂端同步狀態手動同步與載入。若顯示「本機模式」或同步失敗，進度仍會留在目前裝置，但不能保證跨裝置讀取。
+            </p>
+          </div>
+
+          <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
+            <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
+              <span>📚 5. 長局遊玩與卷末換窗</span>
+            </h4>
+            <p class="text-slate-300 text-xs">
+              同一幕累積約 30 回後，系統會建議「卷末換窗」。雲端模式會將本幕濃縮為長期記憶並進入下一幕；本機模式則只切換幕次。數值、關係與道具會保留，建議執行前先建立具名存檔。
             </p>
           </div>
         </div>
@@ -910,6 +918,10 @@
         <button id="drawer-cloud-load-btn" class="w-full text-left px-3 py-2 rounded-lg bg-sky-950/50 hover:bg-sky-950 border border-sky-700/50 text-xs text-sky-200 hover:text-white transition cursor-pointer">
           ☁️ 從雲端載入存檔（跨裝置接續）
         </button>
+        <button id="drawer-reload-lore-btn" class="w-full text-left px-3 py-2 rounded-lg bg-purple-950/50 hover:bg-purple-950 border border-purple-700/50 text-xs text-purple-200 hover:text-white transition cursor-pointer" title="在 Google Drive 上編輯過角色卡後，用這個讓修改立即生效">
+          📜 重新調閱 Drive 角色卡
+        </button>
+        <div id="lore-status-line" class="text-[10px] text-slate-500 px-1 leading-relaxed"></div>
         <button id="drawer-logout-btn" class="w-full text-left px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-brand-border text-xs text-slate-300 hover:text-white transition cursor-pointer">
           登出帳號
         </button>
@@ -1090,6 +1102,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=437f416f9a" defer></script>
+    <script src="app.js?v=bea59a761d" defer></script>
 </body>
 </html>

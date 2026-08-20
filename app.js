@@ -1168,6 +1168,7 @@ function setupEventListeners() {
     on('drawer-clear-all-data-btn', 'click', () => { closeDrawer(); handleClearAllData(); });
     on('drawer-delete-account-btn', 'click', () => { closeDrawer(); handleDeleteAccount(); });
     on('drawer-cloud-load-btn', 'click', () => { closeDrawer(); loadStateFromCloud(); });
+    on('drawer-reload-lore-btn', 'click', handleReloadLore);
     on('home-open-account-btn', 'click', openMenuDrawer);
 
     // ── A3: 雲端讀檔入口（先前只掛在 window 上，沒有任何按鈕） ──
@@ -1291,7 +1292,7 @@ function openDrawerPanel(kind) {
     panel._focusTrapBound = true;
   }
   if (kind === 'status') renderSaveState();
-  if (kind === 'menu') syncReadingPreferenceControls();
+  if (kind === 'menu') { syncReadingPreferenceControls(); renderLoreStatus(); }
 
   deferFocus(() => { panel.querySelector(FOCUSABLE_SELECTOR)?.focus(); });
 }
@@ -2201,6 +2202,204 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
 }
 
 // =========================================================================
+// 4.4 Drive 角色卡調閱與快取 (Lore Retrieval)
+// =========================================================================
+
+/**
+ * Drive 上 14 份角色 .md 共約 50,900 字元，而 app.js 硬編的
+ * OFFICIAL_DRIVE_CHARACTERS 只有約 7,000 字元 —— 缺少關係網絡、家族背景、
+ * 幕僚系統、宿敵設定，以及部分角色專屬的風格防火牆。長局中最容易造成
+ * 性格漂移的正是這些內容。
+ *
+ * 單張角色卡最大 8,512 字元（徐承勳）≈ 14k tokens，而目前整份提示詞只有
+ * 約 7,800 字元。注入 Tier 1 全文後總量約 23k tokens，遠低於 mistral-large
+ * 的 128k 視窗 —— 因此不需要精打細算，主攻角色一律注入完整人設。
+ *
+ * 取得方式：GAS 的 lore/get-character（需登入）。取不到時自動退回硬編資料，
+ * 本機模式與離線都不會因此中斷遊戲。
+ */
+const LORE_CACHE_PREFIX = 'undercurrent_lore_';
+const LORE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;   // 24 小時後自動重新調閱
+const LORE_TIER2_LIMIT = 2;                       // 在場配角最多注入兩張全文
+
+/** 記憶體層快取，避免同一回合內反覆讀 localStorage 與 JSON.parse */
+const loreMemoryCache = new Map();
+
+function readLoreCache(id) {
+  if (loreMemoryCache.has(id)) return loreMemoryCache.get(id);
+  try {
+    const raw = localStorage.getItem(LORE_CACHE_PREFIX + id);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.markdown) return null;
+    if (Date.now() - (parsed.fetchedAt || 0) > LORE_CACHE_TTL_MS) return null;
+    loreMemoryCache.set(id, parsed);
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeLoreCache(id, markdown) {
+  const entry = { id, markdown, fetchedAt: Date.now() };
+  loreMemoryCache.set(id, entry);
+  safeLocalStorageSet(LORE_CACHE_PREFIX + id, JSON.stringify(entry));
+}
+
+/** 清空所有角色卡快取，強迫下次重新自 Drive 調閱（Drive 上編輯後用） */
+function clearLoreCache() {
+  loreMemoryCache.clear();
+  let removed = 0;
+  try {
+    // 用 localStorage.key(i) 索引迭代而非 Object.keys()：前者是 Storage 的
+    // 標準介面，在任何實作上都可靠；後者依賴 key 被暴露為可列舉自有屬性。
+    // 先收集再刪除 —— 邊迭代邊 removeItem 會讓索引位移、漏刪。
+    const doomed = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(LORE_CACHE_PREFIX)) doomed.push(k);
+    }
+    doomed.forEach(k => { localStorage.removeItem(k); removed++; });
+  } catch (e) {
+    console.warn('[Lore] 清除快取時發生異常:', e.message);
+  }
+  return removed;
+}
+
+/**
+ * 自 Drive 調閱指定角色的完整人設，結果寫入快取。
+ * @param {string[]} ids 角色識別碼（如 '01_徐令謙'）
+ * @param {{force?: boolean}} options force 為 true 時忽略既有快取
+ * @returns {Promise<number>} 本次實際取得的張數
+ */
+async function fetchCharacterLore(ids, options = {}) {
+  const { force = false } = options;
+  const wanted = (Array.isArray(ids) ? ids : [ids])
+    .filter(Boolean)
+    .filter(id => force || !readLoreCache(id));
+  if (wanted.length === 0) return 0;
+
+  // 本機模式沒有雲端身分可用，直接沿用硬編資料
+  if (!state.token || state.token.startsWith('tok_local_')) return 0;
+
+  try {
+    const res = await fetch(state.gasApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'lore/get-character',
+        token: state.token,
+        userId: state.userId,
+        ids: wanted.slice(0, 4)
+      }),
+      redirect: 'follow'
+    });
+    const data = await res.json();
+    if (!data.success || !data.data || !data.data.cards) {
+      console.warn('[Lore] 調閱失敗，沿用硬編人設:', data.error?.message);
+      return 0;
+    }
+    let count = 0;
+    Object.values(data.data.cards).forEach(card => {
+      if (card && card.markdown) { writeLoreCache(card.id, card.markdown); count++; }
+    });
+    if ((data.data.missing || []).length) {
+      console.warn('[Lore] Drive 上找不到角色卡:', data.data.missing.join(', '));
+    }
+    console.log(`[Lore] 已自 Drive 調閱 ${count} 張角色卡。`);
+    return count;
+  } catch (err) {
+    console.warn('[Lore] 調閱時網路異常，沿用硬編人設:', err.message);
+    return 0;
+  }
+}
+
+/**
+ * 每隔幾回在提示詞裡加一段「重新對標人設」的強化指令。
+ *
+ * 為什麼需要：滾動摘要池會把早期劇情壓縮成事實條目，語氣與性格的細節
+ * 在壓縮中流失最快，長局因此容易出現「講話方式變了」的漂移。
+ * 完整角色卡雖然每回都注入，但單純放著不代表模型會持續對標它 ——
+ * 定期給一句明確的重新校準指令，效果好得多。
+ */
+const LORE_RECALIBRATE_EVERY = 5;
+
+function buildLoreRecalibrationNote(turnCount, leadName) {
+  if (!turnCount || turnCount < LORE_RECALIBRATE_EVERY) return '';
+  if (turnCount % LORE_RECALIBRATE_EVERY !== 0) return '';
+  return [
+    '',
+    `【人設重新校準 · 第 ${turnCount} 回】`,
+    `已進行 ${turnCount} 回，請在本回動筆前重新通讀上方 ${leadName} 的官方完整人設檔案，`,
+    '特別是說話風格與例句、性格與情慾動態，以及該角色專屬的風格禁制段落。',
+    '本回的對白與行為必須與檔案完全吻合 —— 若先前幾回出現語氣偏移、用詞粗俗化',
+    '或性格軟化，請在本回自然地校正回來，不要沿用偏移後的寫法。',
+    ''
+  ].join('\n');
+}
+
+/** 取出快取中的完整人設；沒有就回傳 null（呼叫端負責降級） */
+function getLoreMarkdown(id) {
+  const entry = readLoreCache(id);
+  return entry ? entry.markdown : null;
+}
+
+/**
+ * 手動重新調閱：在 Google Drive 上編輯過角色卡後，用這個讓修改立即生效
+ * （否則要等 24 小時快取到期）。
+ */
+async function handleReloadLore() {
+  const profile = getActivePlayerProfile();
+  if (!state.token || state.token.startsWith('tok_local_')) {
+    notifyUser('本機模式無法調閱 Drive 角色卡，將沿用內建人設。', 'error', 5000);
+    return;
+  }
+  const removed = clearLoreCache();
+  notifyUser('正在自 Drive 重新調閱角色卡……', 'info', 2500);
+  const ids = [];
+  if (profile.targetLead && profile.targetLead !== '修羅場') ids.push(profile.targetLead);
+  (profile.supportingLeads || []).forEach(k => ids.push(k));
+  const got = await fetchCharacterLore(ids, { force: true });
+  renderLoreStatus();
+  notifyUser(
+    got > 0
+      ? `已重新調閱 ${got} 張角色卡，下一回起生效（清除舊快取 ${removed} 筆）。`
+      : 'Drive 上未取得角色卡，將沿用內建人設。',
+    got > 0 ? 'success' : 'error',
+    6000
+  );
+}
+
+/** 在選單抽屜顯示目前使用的是 Drive 全文還是內建精簡人設 */
+function renderLoreStatus() {
+  const el = document.getElementById('lore-status-line');
+  if (!el) return;
+  const profile = getActivePlayerProfile();
+  const lead = profile.targetLead;
+  if (!lead || lead === '修羅場') {
+    el.textContent = '修羅場模式：使用全 13 位背景名冊。';
+    return;
+  }
+  const md = getLoreMarkdown(lead);
+  el.textContent = md
+    ? `目前 ${profile.targetLeadName || lead}：Drive 完整人設（${md.length} 字元）已載入。`
+    : `目前 ${profile.targetLeadName || lead}：使用內建精簡人設。點上方按鈕自 Drive 調閱完整版。`;
+}
+
+/**
+ * 開局或載入存檔後預熱：主攻對象 + 指定配角。
+ * 刻意不 await —— 第一回的提示詞可以先用硬編資料組成，
+ * 調閱完成後從第二回起自動升級為全量人設。
+ */
+function warmLoreCache(profile) {
+  if (!profile) return;
+  const ids = [];
+  if (profile.targetLead && profile.targetLead !== '修羅場') ids.push(profile.targetLead);
+  (profile.supportingLeads || []).forEach(k => ids.push(k));
+  if (ids.length) fetchCharacterLore(ids).catch(() => {});
+}
+
+// =========================================================================
 // 4.5 三層角色動態注入引擎與長期滾動摘要池 (Tiered Lore & Memory Pipeline)
 // =========================================================================
 
@@ -2323,8 +2522,20 @@ function assembleCharacterPromptBlock(primaryLeadKey, activeNPCs, isShura) {
     blocks.push('當前模式：十三勢力修羅場交鋒！所有 13 位男主均可能依局勢動態突入，請隨時維持各方勢力交鋒的緊張感與性張力！提及各角色時必須嚴格對標其官方座車、職銜與性格！\n');
   } else {
     const primaryChar = OFFICIAL_DRIVE_CHARACTERS[primaryLeadKey] || OFFICIAL_DRIVE_CHARACTERS['01_徐令謙'];
+    const primaryLore = getLoreMarkdown(primaryLeadKey);
+
+    if (primaryLore) {
+      // Drive 上的完整角色卡：含關係網絡、家族背景、幕僚系統、宿敵與
+      // 角色專屬風格防火牆 —— 這些是硬編摘要沒有、而長局防漂移最需要的內容。
+      blocks.push('=== 【主要互動角色 (Tier 1 · 核心主角 · Drive 官方完整人設檔案)】 ===');
+      blocks.push('【最高權重】以下為該角色的官方完整設定檔全文。任何描寫與此衝突時，一律以本檔案為準：');
+      blocks.push(primaryLore.trim());
+      blocks.push('');
+      return finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs);
+    }
+
     const exStr = (primaryChar.speechExamples || []).map(ex => '  * ' + ex).join('\n');
-    blocks.push('=== 【主要互動角色 (Tier 1 · 核心主角 · 全量真實人設)】 ===');
+    blocks.push('=== 【主要互動角色 (Tier 1 · 核心主角 · 精簡人設)】 ===');
     blocks.push(`- 姓名與稱謂：${primaryChar.fullName || primaryChar.name}（${primaryChar.age}，${primaryChar.mbti || ''}）
 - 官方專屬職銜：${primaryChar.title}
 - 專屬座車出入：${primaryChar.cars || '依照官方設定'}
@@ -2340,7 +2551,16 @@ ${exStr}\n`);
   if (activeNPCs && activeNPCs.length > 0) {
     blocks.push('=== 【當前在場配角 (Tier 2 · 動態突入 · 精準人設對標)】 ===');
     blocks.push('【在場配角演繹指引】：以下角色已動態升階為在場配角！請載入其完整職銜、座車與上位者身分，推動衝突與暗流，絕不可張冠李戴或隨意發明設定！');
+    let tier2FullCount = 0;
     activeNPCs.forEach((npc, idx) => {
+      const npcLore = tier2FullCount < LORE_TIER2_LIMIT ? getLoreMarkdown(npc.id) : null;
+      if (npcLore) {
+        tier2FullCount++;
+        blocks.push(`▶ 在場配角 [${idx + 1}]：${npc.name}（Drive 官方完整人設檔案）`);
+        blocks.push(npcLore.trim());
+        blocks.push('');
+        return;
+      }
       const fullChar = OFFICIAL_DRIVE_CHARACTERS[npc.id] || OFFICIAL_DRIVE_CHARACTERS[npc.name] || {};
       blocks.push(`▶ 在場配角 [${idx + 1}]：${fullChar.fullName || npc.name}（${fullChar.age || ''}）
   - 精確職銜：${fullChar.title || npc.role}
@@ -2348,6 +2568,33 @@ ${exStr}\n`);
   - 專屬手錶/住所：${fullChar.watch || '-'} ｜ ${fullChar.residence || '-'}
   - 核心特徵與性格：${fullChar.personality || npc.oneLiner}
   - 經典語調：${(fullChar.speechExamples || [])[0] || '-'}`);
+    });
+    blocks.push('');
+  }
+
+  return finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs, true);
+}
+
+/**
+ * 補上 Tier 2 / Tier 3 區塊。
+ * Tier 1 走 Drive 全文時會提前 return，因此這段抽成獨立函式供兩條路徑共用。
+ * @param {boolean} tier2AlreadyDone 呼叫端是否已自行輸出 Tier 2
+ */
+function finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs, tier2AlreadyDone = false) {
+  if (!tier2AlreadyDone && activeNPCs && activeNPCs.length > 0) {
+    blocks.push('=== 【當前在場配角 (Tier 2 · 動態突入)】 ===');
+    let n = 0;
+    activeNPCs.forEach((npc, idx) => {
+      const npcLore = n < LORE_TIER2_LIMIT ? getLoreMarkdown(npc.id) : null;
+      if (npcLore) {
+        n++;
+        blocks.push(`▶ 在場配角 [${idx + 1}]：${npc.name}（Drive 官方完整人設檔案）`);
+        blocks.push(npcLore.trim());
+      } else {
+        const c = OFFICIAL_DRIVE_CHARACTERS[npc.id] || {};
+        blocks.push(`▶ 在場配角 [${idx + 1}]：${c.fullName || npc.name}｜${c.title || npc.role}｜座車 ${c.cars || '-'}`);
+        blocks.push(`  性格：${c.personality || npc.oneLiner}`);
+      }
     });
     blocks.push('');
   }
@@ -2448,6 +2695,8 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
 
   // 1. 動態偵測在場配角
   const activeNPCs = detectActiveNPCs(lastProseText, playerActionText, leadKey, profile.supportingLeads || []);
+  // 在場配角可能是本局第一次登場，順手調閱其角色卡（下一回即可用上全文）
+  fetchCharacterLore(activeNPCs.slice(0, LORE_TIER2_LIMIT).map(n => n.id)).catch(() => {});
   const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura);
 
   // 2. 組裝近期 2 回合精簡記憶
@@ -2474,6 +2723,7 @@ ${CHARACTER_IDENTITY_FIREWALL}
    - favorabilityDelta（好感度變動 -5~+10）：依據主角此舉是否合乎該男主性格給予增減（精準博弈 +2~+5，重大浪漫/致命共犯 +8~+10，失誤冒犯 -2~-5）。
 5. 【三層角色設定集】：
 ${characterPromptBlock}
+${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象')}
 
 6. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼標記）：
 {
@@ -2618,6 +2868,8 @@ async function startNewGameWithProfile(profile) {
   state.generationAbortRequested = false;
   // 1. 徹底重置遊戲全域狀態與 DOM（絕不殘留舊局卡片）
   state.playerProfile = profile;
+  // 自 Drive 預熱角色卡（不 await：第 1 回先用硬編資料，取回後從第 2 回起升級為全量人設）
+  warmLoreCache(profile);
   state.chapterHistoryList = [];
   state.chapterData = null;
   state.lastChoicePayload = null;
@@ -4192,6 +4444,7 @@ function renderHomeRecentSaves() {
 }
 
 function handleContinueGame() {
+  warmLoreCache(getActivePlayerProfile());
   if (state.chapterHistoryList && state.chapterHistoryList.length > 0 && state.chapterData) {
     switchView('gameplay');
     // switchView 只更新麵包屑，從不渲染故事本體 —— 先前續玩進來會看到一片空白，
@@ -4828,6 +5081,9 @@ if (typeof window !== 'undefined') {
   window.closeChapterNav = closeChapterNav;
   window.showDialog = showDialog;
   window.showErrorRecovery = showErrorRecovery;
+  window.handleReloadLore = handleReloadLore;
+  window.clearLoreCache = clearLoreCache;
+  window.fetchCharacterLore = fetchCharacterLore;
 }
 
 
