@@ -9,10 +9,10 @@ compatibility_date = "2026-08-20"
 # 不設定時，所有沒有合法 Origin 的請求都會被拒絕。
 #   npx wrangler secret put CLIENT_SHARED_KEY
 #
-# 速率限制用的 KV namespace。建立方式：
-#   npx wrangler kv namespace create RATE_LIMIT_KV
-# 把回傳的 id 填到下面的 id = "" 裡即可。
-# 未填 id 時 Worker 會自動略過速率限制（不會因此掛掉）。
+# 速率限制用的 KV namespace（已於 2026-08-20 建立）。
+# 若要在別的帳號重建：npx wrangler kv namespace create RATE_LIMIT_KV
+# namespace id 只是資源識別碼、不是機密，可以進版控。
+# 未綁定或 id 留空時，Worker 會自動略過速率限制（不會因此掛掉）。
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "10473ace38044ccca8feac12eb621fae"
