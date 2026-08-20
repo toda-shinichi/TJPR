@@ -74,6 +74,13 @@
    - 捲動至最下方的 **「指令碼屬性 (Script Properties)」**，點擊「新增指令碼屬性」：
      - 屬性：`API_KEY`，值：`<請填入新建立的 API 金鑰>`（禁止把真實金鑰寫入程式碼、文件或版本控制）
      - 屬性：`SPREADSHEET_ID`，值：`1lP2etciUuoE4JYfJcuDVZt9XcrdYm6409Wb9hH8DN1s`
+     - `JWT_SECRET` 不需手動設定：首次呼叫時會自動產生一把隨機密鑰並存入指令碼屬性。
+
+   > ⚠️ **金鑰同時存在兩條路徑**：前端會先呼叫 Cloudflare Worker
+   > (`LLM_CONFIG.WORKER_URL`)，失敗才退回這個 GAS Proxy。
+   > 輪換 API 金鑰時**兩邊都要更新**，只改 GAS 等於沒有生效。
+   > Worker 端：`npx wrangler secret put API_KEY --name tjpr-llm-proxy`
+   > 或 Cloudflare Dashboard → Workers & Pages → 該 Worker → Settings → Variables and Secrets。
 5. **部署為網頁應用程式 (Web App)**：
    - 點擊右上角藍色按鈕 **「部署」 -> 「新增部署」**。
    - 齒輪圖示選擇 **「網頁應用程式 (Web App)」**。
@@ -91,3 +98,37 @@
 2. 點擊畫面底部的 **狀態抽屜**。
 3. 在最下方的 **「GAS 後端 Web App URL 設定」** 欄位中，貼上剛才第三步複製的 Apps Script 部署網址，並點擊 **「儲存」**。
 4. 系統將正式連線至 Google Apps Script 雲端後端，開始調用 `mistral-large-3` 展開 1,200~1,500 字的長篇互動分支冒險！
+
+---
+
+## 前端資產維護（快取版號與部署副本）
+
+`index.html` 以 `?v=<hash>` 破壞瀏覽器快取，同時 root 的
+`app.js` / `index.html` / `style.css` 必須與 `project-epilogue/frontend-web/`
+的部署副本逐位元一致（`debug_checks.js` 會驗證）。
+
+這兩件事已自動化，**不要手動改版號或手動複製檔案**：
+
+```bash
+node tools/stamp-assets.js          # 依內容雜湊重算版號並同步部署副本
+node tools/stamp-assets.js --check   # 只檢查，不同步則以非零結束（供 CI 使用）
+```
+
+版號取自 `app.js` + `style.css` 的內容雜湊，因此內容有變版號必變、
+內容沒變版號不動。
+
+一次性啟用 pre-commit 掛鉤（提交前自動戳記並跑 `debug_checks.js`）：
+
+```bash
+git config core.hooksPath .githooks
+```
+
+## 本機偵錯
+
+```bash
+node debug_checks.js
+```
+
+驗證項目包含：root 與部署副本一致性、`index.html` id 唯一性、HTML 轉義、
+段落切分規則一致性、回退還原、後端認證拒絕偽造 token、記憶管線好感度上限、
+卷末換窗重置行為。

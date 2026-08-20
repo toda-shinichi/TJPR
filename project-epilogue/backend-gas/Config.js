@@ -110,7 +110,47 @@ function getSecrets() {
   return {
     API_KEY: props.getProperty('API_KEY') || CONFIG.API.API_KEY,
     SPREADSHEET_ID: props.getProperty('SPREADSHEET_ID') || CONFIG.SHEET.SPREADSHEET_ID,
-    JWT_SECRET: props.getProperty('JWT_SECRET') || '',
+    JWT_SECRET: getOrCreateJwtSecret(props),
     MASTER_ADMIN_KEY: props.getProperty('MASTER_ADMIN_KEY') || ''
   };
+}
+
+/**
+ * 取得簽章用密鑰；若尚未設定則自動產生一把並持久化。
+ *
+ * 為什麼不留空字串 fallback：空密鑰會讓 generateSessionToken() 的簽章段
+ * 完全失去作用，而且是靜默失效 —— 不會有任何錯誤提示。
+ * 為什麼不硬編預設值：先前的 'epilogue_secret_sign_key_tw_2026' 已進入
+ * 公開的 git 歷史，任何人都能重現簽章。
+ *
+ * 自動產生的好處是部署者不需要記得手動設定，也不存在「忘記設」的狀態。
+ * @param {Properties} props ScriptProperties 實例
+ * @returns {string} 128 bit 以上的隨機密鑰
+ */
+function getOrCreateJwtSecret(props) {
+  var existing = props.getProperty('JWT_SECRET');
+  if (existing && existing.length >= 32) return existing;
+
+  // 併發時可能有多個請求同時走到這裡，取鎖後重新確認一次
+  var lock = LockService.getScriptLock();
+  var locked = false;
+  try {
+    locked = lock.waitLock(10000);
+  } catch (lockErr) {
+    console.warn('JWT_SECRET 取鎖失敗: ' + lockErr.message);
+  }
+
+  try {
+    existing = props.getProperty('JWT_SECRET');
+    if (existing && existing.length >= 32) return existing;
+
+    var generated = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+    props.setProperty('JWT_SECRET', generated);
+    console.info('已自動產生並儲存新的 JWT_SECRET（僅首次部署時發生）。');
+    return generated;
+  } finally {
+    if (locked) {
+      try { lock.releaseLock(); } catch (relErr) { /* 忽略 */ }
+    }
+  }
 }

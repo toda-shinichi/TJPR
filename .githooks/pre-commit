@@ -1,0 +1,27 @@
+#!/bin/sh
+# 提交前自動戳記資產版號並同步部署副本，然後跑迴歸檢查。
+# 一次性啟用：git config core.hooksPath .githooks
+
+set -e
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-commit: 找不到 node，跳過資產戳記。" >&2
+  exit 0
+fi
+
+node tools/stamp-assets.js || exit 1
+
+# 把腳本剛才可能改動的檔案重新加入本次提交
+for f in index.html app.js style.css \
+         project-epilogue/frontend-web/index.html \
+         project-epilogue/frontend-web/app.js \
+         project-epilogue/frontend-web/style.css; do
+  [ -f "$f" ] && git add "$f"
+done
+
+if [ -f debug_checks.js ]; then
+  node debug_checks.js || {
+    echo "pre-commit: debug_checks.js 未通過，提交中止。" >&2
+    exit 1
+  }
+fi
