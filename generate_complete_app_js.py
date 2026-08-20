@@ -1,4 +1,18 @@
 import os
+import sys
+
+# ⚠️ 已停用的一次性產生器（2026-08-16 快照）
+# 這支腳本會整檔覆寫 app.js。其內建的樣板早於 Worker 串流、escapeHtml、
+# extractGameData 解析器等改動，執行它會靜默抹除之後的所有修正。
+# 若真的要重新產生，請先確認樣板已同步到 app.js 目前的內容，
+# 再以 ALLOW_STALE_CODEGEN=1 執行。
+if os.environ.get('ALLOW_STALE_CODEGEN') != '1':
+    sys.exit(
+        '已中止：此產生器內容為 2026-08-16 舊快照，執行會覆蓋 app.js 並抹除後續所有修正。\n'
+        '確認要覆寫請執行：ALLOW_STALE_CODEGEN=1 python3 generate_complete_app_js.py'
+    )
+
+import os
 import re
 import json
 
@@ -40,7 +54,7 @@ for f in files:
 
 db_json = json.dumps(characters_db, ensure_ascii=False, indent=2)
 
-js_content = f'''/**
+js_content = r'''/**
  * 《暗流》（UNDER CURRENT）— 頂級沉浸式互動文字 RPG 核心引擎
  * 版本: v20260816_v50
  * 
@@ -53,7 +67,7 @@ js_content = f'''/**
  */
 
 // 官方 13 位男主資料庫
-const OFFICIAL_DRIVE_CHARACTERS = {db_json};
+const OFFICIAL_DRIVE_CHARACTERS = __CHARACTER_DB_JSON__;
 
 // 預設官方人設範本
 const DEFAULT_PRESETS = {{
@@ -473,7 +487,7 @@ function updateUserBadgeUI() {{
 
 const LLM_CONFIG = {{
   API_URL: 'https://api.banana2556.com/v1/chat/completions',
-  API_KEY: 'sk-TcKczU9MQ5abSWYrF51eU85aQjZV6IzPqeypYYn9zVDoSram',
+  API_KEY: '', // 真實金鑰僅能由後端環境變數提供
   PRIMARY_MODEL: 'gemini-3.6-flash',
   FALLBACK_MODEL: 'mistral-large-3',
   TEMPERATURE: 0.92
@@ -1798,6 +1812,10 @@ function hideLoading() {{
   state.currentAbortController = null;
 }}
 '''
+
+# 原始樣板曾使用 f-string，內嵌 JavaScript 的單層大括號會讓 Python 在
+# 執行安全停用判斷前就 SyntaxError。改為純字串後再還原樣板跳脫。
+js_content = js_content.replace('__CHARACTER_DB_JSON__', db_json).replace('{{', '{').replace('}}', '}')
 
 with open('/Users/huanhsu/Desktop/程式碼專案/TJPR/app.js', 'w', encoding='utf-8') as f:
     f.write(js_content)

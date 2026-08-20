@@ -12,3 +12,6 @@ npm-debug.log
 
 # System temp / logs
 *.log
+
+# 本機開發用的預覽 server 設定
+.claude/launch.json

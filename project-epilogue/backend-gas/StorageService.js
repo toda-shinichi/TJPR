@@ -114,7 +114,11 @@ var StorageService = (function() {
    * 更新使用者的 API Token
    */
   function updateUserToken(userId, newToken) {
-    var sheet = getOrCreateSheet(CONFIG.SHEET.USERS_SHEET_NAME);
+    // 必須帶入表頭：否則工作表不存在時會建出無表頭空表，token 不會被寫入，
+    // 使用者會拿到一個伺服器端查不到的 token（登入成功卻立刻 401）。
+    var sheet = getOrCreateSheet(CONFIG.SHEET.USERS_SHEET_NAME, [
+      'User_ID', 'Email', 'Password_Hash', 'Salt', 'API_Token', 'Drive_Folder_ID', 'Created_At', 'Last_Active'
+    ]);
     var data = sheet.getDataRange().getValues();
     for (var i = 1; i < data.length; i++) {
       if (data[i][0] === userId) {
@@ -134,25 +138,38 @@ var StorageService = (function() {
     ]);
     var data = sheet.getDataRange().getValues();
     var folderIdToDelete = null;
+    var rowIndexToDelete = null;
 
+    var tokenToInvalidate = null;
     for (var i = 1; i < data.length; i++) {
       if (data[i][0] === userId) {
         folderIdToDelete = data[i][5];
-        sheet.deleteRow(i + 1);
+        tokenToInvalidate = data[i][4];
+        rowIndexToDelete = i + 1;
         break;
+      }
+    }
+
+    if (!rowIndexToDelete) return false;
+
+    // 必須同步清除 CacheService 中的 session，否則已註銷帳號的 token
+    // 在快取到期前（最長 30 分鐘）仍可通過 verifyUserToken 驗證。
+    if (tokenToInvalidate) {
+      try {
+        CacheService.getScriptCache().remove('token_' + tokenToInvalidate);
+      } catch (cacheErr) {
+        console.warn('清除 token 快取失敗: ' + cacheErr.message);
       }
     }
 
     // 刪除 / 移至垃圾桶 Drive 資料夾
     if (folderIdToDelete) {
-      try {
-        var folder = DriveApp.getFolderById(folderIdToDelete);
-        if (folder) folder.setTrashed(true);
-      } catch (e) {
-        console.warn('Could not trash user folder: ' + e.message);
-      }
+      var folder = DriveApp.getFolderById(folderIdToDelete);
+      if (folder) folder.setTrashed(true);
     }
 
+    // 雲端資料夾處理成功後才移除帳號索引，避免留下無法追蹤的資料。
+    sheet.deleteRow(rowIndexToDelete);
     return true;
   }
 
@@ -213,8 +230,14 @@ var StorageService = (function() {
    */
   function loadSaveState(userFolderIdOrUserId) {
     try {
+      // 缺少識別資訊時直接放棄：先前會退回共用的 User_usr_guest 資料夾，
+      // 造成不同使用者的存檔互相覆寫與外洩。
+      if (!userFolderIdOrUserId) {
+        console.error('loadSaveState 缺少 folderId/userId，拒絕讀取共用 guest 資料夾。');
+        return null;
+      }
       var folderId = userFolderIdOrUserId;
-      if (!folderId || folderId.indexOf('usr_') === 0 || folderId === 'usr_guest') {
+      if (folderId.indexOf('usr_') === 0) {
         folderId = getOrCreateUserDriveFolder(userFolderIdOrUserId);
       }
       var folder = DriveApp.getFolderById(folderId);
@@ -236,8 +259,14 @@ var StorageService = (function() {
    */
   function saveSaveState(userFolderIdOrUserId, saveStateObj, chapterObj, playerProfileObj, chapterHistoryArr) {
     try {
+      // 缺少識別資訊時直接放棄：先前會退回共用的 User_usr_guest 資料夾，
+      // 造成不同使用者的存檔互相覆寫與外洩。
+      if (!userFolderIdOrUserId) {
+        console.error('saveSaveState 缺少 folderId/userId，拒絕寫入共用 guest 資料夾。');
+        return false;
+      }
       var folderId = userFolderIdOrUserId;
-      if (!folderId || folderId.indexOf('usr_') === 0 || folderId === 'usr_guest') {
+      if (folderId.indexOf('usr_') === 0) {
         folderId = getOrCreateUserDriveFolder(userFolderIdOrUserId);
       }
       var folder = DriveApp.getFolderById(folderId);
@@ -445,4 +474,3 @@ var StorageService = (function() {
   };
 
 })();
-

@@ -110,7 +110,7 @@ function getSecrets() {
   return {
     API_KEY: props.getProperty('API_KEY') || CONFIG.API.API_KEY,
     SPREADSHEET_ID: props.getProperty('SPREADSHEET_ID') || CONFIG.SHEET.SPREADSHEET_ID,
-    JWT_SECRET: props.getProperty('JWT_SECRET') || 'epilogue_secret_sign_key_tw_2026',
+    JWT_SECRET: props.getProperty('JWT_SECRET') || '',
     MASTER_ADMIN_KEY: props.getProperty('MASTER_ADMIN_KEY') || ''
   };
 }

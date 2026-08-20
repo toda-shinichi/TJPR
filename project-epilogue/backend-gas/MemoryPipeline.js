@@ -125,8 +125,33 @@ var MemoryPipeline = (function() {
   /**
    * 組裝主要敘事模型提示詞內容 (Prompt Context)
    */
+  /**
+   * 補齊用戶端傳來的存檔缺漏欄位。
+   * saveState 來自 payload.saveState（完全由用戶端控制），先前直接讀取
+   * saveState.turnHistory / protagonist.hp / meta.currentAct，任何欄位缺漏
+   * 都會讓整個 doPost 以 500 收場。
+   */
+  function normalizeSaveState(saveState) {
+    var s = saveState || {};
+    s.meta = s.meta || {};
+    if (typeof s.turnCount !== 'number' || !isFinite(s.turnCount) || s.turnCount < 1) {
+      s.turnCount = 1;
+    }
+    s.protagonist = s.protagonist || {};
+    if (typeof s.protagonist.hp !== 'number') s.protagonist.hp = 100;
+    if (typeof s.protagonist.sanity !== 'number') s.protagonist.sanity = 100;
+    if (!Array.isArray(s.inventory)) s.inventory = [];
+    if (!Array.isArray(s.turnHistory)) s.turnHistory = [];
+    if (!Array.isArray(s.actDossiers)) s.actDossiers = [];
+    if (!Array.isArray(s.auditLog)) s.auditLog = [];
+    if (!s.relationships || typeof s.relationships !== 'object') s.relationships = {};
+    if (!s.questFlags || typeof s.questFlags !== 'object') s.questFlags = {};
+    if (typeof s.summaryPool !== 'string') s.summaryPool = '';
+    return s;
+  }
+
   function buildTurnPromptContext(params) {
-    var saveState = params.saveState;
+    var saveState = normalizeSaveState(params.saveState);
     var choiceId = params.choiceId;
     var customInput = params.customInput;
     var playerProfile = (saveState.meta && saveState.meta.playerProfile) || {};
@@ -147,7 +172,7 @@ var MemoryPipeline = (function() {
       '【最高指導原則】',
       '1. 絕對禁止OOC：100%沉浸式角色扮演，角色絕不承認是AI，依各自MBTI、身分背景、著裝風格與微表情細膩反應。',
       '2. 純文學沉浸正文：正文開頭【嚴禁出現「妳做出了抉擇」等系統破梗語】！小說正文必須宛如出版實體書，直接從劇中人物的動作、微表情、眼神交會、肢體觸摸與對話自然推進！',
-      '3. 篇幅與深度：每回合正文輸出【嚴格維持 1,000 至 1,500 字】，細緻描寫環境氣味、光影、肢體距離、呼吸心跳、對話交鋒與微表情變化，絕不套用固定模板。',
+      '3. 篇幅與深度：每回合正文輸出【嚴格維持 600 至 800 字，不得超過】，細緻描寫環境氣味、光影、肢體距離、呼吸心跳、對話交鋒與微表情變化，絕不套用固定模板。',
       '4. 嚴格身分防火牆：徐令謙是黑道玄辰幫二把手·天裕會中樞，絕非檢察官（士林地檢署檢察官是韓正寰），徐承勳是中華民國副總統，絕不可張冠李戴！',
       '5. 成人情慾文學指引（R-18）：極致性張力、高位推拉、寫實直白描寫肉體交纏、支配與臣服、五感具象（體溫、喘息、香氣、眼神壓迫、肢體撫摸）、權謀殺伐與多方博弈，使用純台灣繁體中文，拒絕隱晦暗喻！',
       '',
@@ -157,7 +182,7 @@ var MemoryPipeline = (function() {
       '你必須嚴格輸出標準 JSON 格式，請勿在 JSON 外附帶任何非 JSON 字串：',
       '{',
       '  "chapterTitle": "第 N 回．[自動生成章節名稱]",',
-      '  "prose": "800-1200字以上純文學長篇正文。開頭嚴禁「妳選擇了」等系統語，直接由人物動作與情境切入。第三人稱現在式描寫五感細節、服裝著裝、微表情與對話交鋒；對話用引號「」。",',
+      '  "prose": "600~800 字純文學長篇正文（上限強制執行）。開頭嚴禁「妳選擇了」等系統語，直接由人物動作與情境切入。第三人稱現在式描寫五感細節、服裝著裝、微表情與對話交鋒；對話用引號「」。",',
       '  "narrativeSummaryDelta": "本回關鍵進展的 2~3 句話濃縮摘要（供記憶池更新）",',
       '  "statusPanel": {',
       '    "timeLocation": "時空（例如：2026年5月12日 21:30 星期二 於 台北市士林區德行法律事務所頂樓制策室）",',
@@ -216,7 +241,7 @@ var MemoryPipeline = (function() {
       '選擇識別碼: ' + (choiceId || 'CUSTOM_ACTION'),
       '自訂動作/具體內容: ' + (customInput || '依照選項推進'),
       '',
-      '請根據以上完整脈絡，撰寫下一回 600~1000 字精緻長篇情節並回傳標準 JSON！'
+      '請根據以上完整脈絡，撰寫下一回 600~800 字精緻長篇情節並回傳標準 JSON！'
     ];
 
     return {
@@ -230,8 +255,8 @@ var MemoryPipeline = (function() {
    */
   function applyTurnUpdate(params) {
     var userSession = params.userSession;
-    var saveState = params.saveState;
-    var turnOutput = params.turnOutput;
+    var saveState = normalizeSaveState(params.saveState);
+    var turnOutput = params.turnOutput || {};
     var choiceSelected = params.choiceSelected;
 
     saveState.turnCount += 1;
@@ -259,7 +284,13 @@ var MemoryPipeline = (function() {
       // 好感度更新
       if (delta.relationshipChanges) {
         for (var npc in delta.relationshipChanges) {
-          saveState.relationships[npc] = (saveState.relationships[npc] || 0) + delta.relationshipChanges[npc];
+          // LLM 可能回傳字串或物件；舊存檔的 relationships 值也可能是物件
+          // （{favorability:...}），直接相加會得到 NaN 並寫進存檔。
+          var current = Number(saveState.relationships[npc]);
+          if (!isFinite(current)) current = 0;
+          var change = Number(delta.relationshipChanges[npc]);
+          if (!isFinite(change)) continue;
+          saveState.relationships[npc] = Math.max(0, Math.min(100, current + change));
         }
       }
       // 任務旗標更新
@@ -323,12 +354,27 @@ var MemoryPipeline = (function() {
     var files = folder.getFilesByName(CONFIG.STORAGE.NOVEL_FILE_NAME);
 
     var fullProse = '';
+    var currentNovelFile = null;
     if (files.hasNext()) {
-      fullProse = files.next().getBlob().getDataAsString('UTF-8');
+      currentNovelFile = files.next();
+      fullProse = currentNovelFile.getBlob().getDataAsString('UTF-8');
     }
 
-    // 呼叫 AI 生成幕篇檔案
-    var actDossier = AIService.generateActDossier(fullProse, saveState);
+    // 呼叫 AI 生成幕篇檔案。
+    // 整幕正文會隨回合數線性膨脹（每回約 800 字），直接整份送出必定撞上
+    // 模型 token 上限。此處保留頭尾兩段：開頭建立本幕基調，結尾承接下一幕。
+    var MAX_DOSSIER_INPUT_CHARS = 24000;
+    var dossierInput = fullProse;
+    if (dossierInput.length > MAX_DOSSIER_INPUT_CHARS) {
+      var headChars = Math.floor(MAX_DOSSIER_INPUT_CHARS * 0.4);
+      var tailChars = MAX_DOSSIER_INPUT_CHARS - headChars;
+      dossierInput = dossierInput.slice(0, headChars) +
+        '\n\n……（本幕中段內容因長度過長已省略，請依前後文與下方摘要池推斷）……\n\n' +
+        dossierInput.slice(-tailChars);
+      console.info('executeActRebase：正文長度 ' + fullProse.length +
+        ' 字元已裁切為 ' + dossierInput.length + ' 字元後送出。');
+    }
+    var actDossier = AIService.generateActDossier(dossierInput, saveState);
 
     // 封存並更新存檔狀態
     saveState.actDossiers = saveState.actDossiers || [];
@@ -336,7 +382,8 @@ var MemoryPipeline = (function() {
 
     // 備份當前幕小說紀錄為 Full_Novel_Act_X.md
     var actNumber = saveState.meta.currentAct || 1;
-    folder.createFile('Full_Novel_Act_' + actNumber + '_Archived.md', fullProse, MimeType.PLAIN_TEXT);
+    var archiveStamp = new Date().toISOString().replace(/[:.]/g, '-');
+    folder.createFile('Full_Novel_Act_' + actNumber + '_Archived_' + archiveStamp + '.md', fullProse, MimeType.PLAIN_TEXT);
 
     // 重置即時視窗
     saveState.meta.currentAct = actNumber + 1;
@@ -344,8 +391,14 @@ var MemoryPipeline = (function() {
     saveState.summaryPool = '【第 ' + actNumber + ' 幕已完結並重整】請根據幕篇檔案承接下一幕情節。';
 
     // 重新建立新的 Full_Novel.md
-    if (files.hasNext()) {
-      files.next().setContent('# Project Epilogue — 第 ' + saveState.meta.currentAct + ' 幕\n*建立時間：' + new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) + '*\n\n---\n');
+    if (currentNovelFile) {
+      currentNovelFile.setContent('# Project Epilogue — 第 ' + saveState.meta.currentAct + ' 幕\n*建立時間：' + new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) + '*\n\n---\n');
+    } else {
+      folder.createFile(
+        CONFIG.STORAGE.NOVEL_FILE_NAME,
+        '# Project Epilogue — 第 ' + saveState.meta.currentAct + ' 幕\n*建立時間：' + new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) + '*\n\n---\n',
+        MimeType.PLAIN_TEXT
+      );
     }
 
     StorageService.saveSaveState(userFolderId, saveState);

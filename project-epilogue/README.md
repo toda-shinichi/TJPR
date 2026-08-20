@@ -72,7 +72,7 @@
 4. **設定環境金鑰 (Script Properties)**：
    - 點擊左側齒輪圖示 **「專案設定 (Project Settings)」**。
    - 捲動至最下方的 **「指令碼屬性 (Script Properties)」**，點擊「新增指令碼屬性」：
-     - 屬性：`API_KEY`，值：`sk-TcKczU9MQ5abSWYrF51eU85aQjZV6IzPqeypYYn9zVDoSram`
+     - 屬性：`API_KEY`，值：`<請填入新建立的 API 金鑰>`（禁止把真實金鑰寫入程式碼、文件或版本控制）
      - 屬性：`SPREADSHEET_ID`，值：`1lP2etciUuoE4JYfJcuDVZt9XcrdYm6409Wb9hH8DN1s`
 5. **部署為網頁應用程式 (Web App)**：
    - 點擊右上角藍色按鈕 **「部署」 -> 「新增部署」**。

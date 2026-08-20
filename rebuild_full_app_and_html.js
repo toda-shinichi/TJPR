@@ -1,3 +1,14 @@
+// ⚠️ 已停用的一次性產生器（2026-08-16 快照）
+// 這支腳本會整檔覆寫 index.html 與 app.js。其內建的樣板早於 Worker 串流、escapeHtml、
+// extractGameData 解析器等改動，執行它會靜默抹除之後的所有修正。
+// 若真的要重新產生，請先確認樣板已同步到目前檔案內容，
+// 再以 ALLOW_STALE_CODEGEN=1 執行。
+if (process.env.ALLOW_STALE_CODEGEN !== '1') {
+  console.error('已中止：此產生器內容為 2026-08-16 舊快照，執行會覆蓋 index.html/app.js 並抹除後續所有修正。');
+  console.error('確認要覆寫請執行：ALLOW_STALE_CODEGEN=1 node rebuild_full_app_and_html.js');
+  process.exit(1);
+}
+
 const fs = require('fs');
 
 // ==========================================

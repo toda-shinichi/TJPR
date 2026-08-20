@@ -377,11 +377,27 @@ const state = {
   lastChoicePayload: null,
   previousStateSnapshot: null,
   currentAbortController: null,
+  generationAbortRequested: false,
+  isGenerating: false,
   cooldownInterval: null,
   fontSizePx: parseInt(localStorage.getItem('undercurrent_font_size') || '18', 10),
   theme: localStorage.getItem('undercurrent_theme') || 'dark',
-  typeSpeed: localStorage.getItem('undercurrent_type_speed') || 'normal'
+  typeSpeed: localStorage.getItem('undercurrent_type_speed') || 'fast'
 };
+
+function createGenerationAbortError() {
+  const error = new Error('Generation aborted by user.');
+  error.name = 'AbortError';
+  return error;
+}
+
+function isGenerationAbortError(error) {
+  return state.generationAbortRequested || (error && error.name === 'AbortError');
+}
+
+function throwIfGenerationAborted() {
+  if (state.generationAbortRequested) throw createGenerationAbortError();
+}
 
 // ==========================================
 // 2. DOM 元素動態安全代理 (Dynamic DOM Proxy)
@@ -528,6 +544,185 @@ const dom = new Proxy({}, {
 });
 
 // ==========================================
+// 2.5 共用 UI 基礎設施 (Dialog / Toast / Modal a11y)
+// ==========================================
+
+/**
+ * 自訂對話框，取代原生 alert / confirm / prompt。
+ * 原生對話框會凍結整頁、樣式與遊戲美術脫節，手機上還會顯示網域名稱，
+ * 且 prompt() 在部分瀏覽器已被限制。
+ * @returns {Promise<boolean|string|null>} alert → true；confirm → boolean；prompt → 字串或 null
+ */
+function showDialog(options = {}) {
+  const {
+    title = '提示',
+    message = '',
+    icon = '✦',
+    mode = 'alert',          // 'alert' | 'confirm' | 'prompt'
+    confirmText = '確定',
+    cancelText = '取消',
+    tone = 'default',        // 'default' | 'danger'
+    defaultValue = ''
+  } = options;
+
+  const root = document.getElementById('app-dialog');
+  if (!root) {
+    // 極端降級：對話框節點不存在時不可讓流程靜默中斷
+    if (mode === 'confirm') return Promise.resolve(window.confirm(message));
+    if (mode === 'prompt') return Promise.resolve(window.prompt(message, defaultValue));
+    window.alert(message);
+    return Promise.resolve(true);
+  }
+
+  const titleEl = document.getElementById('app-dialog-title');
+  const msgEl = document.getElementById('app-dialog-message');
+  const iconEl = document.getElementById('app-dialog-icon');
+  const inputWrap = document.getElementById('app-dialog-input-wrap');
+  const inputEl = document.getElementById('app-dialog-input');
+  const confirmBtn = document.getElementById('app-dialog-confirm');
+  const cancelBtn = document.getElementById('app-dialog-cancel');
+
+  if (titleEl) titleEl.textContent = title;
+  if (msgEl) msgEl.textContent = message;
+  if (iconEl) iconEl.textContent = icon;
+  if (confirmBtn) {
+    confirmBtn.textContent = confirmText;
+    confirmBtn.className = tone === 'danger'
+      ? 'px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition cursor-pointer shadow-lg shadow-rose-900/30'
+      : 'px-4 py-2 rounded-xl bg-brand-gold hover:bg-yellow-500 text-slate-950 text-xs font-black transition cursor-pointer shadow-lg shadow-brand-gold/10';
+  }
+  if (cancelBtn) {
+    cancelBtn.textContent = cancelText;
+    cancelBtn.style.display = mode === 'alert' ? 'none' : 'inline-flex';
+  }
+  if (inputWrap) inputWrap.style.display = mode === 'prompt' ? 'block' : 'none';
+  if (inputEl) inputEl.value = defaultValue || '';
+
+  const previouslyFocused = document.activeElement;
+  root.style.display = 'flex';
+  lockBodyScroll(true);
+
+  return new Promise(resolve => {
+    const settle = (result) => {
+      root.style.display = 'none';
+      confirmBtn?.removeEventListener('click', onConfirm);
+      cancelBtn?.removeEventListener('click', onCancel);
+      root.removeEventListener('keydown', onKeydown);
+      root.removeEventListener('mousedown', onBackdrop);
+      lockBodyScroll(false);
+      if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+        previouslyFocused.focus();
+      }
+      resolve(result);
+    };
+    const onConfirm = () => settle(mode === 'prompt' ? (inputEl ? inputEl.value : '') : true);
+    const onCancel = () => settle(mode === 'prompt' ? null : false);
+    const onKeydown = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onCancel(); }
+      else if (e.key === 'Enter' && mode !== 'alert') { e.preventDefault(); onConfirm(); }
+      else trapFocusWithin(root, e);
+    };
+    const onBackdrop = (e) => { if (e.target === root) onCancel(); };
+
+    confirmBtn?.addEventListener('click', onConfirm);
+    cancelBtn?.addEventListener('click', onCancel);
+    root.addEventListener('keydown', onKeydown);
+    root.addEventListener('mousedown', onBackdrop);
+
+    // 對話框開啟後把焦點移進來：prompt 進輸入框，其餘進主要按鈕
+    deferFocus(() => {
+      if (mode === 'prompt' && inputEl) { inputEl.focus(); inputEl.select(); }
+      else confirmBtn?.focus();
+    });
+  });
+}
+
+/**
+ * 在下一個事件循環把焦點移入浮層。
+ * 不用 requestAnimationFrame：頁面未取得焦點（背景分頁、隱藏視窗）時 rAF
+ * 會被節流甚至完全不觸發，導致焦點永遠不會移進對話框。
+ */
+function deferFocus(fn) {
+  setTimeout(fn, 0);
+}
+
+/** 語意化捷徑 */
+const notifyDialog = (message, title = '提示') => showDialog({ message, title });
+const confirmDialog = (message, options = {}) =>
+  showDialog(Object.assign({ message, title: '請確認', mode: 'confirm', icon: '❓' }, options));
+const confirmDangerDialog = (message, options = {}) =>
+  showDialog(Object.assign({ message, title: '危險操作', mode: 'confirm', icon: '⚠️', tone: 'danger', confirmText: '我了解，繼續' }, options));
+const promptDialog = (message, defaultValue = '', options = {}) =>
+  showDialog(Object.assign({ message, defaultValue, title: '請輸入', mode: 'prompt', icon: '✎' }, options));
+
+/** 背景捲動鎖定計數器（避免嵌套彈窗提早解鎖） */
+let bodyScrollLockCount = 0;
+function lockBodyScroll(shouldLock) {
+  if (typeof document === 'undefined' || !document.body) return;
+  bodyScrollLockCount = Math.max(0, bodyScrollLockCount + (shouldLock ? 1 : -1));
+  document.body.style.overflow = bodyScrollLockCount > 0 ? 'hidden' : '';
+}
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** 把 Tab 鍵鎖在容器內，避免焦點跑到背後的頁面 */
+function trapFocusWithin(container, event) {
+  if (!container || event.key !== 'Tab') return;
+  const items = Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR))
+    .filter(el => el.offsetParent !== null || el === document.activeElement);
+  if (items.length === 0) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+// 記住每個彈窗開啟前的焦點，關閉時歸還
+const modalReturnFocus = new Map();
+
+/** 開啟浮層：顯示、鎖背景捲動、移入焦點、掛上 Tab 鎖 */
+function openOverlay(elementId, options = {}) {
+  const el = document.getElementById(elementId);
+  if (!el) return null;
+  const { display = 'flex', focusSelector = null } = options;
+  modalReturnFocus.set(elementId, document.activeElement);
+  el.style.display = display;
+  lockBodyScroll(true);
+  if (!el._focusTrapBound) {
+    el.addEventListener('keydown', (e) => trapFocusWithin(el, e));
+    el._focusTrapBound = true;
+  }
+  deferFocus(() => {
+    const target = (focusSelector && el.querySelector(focusSelector))
+      || el.querySelector(FOCUSABLE_SELECTOR);
+    if (target && typeof target.focus === 'function') target.focus();
+  });
+  return el;
+}
+
+/** 關閉浮層：隱藏、解除捲動鎖、歸還焦點 */
+function closeOverlay(elementId) {
+  const el = document.getElementById(elementId);
+  if (!el || el.style.display === 'none') return;
+  el.style.display = 'none';
+  lockBodyScroll(false);
+  const prev = modalReturnFocus.get(elementId);
+  modalReturnFocus.delete(elementId);
+  if (prev && typeof prev.focus === 'function' && document.body.contains(prev)) prev.focus();
+}
+
+function isOverlayOpen(elementId) {
+  const el = document.getElementById(elementId);
+  return !!el && el.style.display !== 'none' && el.style.display !== '';
+}
+
+// ==========================================
 // 1. 初始化與事件綁定 (Initialization & Events)
 // ==========================================
 
@@ -538,7 +733,217 @@ window.addEventListener('DOMContentLoaded', async () => {
   try { loadSavedProfilePresetsIntoSelect(); } catch (e) { console.warn('loadSavedProfilePresetsIntoSelect warn:', e); }
   try { renderHomeRecentSaves(); } catch (e) { console.warn('renderHomeRecentSaves warn:', e); }
   try { restoreSavedStateFromStorage(); } catch (e) { console.warn('restoreSavedStateFromStorage warn:', e); }
+  try { initializeUxControls(); } catch (e) { console.warn('initializeUxControls warn:', e); }
+  try { updateHomeContinueCard(); } catch (e) { console.warn('updateHomeContinueCard warn:', e); }
+  try { updateGenderedCopy(); } catch (e) { console.warn('updateGenderedCopy warn:', e); }
+  try {
+    updateCloudSyncBadge(
+      (!state.token || state.token.startsWith('tok_local_')) ? 'local' : 'idle'
+    );
+  } catch (e) { console.warn('updateCloudSyncBadge warn:', e); }
 });
+
+/**
+ * localStorage 安全寫入：配額耗盡（QuotaExceededError）時不再向外拋出，
+ * 否則 appendChapterToHistory 等呼叫點會讓整個回合推進失敗、遊戲永久卡死。
+ * 回傳是否寫入成功，並在失敗時提示玩家清理存檔。
+ */
+function safeLocalStorageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err) {
+    console.error('[Storage] 寫入 localStorage 失敗（' + key + '）:', err && err.name, err && err.message);
+    if (!safeLocalStorageSet._warned) {
+      safeLocalStorageSet._warned = true;
+      try {
+        notifyUser('本機儲存空間已滿，最新進度可能未保存。請至存檔庫刪除舊存檔後再繼續。', 'error', 8000);
+      } catch (e) { /* notifyUser 尚未就緒時忽略 */ }
+    }
+    return false;
+  }
+}
+
+function notifyUser(message, type = 'info', duration = 3200) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const toast = document.createElement('div');
+  const tone = type === 'success'
+    ? 'border-emerald-500/60 bg-emerald-950/95 text-emerald-100'
+    : type === 'error'
+      ? 'border-rose-500/60 bg-rose-950/95 text-rose-100'
+      : 'border-brand-gold/50 bg-brand-surface/95 text-slate-100';
+  toast.className = `pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-2xl backdrop-blur-md ${tone}`;
+  toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+
+  const text = document.createElement('span');
+  text.className = 'flex-1 leading-relaxed';
+  text.textContent = message;
+  toast.appendChild(text);
+
+  // 可手動關閉：長訊息（如儲存空間警告）若在閱讀時自動消失，玩家就完全錯過了
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'shrink-0 -mr-1 -mt-0.5 px-1.5 text-base leading-none opacity-60 hover:opacity-100 transition cursor-pointer';
+  closeBtn.setAttribute('aria-label', '關閉通知');
+  closeBtn.textContent = '✕';
+  toast.appendChild(closeBtn);
+
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('toast-visible'));
+
+  let dismissTimer = null;
+  const dismiss = () => {
+    if (dismissTimer) clearTimeout(dismissTimer);
+    dismissTimer = null;
+    toast.classList.remove('toast-visible');
+    setTimeout(() => toast.remove(), 220);
+  };
+  const startTimer = () => {
+    if (dismissTimer) clearTimeout(dismissTimer);
+    dismissTimer = setTimeout(dismiss, duration);
+  };
+
+  closeBtn.addEventListener('click', dismiss);
+  // 指標停留時暫停倒數，離開後重新計時
+  toast.addEventListener('mouseenter', () => { if (dismissTimer) { clearTimeout(dismissTimer); dismissTimer = null; } });
+  toast.addEventListener('mouseleave', startTimer);
+  startTimer();
+}
+
+function setFormMessage(formName, message = '', type = 'error') {
+  const el = document.getElementById(`${formName}-form-message`);
+  if (!el) return;
+  el.textContent = message;
+  el.className = `form-message ${message ? 'is-visible' : ''} ${type === 'success' ? 'is-success' : 'is-error'}`;
+}
+
+const FONT_SIZE_MIN = 15;
+const FONT_SIZE_MAX = 26;
+const SPEED_LABELS = { instant: '立即顯示', fast: '快速', normal: '沉浸' };
+
+/** 套用正文字級到 CSS 變數（style.css 的 .prose-tc 已改為讀取它） */
+function applyReaderFontSize(px) {
+  const clamped = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, Math.round(px)));
+  state.fontSizePx = clamped;
+  if (typeof document !== 'undefined' && document.documentElement) {
+    document.documentElement.style.setProperty('--reader-font-size', clamped + 'px');
+    // 字級越大行高比例略降，避免大字時行距過鬆
+    const ratio = clamped >= 22 ? 1.9 : clamped >= 19 ? 2.0 : 2.1;
+    document.documentElement.style.setProperty('--reader-line-height', String(ratio));
+  }
+  safeLocalStorageSet('undercurrent_font_size', String(clamped));
+  syncReadingPreferenceControls();
+  return clamped;
+}
+
+function adjustReaderFontSize(delta) {
+  const before = state.fontSizePx;
+  const after = applyReaderFontSize((state.fontSizePx || 18) + delta);
+  if (after === before) {
+    notifyUser(delta > 0 ? '已是最大字級。' : '已是最小字級。', 'info', 2000);
+  }
+}
+
+function setReadingSpeed(value) {
+  if (!SPEED_LABELS[value]) return;
+  state.typeSpeed = value;
+  safeLocalStorageSet('undercurrent_type_speed', value);
+  syncReadingPreferenceControls();
+  notifyUser(`文字速度已切換為「${SPEED_LABELS[value]}」。`, 'success', 2400);
+}
+
+/** 抉擇區與選單抽屜有兩組相同的偏好控制項，任一改動都要同步另一組 */
+function syncReadingPreferenceControls() {
+  const px = state.fontSizePx || 18;
+  ['font-size-display', 'drawer-font-size-display'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = px + 'px';
+  });
+  ['reading-speed-select', 'drawer-reading-speed-select'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.value !== state.typeSpeed) el.value = state.typeSpeed;
+  });
+}
+
+/**
+ * 自由行動輸入框自動增高。
+ * 必須設下限：初始化時遊玩畫面仍是 display:none，scrollHeight 為 0，
+ * 若直接套用會把高度壓到一行以下、裁掉 placeholder。
+ */
+const ACTION_INPUT_MIN_HEIGHT = 44;
+const ACTION_INPUT_MAX_HEIGHT = 160;
+
+function autoGrowActionInput() {
+  const el = document.getElementById('custom-action-input');
+  if (!el) return;
+  // 空的時候一律用最小高度，不去信任量測結果。
+  // Tailwind 由 CDN 在執行期產生樣式，DOMContentLoaded 當下 max-h/padding 等
+  // 類別尚未生效，此時量到的 scrollHeight 會把高度鎖在上限 160px。
+  if (!el.value) {
+    el.style.height = ACTION_INPUT_MIN_HEIGHT + 'px';
+    return;
+  }
+  el.style.height = 'auto';
+  const needed = el.scrollHeight || ACTION_INPUT_MIN_HEIGHT;
+  el.style.height = Math.min(Math.max(needed, ACTION_INPUT_MIN_HEIGHT), ACTION_INPUT_MAX_HEIGHT) + 'px';
+}
+
+function initializeUxControls() {
+  // A4: 字級偏好先前只從 localStorage 讀進 state，既沒有 UI 也從未被套用
+  applyReaderFontSize(state.fontSizePx || 18);
+
+  ['reading-speed-select', 'drawer-reading-speed-select'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.value = state.typeSpeed;
+    sel.addEventListener('change', () => setReadingSpeed(sel.value));
+  });
+
+  [['font-size-up-btn', 1], ['drawer-font-size-up-btn', 1],
+   ['font-size-down-btn', -1], ['drawer-font-size-down-btn', -1]].forEach(([id, dir]) => {
+    document.getElementById(id)?.addEventListener('click', () => adjustReaderFontSize(dir * 1));
+  });
+
+  document.querySelectorAll('.password-toggle').forEach(button => {
+    button.addEventListener('click', () => {
+      const input = document.getElementById(button.dataset.target);
+      if (!input) return;
+      const shouldShow = input.type === 'password';
+      input.type = shouldShow ? 'text' : 'password';
+      button.textContent = shouldShow ? '隱藏' : '顯示';
+      button.setAttribute('aria-label', shouldShow ? '隱藏密碼' : '顯示密碼');
+    });
+  });
+
+  // F2: 量測 header 實際高度供遊玩狀態條的 sticky 定位使用，不再硬編 top-16
+  const syncHeaderHeight = () => {
+    const header = document.querySelector('header');
+    if (header && document.documentElement) {
+      document.documentElement.style.setProperty('--header-height', header.offsetHeight + 'px');
+    }
+  };
+  syncHeaderHeight();
+  window.addEventListener('resize', syncHeaderHeight);
+
+  // F4: 自由行動輸入框自動增高
+  const actionInput = document.getElementById('custom-action-input');
+  if (actionInput) {
+    actionInput.addEventListener('input', autoGrowActionInput);
+    autoGrowActionInput();
+  }
+
+  syncReadingPreferenceControls();
+}
+
+function setGenerationBusy(isBusy) {
+  state.isGenerating = isBusy;
+  if (isBusy) showStreamingAbortControl(); else hideStreamingAbortControl();
+  document.querySelectorAll('.game-action-control, #submit-custom-btn, #gameplay-quick-save-btn, #rebase-act-btn').forEach(el => {
+    el.disabled = isBusy;
+    el.setAttribute('aria-disabled', String(isBusy));
+  });
+}
 
 function initTargetLeadSelectOptions() {
   const select = document.getElementById('form-target-lead');
@@ -622,6 +1027,7 @@ function switchView(viewName) {
     if (homeView) homeView.style.display = 'block';
     if (gameplayView) gameplayView.style.display = 'none';
     renderHomeRecentSaves();
+    updateHomeContinueCard();
     if (typeof window !== 'undefined' && window.scrollTo) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -629,6 +1035,7 @@ function switchView(viewName) {
     if (homeView) homeView.style.display = 'none';
     if (gameplayView) gameplayView.style.display = 'block';
     updateGameplayBreadcrumb();
+    autoGrowActionInput();
     if (typeof window !== 'undefined' && window.scrollTo) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -666,7 +1073,7 @@ function setupEventListeners() {
     on('mobile-menu-btn', 'click', openDrawer);
 
     // 抽屜內全功能導航
-    on('drawer-gameplay-btn', 'click', () => { closeDrawer(); switchView('gameplay'); });
+    on('drawer-gameplay-btn', 'click', () => { closeDrawer(); handleContinueGame(); });
     on('drawer-saves-btn', 'click', () => { closeDrawer(); openSaveArchiveModal(); });
     on('drawer-presets-btn', 'click', () => { closeDrawer(); openProfileManagerModal(); });
     on('drawer-guide-btn', 'click', () => { closeDrawer(); openGameGuideModal('gameplay'); });
@@ -753,14 +1160,88 @@ function setupEventListeners() {
     on('dismiss-error-btn', 'click', dismissError);
     on('rebase-act-btn', 'click', handleActRebase);
 
-    // 鍵盤 ESC 快捷鍵關閉所有彈窗
+    // ── 拆分後的兩個抽屜 ──
+    on('mobile-menu-btn', 'click', openMenuDrawer);
+    on('close-menu-drawer-btn', 'click', closeDrawer);
+    on('drawer-backdrop', 'click', closeDrawer);
+    on('drawer-logout-btn', 'click', () => { closeDrawer(); handleLogout(); });
+    on('drawer-clear-all-data-btn', 'click', () => { closeDrawer(); handleClearAllData(); });
+    on('drawer-delete-account-btn', 'click', () => { closeDrawer(); handleDeleteAccount(); });
+    on('drawer-cloud-load-btn', 'click', () => { closeDrawer(); loadStateFromCloud(); });
+    on('home-open-account-btn', 'click', openMenuDrawer);
+
+    // ── A3: 雲端讀檔入口（先前只掛在 window 上，沒有任何按鈕） ──
+    on('cloud-load-btn', 'click', loadStateFromCloud);
+
+    // ── B1: 同步徽章點擊即手動同步 ──
+    on('cloud-sync-status-badge', 'click', () => syncStateToGoogleDriveCloud(state.saveState, state.chapterData, true));
+
+    // ── C2/A2: 底部浮動閱讀控制 ──
+    on('skip-typewriter-fab', 'click', () => { state.skipTypewriterTriggered = true; });
+    on('abort-streaming-fab', 'click', handleAbortGeneration);
+    on('back-to-latest-fab', 'click', () => {
+      document.getElementById('active-chapter-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // ── C4: 章節目錄 ──
+    on('chapter-nav-btn', 'click', openChapterNav);
+    on('close-chapter-nav-btn', 'click', closeChapterNav);
+    document.getElementById('chapter-nav-panel')?.addEventListener('mousedown', (e) => {
+      if (e.target.id === 'chapter-nav-panel') closeChapterNav();
+    });
+    window.addEventListener('scroll', updateBackToLatestFab, { passive: true });
+
+    // ── G5: 換窗建議橫幅 ──
+    on('rebase-suggestion-action-btn', 'click', () => { dismissRebaseSuggestion(); handleActRebase(); });
+    on('rebase-suggestion-dismiss-btn', 'click', dismissRebaseSuggestion);
+
+    // ── E3: Esc 逐層關閉（含先前漏掉的意見回饋彈窗），一次只關最上層 ──
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        closeCharacterCreationModal();
-        closeProfileManagerModal();
-        closeSaveArchiveModal();
-        closeGameGuideModal();
-        closeDrawer();
+      if (e.key !== 'Escape') return;
+      // 自訂對話框自行處理 Esc，層級最高
+      if (isOverlayOpen('app-dialog')) return;
+      const layers = [
+        ['chapter-nav-panel', closeChapterNav],
+        ['feedback-modal', closeFeedbackModal],
+        ['game-guide-modal', closeGameGuideModal],
+        ['save-archive-modal', closeSaveArchiveModal],
+        ['profile-manager-modal', closeProfileManagerModal],
+        ['character-creation-modal', closeCharacterCreationModal]
+      ];
+      for (const [id, close] of layers) {
+        if (isOverlayOpen(id)) { close(); return; }
+      }
+      if (openDrawerKind) { closeDrawer(); return; }
+    });
+
+    // ── E5: 選項鍵盤快捷鍵（A/B/C 與 1/2/3），桌機玩家不必再全程用滑鼠 ──
+    window.addEventListener('keydown', (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return;
+      const tag = (e.target?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (state.isGenerating) return;
+      // 任何浮層開著時不攔鍵盤
+      if (openDrawerKind || ['app-dialog', 'chapter-nav-panel', 'feedback-modal', 'game-guide-modal',
+           'save-archive-modal', 'profile-manager-modal', 'character-creation-modal', 'auth-modal']
+           .some(isOverlayOpen)) return;
+
+      // 空白鍵／Enter：正文播放中則跳過
+      if (state.isTyping && (e.key === ' ' || e.key === 'Enter')) {
+        e.preventDefault();
+        state.skipTypewriterTriggered = true;
+        return;
+      }
+
+      const key = e.key.toUpperCase();
+      let idx = -1;
+      if (key >= 'A' && key <= 'C') idx = key.charCodeAt(0) - 65;
+      else if (key >= '1' && key <= '3') idx = Number(key) - 1;
+      if (idx < 0) return;
+
+      const btn = document.querySelector(`.choice-option-btn[data-choice-index="${idx}"]`);
+      if (btn && !btn.disabled) {
+        e.preventDefault();
+        btn.click();
       }
     });
 
@@ -775,22 +1256,65 @@ function updateGameplayBreadcrumb() {
   const turn = state.saveState?.turnCount || 1;
   const leadName = state.saveState?.meta?.playerProfile?.targetLeadName || '修羅場';
   dom.gameplayBreadcrumb.textContent = `第 ${act} 幕 · 第 ${turn} 回 ｜ ${leadName}`;
+  updateRebaseSuggestion();
+  updateGenderedCopy();
+  updateBackToLatestFab();
 }
 
-function openDrawer() {
-  if (dom.sideDrawer && dom.drawerBackdrop) {
-    dom.drawerBackdrop.classList.remove('opacity-0', 'pointer-events-none');
-    dom.sideDrawer.classList.remove('translate-x-full');
-    renderSaveState();
+/**
+ * 抽屜拆成兩個：狀態面板（角色數值）與功能選單（導覽＋閱讀偏好＋帳號）。
+ * 先前兩者混在同一個抽屜，玩家遊玩中想查好感度會撞見一整排導覽項，
+ * 想改設定又得先滑過一大片數值。
+ */
+const DRAWER_IDS = { status: 'side-drawer', menu: 'menu-drawer' };
+let openDrawerKind = null;
+
+function openDrawerPanel(kind) {
+  const backdrop = document.getElementById('drawer-backdrop');
+  const panel = document.getElementById(DRAWER_IDS[kind]);
+  if (!panel || !backdrop) return;
+
+  // 一次只開一個：另一個若開著先收起
+  Object.entries(DRAWER_IDS).forEach(([k, id]) => {
+    if (k !== kind) document.getElementById(id)?.classList.add('translate-x-full');
+  });
+
+  if (!openDrawerKind) lockBodyScroll(true);
+  modalReturnFocus.set(DRAWER_IDS[kind], document.activeElement);
+  openDrawerKind = kind;
+
+  backdrop.classList.remove('opacity-0', 'pointer-events-none');
+  panel.classList.remove('translate-x-full');
+
+  if (!panel._focusTrapBound) {
+    panel.addEventListener('keydown', (e) => trapFocusWithin(panel, e));
+    panel._focusTrapBound = true;
   }
+  if (kind === 'status') renderSaveState();
+  if (kind === 'menu') syncReadingPreferenceControls();
+
+  deferFocus(() => { panel.querySelector(FOCUSABLE_SELECTOR)?.focus(); });
 }
 
 function closeDrawer() {
-  if (dom.sideDrawer && dom.drawerBackdrop) {
-    dom.drawerBackdrop.classList.add('opacity-0', 'pointer-events-none');
-    dom.sideDrawer.classList.add('translate-x-full');
+  const backdrop = document.getElementById('drawer-backdrop');
+  if (backdrop) backdrop.classList.add('opacity-0', 'pointer-events-none');
+  Object.values(DRAWER_IDS).forEach(id => {
+    document.getElementById(id)?.classList.add('translate-x-full');
+  });
+  if (openDrawerKind) {
+    lockBodyScroll(false);
+    const prev = modalReturnFocus.get(DRAWER_IDS[openDrawerKind]);
+    modalReturnFocus.delete(DRAWER_IDS[openDrawerKind]);
+    if (prev && typeof prev.focus === 'function' && document.body.contains(prev)) prev.focus();
   }
+  openDrawerKind = null;
 }
+
+// 向後兼容：openDrawer() 一律開啟狀態面板
+function openDrawer() { openDrawerPanel('status'); }
+function openStatusDrawer() { openDrawerPanel('status'); }
+function openMenuDrawer() { openDrawerPanel('menu'); }
 
 // ==========================================
 // 3. 帳號門禁與認證管理 (Authentication)
@@ -823,12 +1347,14 @@ async function checkAuthAndInitUser() {
     const data = await res.json();
     if (data.success && data.data) {
       state.driveFolderId = data.data.driveFolderId || state.driveFolderId;
-      if (state.driveFolderId) localStorage.setItem('undercurrent_drive_folder_id', state.driveFolderId);
+      if (state.driveFolderId) safeLocalStorageSet('undercurrent_drive_folder_id', state.driveFolderId);
       console.log('[Auth] Token verified with cloud backend.');
       updateUserBadgeUI('active');
     } else {
-      console.warn('[Auth] Token verification failed, running in local mode.');
+      console.warn('[Auth] Token verification failed; clearing the expired session.');
+      clearAuthSession();
       updateUserBadgeUI('expired');
+      openAuthModal();
     }
   } catch (err) {
     console.warn('[Auth] Cloud verification skipped (offline or unavailable):', err.message);
@@ -837,11 +1363,22 @@ async function checkAuthAndInitUser() {
 }
 
 function openAuthModal() {
-  if (dom.authModal) dom.authModal.style.display = 'flex';
+  openOverlay('auth-modal', { focusSelector: '#login-username' });
 }
 
 function closeAuthModal() {
-  if (dom.authModal) dom.authModal.style.display = 'none';
+  closeOverlay('auth-modal');
+}
+
+function clearAuthSession() {
+  localStorage.removeItem('undercurrent_auth_token');
+  localStorage.removeItem('undercurrent_user_name');
+  localStorage.removeItem('undercurrent_user_id');
+  localStorage.removeItem('undercurrent_drive_folder_id');
+  state.username = '';
+  state.token = '';
+  state.userId = '';
+  state.driveFolderId = '';
 }
 
 function switchAuthTab(tab) {
@@ -868,9 +1405,17 @@ async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManua
   const playerProfile = state.playerProfile || (saveState && saveState.meta && saveState.meta.playerProfile);
 
   if (!saveState && !chapterData) {
-    if (isManual) alert('目前尚無進行中的遊戲進度可同步至雲端！');
+    if (isManual) notifyUser('目前尚無進行中的遊戲進度可同步至雲端。', 'error');
     return;
   }
+
+  if (!state.token || state.token.startsWith('tok_local_')) {
+    updateCloudSyncBadge('local');
+    if (isManual) notifyUser('您目前為本機模式，請先使用雲端帳號登入後再同步。', 'error');
+    return;
+  }
+
+  updateCloudSyncBadge('syncing');
 
   try {
     const email = state.username ? (state.username.includes('@') ? state.username : `${state.username}@undercurrent.game`) : 'player@undercurrent.game';
@@ -886,7 +1431,12 @@ async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManua
       namedSaves: getNamedSavesList()
     };
 
-    console.log('[Cloud Sync] Transmitting live game data to Google Drive...', payload);
+    // 不記錄整個 payload：其中含有 session token。
+    console.log('[Cloud Sync] Transmitting live game data to Google Drive...', {
+      turnCount: saveState && saveState.turnCount,
+      chapters: (state.chapterHistoryList || []).length,
+      namedSaves: payload.namedSaves.length
+    });
 
     const res = await fetch(state.gasApiUrl, {
       method: 'POST',
@@ -898,19 +1448,22 @@ async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManua
     const data = await res.json();
     if (data.success) {
       console.log('[Cloud Sync] Successfully synchronized to Google Drive.');
+      updateCloudSyncBadge('synced', new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false }));
       if (isManual) {
-        alert('雲端同步完成！遊戲進度已成功儲存至 Google Drive。');
+        notifyUser('雲端同步完成，遊戲進度已儲存。', 'success');
       }
     } else {
       console.warn('[Cloud Sync] Backend returned error:', data.error);
+      updateCloudSyncBadge('failed');
       if (isManual) {
-        alert('雲端同步失敗：' + (data.error?.message || '伺服器回應異常') + '\n遊戲進度已保存於本機。');
+        notifyUser('雲端同步失敗：' + (data.error?.message || '伺服器回應異常') + '（進度已保存於本機）', 'error', 6000);
       }
     }
   } catch (err) {
     console.warn('[Cloud Sync] Sync failed:', err.message);
+    updateCloudSyncBadge('failed');
     if (isManual) {
-      alert('雲端伺服器暫時無法連線，遊戲進度已保存於本機。\n錯誤：' + err.message);
+      notifyUser('雲端伺服器暫時無法連線，進度已保存於本機。', 'error', 6000);
     }
   }
 }
@@ -919,7 +1472,11 @@ async function handleLogin(e) {
   e.preventDefault();
   const username = document.getElementById('login-username').value.trim();
   const pass = document.getElementById('login-password').value.trim();
-  if (!username || !pass) return alert('請輸入帳號與密碼！');
+  setFormMessage('login');
+  if (!username || !pass) {
+    setFormMessage('login', '請輸入帳號與密碼。');
+    return;
+  }
 
   const email = username.includes('@') ? username : `${username}@undercurrent.game`;
   const submitBtn = document.querySelector('#login-form button[type="submit"]');
@@ -938,15 +1495,15 @@ async function handleLogin(e) {
       state.token = data.data.token;
       state.userId = data.data.userId;
       state.driveFolderId = data.data.driveFolderId || '';
-      localStorage.setItem('undercurrent_user_name', state.username);
-      localStorage.setItem('undercurrent_auth_token', state.token);
-      localStorage.setItem('undercurrent_user_id', state.userId);
-      if (state.driveFolderId) localStorage.setItem('undercurrent_drive_folder_id', state.driveFolderId);
+      safeLocalStorageSet('undercurrent_user_name', state.username);
+      safeLocalStorageSet('undercurrent_auth_token', state.token);
+      safeLocalStorageSet('undercurrent_user_id', state.userId);
+      if (state.driveFolderId) safeLocalStorageSet('undercurrent_drive_folder_id', state.driveFolderId);
       updateUserBadgeUI();
       closeAuthModal();
-      alert('歡迎回來，' + username + '！已成功登入。');
+      notifyUser('歡迎回來，' + username + '！', 'success');
     } else {
-      alert('登入失敗：' + (data.error?.message || '帳號或密碼錯誤，請重新輸入。'));
+      setFormMessage('login', data.error?.message || '帳號或密碼錯誤，請重新輸入。');
     }
   } catch (err) {
     console.error('[Login Error]', err);
@@ -954,12 +1511,12 @@ async function handleLogin(e) {
     state.username = username;
     state.token = 'tok_local_' + Date.now();
     state.userId = 'usr_' + btoa(encodeURIComponent(username)).slice(0, 12);
-    localStorage.setItem('undercurrent_user_name', state.username);
-    localStorage.setItem('undercurrent_auth_token', state.token);
-    localStorage.setItem('undercurrent_user_id', state.userId);
+    safeLocalStorageSet('undercurrent_user_name', state.username);
+    safeLocalStorageSet('undercurrent_auth_token', state.token);
+    safeLocalStorageSet('undercurrent_user_id', state.userId);
     updateUserBadgeUI();
     closeAuthModal();
-    alert('雲端伺服器暫時無法連線，已以本機模式登入。遊戲進度僅儲存於本機。\n錯誤詳細：' + err.name + ' - ' + err.message);
+    notifyUser('雲端暫時無法連線，已以本機模式進入。', 'info', 5000);
   } finally {
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '登入'; }
   }
@@ -969,7 +1526,11 @@ async function handleRegister(e) {
   e.preventDefault();
   const username = document.getElementById('reg-username').value.trim();
   const pass = document.getElementById('reg-password').value.trim();
-  if (!username || !pass || pass.length < 6) return alert('請輸入完整帳號與至少 6 碼密碼！');
+  setFormMessage('register');
+  if (!username || !pass || pass.length < 6) {
+    setFormMessage('register', '請輸入完整帳號與至少 6 碼密碼。');
+    return;
+  }
 
   const email = username.includes('@') ? username : `${username}@undercurrent.game`;
   const submitBtn = document.querySelector('#register-form button[type="submit"]');
@@ -988,65 +1549,90 @@ async function handleRegister(e) {
       state.token = data.data.token;
       state.userId = data.data.userId;
       state.driveFolderId = data.data.driveFolderId || '';
-      localStorage.setItem('undercurrent_user_name', state.username);
-      localStorage.setItem('undercurrent_auth_token', state.token);
-      localStorage.setItem('undercurrent_user_id', state.userId);
-      if (state.driveFolderId) localStorage.setItem('undercurrent_drive_folder_id', state.driveFolderId);
+      safeLocalStorageSet('undercurrent_user_name', state.username);
+      safeLocalStorageSet('undercurrent_auth_token', state.token);
+      safeLocalStorageSet('undercurrent_user_id', state.userId);
+      if (state.driveFolderId) safeLocalStorageSet('undercurrent_drive_folder_id', state.driveFolderId);
       updateUserBadgeUI();
       closeAuthModal();
-      alert('註冊成功！歡迎踏入《暗流》，' + username + '。');
+      notifyUser('註冊成功！歡迎踏入《暗流》，' + username + '。', 'success');
     } else {
-      alert('註冊失敗：' + (data.error?.message || '伺服器回應異常，請稍後再試。'));
+      setFormMessage('register', data.error?.message || '伺服器回應異常，請稍後再試。');
     }
   } catch (err) {
     console.error('[Register Error]', err);
-    alert('無法連線至雲端伺服器，請檢查網路或稍後再試。\n錯誤：' + err.message);
+    setFormMessage('register', '無法連線至雲端伺服器，請檢查網路或稍後再試。');
   } finally {
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '立即註冊'; }
   }
 }
 
-function handleLogout() {
-  if (confirm('確定要登出當前帳號嗎？')) {
-    localStorage.removeItem('undercurrent_auth_token');
-    localStorage.removeItem('undercurrent_user_name');
-    state.username = '';
-    state.token = '';
-    updateUserBadgeUI();
-    openAuthModal();
-  }
+async function handleLogout() {
+  const ok = await confirmDialog('登出後需要重新輸入帳號密碼才能繼續遊玩。\n本機已保存的進度不會被刪除。', {
+    title: '登出帳號',
+    confirmText: '登出'
+  });
+  if (!ok) return;
+  clearAuthSession();
+  updateUserBadgeUI();
+  openAuthModal();
 }
 
 async function handleDeleteAccount() {
-  const confirmName = prompt('危險操作：註銷帳號將永久抹除您的身分與雲端全部存檔！\n\n若確定註銷，請在此輸入您的帳號名稱「' + state.username + '」：');
-  if (confirmName === state.username) {
+  const acknowledged = await confirmDangerDialog(
+    '註銷帳號會永久抹除您的身分、雲端全部存檔與小說正文，且無法復原。\n\n下一步將請您輸入帳號名稱以確認。',
+    { title: '註銷帳號', confirmText: '我了解，繼續' }
+  );
+  if (!acknowledged) return;
+
+  const confirmName = await promptDialog(
+    '請輸入您的帳號名稱「' + state.username + '」以完成註銷：',
+    '',
+    { title: '最終確認', icon: '⚠️', confirmText: '永久註銷', tone: 'danger' }
+  );
+  if (confirmName === null) return;
+
+  if (confirmName.trim() === state.username) {
     try {
-      await fetch(state.gasApiUrl, {
+      const response = await fetch(state.gasApiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'auth/delete-account', token: state.token, userId: state.userId }),
         redirect: 'follow'
       });
+      const data = await response.json();
+      if (!data.success || !data.data?.deleted) {
+        throw new Error(data.error?.message || '雲端未確認完成註銷');
+      }
     } catch (err) {
-      console.warn('[Delete Account] Cloud deletion may have failed:', err.message);
+      console.error('[Delete Account] Failed:', err);
+      notifyUser('註銷失敗，帳號與本機資料保留不變：' + err.message, 'error', 6000);
+      return;
     }
     localStorage.clear();
-    alert('您的帳號及所有檔案已全數註銷刪除。');
+    await notifyDialog('您的帳號及所有檔案已全數註銷刪除。', '註銷完成');
     location.reload();
-  } else if (confirmName !== null) {
-    alert('輸入名稱不相符，已取消註銷操作。');
+  } else {
+    notifyUser('輸入名稱不相符，已取消註銷操作。', 'error', 5000);
   }
 }
 
-function handleClearAllData() {
-  if (confirm('確定要清空所有本機暫存與遊玩紀錄嗎？（不影響雲端已備份檔案）')) {
+async function handleClearAllData() {
+  const ok = await confirmDangerDialog(
+    '將清空本機的當前進度、章節正文與具名存檔清單。\n已同步至雲端的檔案不受影響。',
+    { title: '清空本機存檔', confirmText: '清空本機資料' }
+  );
+  if (ok) {
     localStorage.removeItem('undercurrent_current_save_state');
     localStorage.removeItem('undercurrent_full_story_chapters');
     localStorage.removeItem('undercurrent_named_saves');
+    localStorage.removeItem('undercurrent_save_slot_1');
+    localStorage.removeItem('undercurrent_current_player_profile');
     state.saveState = null;
     state.chapterData = null;
     state.chapterHistoryList = [];
-    alert('本機存檔資料已清空重置。');
+    state.playerProfile = null;
+    notifyUser('本機存檔資料已清空重置。', 'success');
     location.reload();
   }
 }
@@ -1056,7 +1642,7 @@ function handleClearAllData() {
  */
 async function loadStateFromCloud() {
   if (!state.token || state.token.startsWith('tok_local_')) {
-    alert('您目前為本機模式，請先使用雲端帳號登入後再載入雲端存檔。');
+    notifyUser('您目前為本機模式，請先使用雲端帳號登入後再載入雲端存檔。', 'error', 5000);
     return;
   }
 
@@ -1076,20 +1662,39 @@ async function loadStateFromCloud() {
       const cloudSave = data.data;
       if (cloudSave.saveState) {
         state.saveState = cloudSave.saveState;
-        localStorage.setItem('undercurrent_current_save_state', JSON.stringify(cloudSave.saveState));
+        state.playerProfile = cloudSave.saveState?.meta?.playerProfile || null;
+        safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(cloudSave.saveState));
       }
       if (cloudSave.chapter) {
         state.chapterData = cloudSave.chapter;
-        localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(cloudSave.chapter));
+        const cloudHistory = Array.isArray(cloudSave.chapterHistory) && cloudSave.chapterHistory.length > 0
+          ? cloudSave.chapterHistory
+          : [cloudSave.chapter];
+        state.chapterHistoryList = cloudHistory;
+        safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(cloudHistory));
+      } else if (cloudSave.saveState) {
+        // 雲端有存檔但沒有章節：必須清空本機舊章節，否則會把別局的正文與
+        // 雲端的 turnCount 混在一起顯示。
+        state.chapterData = null;
+        state.chapterHistoryList = [];
+        safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify([]));
+        notifyUser('雲端僅有數值存檔、無章節正文，已載入進度數值。', 'info', 5000);
       }
-      alert('雲端存檔已成功載入！可以繼續遊玩。');
+      if (state.chapterData) {
+        state.previousStateSnapshot = null;
+        state.lastChoicePayload = null;
+        renderStoryStream(state.chapterData);
+        renderSaveState();
+        updateGameplayBreadcrumb();
+      }
+      notifyUser('雲端存檔已成功載入，可以繼續遊玩。', 'success');
       console.log('[Cloud Load] State loaded from Google Drive.');
     } else {
-      alert('雲端無可用存檔，或存檔讀取失敗：' + (data.error?.message || '無資料'));
+      notifyUser('雲端無可用存檔，或讀取失敗：' + (data.error?.message || '無資料'), 'error', 5000);
     }
   } catch (err) {
     console.error('[Cloud Load] Failed:', err);
-    alert('無法從雲端載入存檔：' + err.message);
+    notifyUser('無法從雲端載入存檔：' + err.message, 'error', 5000);
   }
 }
 
@@ -1161,6 +1766,15 @@ const LLM_CONFIG = {
  * 從任意 LLM 輸出文字中萃取遊戲資料（不依賴 JSON.parse，直接 regex 挖欄位）
  * 解決模型把換行直接寫在 JSON 字串裡導致解析失敗的問題
  */
+/** 解碼 JSON 字串常量中的轉義序列（供 regex 萃取的欄位使用） */
+function decodeJsonStringEscapes(value) {
+  try {
+    return JSON.parse('"' + value + '"');
+  } catch (e) {
+    return value;
+  }
+}
+
 function extractGameData(rawText) {
   if (!rawText) return null;
 
@@ -1180,7 +1794,7 @@ function extractGameData(rawText) {
   // ── 萃取簡單字串/數字欄位 ──────────────────────────────────────────────────
   const getStr = (key) => {
     const m = rawText.match(new RegExp('"' + key + '"\\s*:\\s*"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"'));
-    return m ? m[1] : '';
+    return m ? decodeJsonStringEscapes(m[1]) : '';
   };
   const getNum = (key) => {
     const m = rawText.match(new RegExp('"' + key + '"\\s*:\\s*(-?\\d+)'));
@@ -1218,7 +1832,12 @@ function extractGameData(rawText) {
       const arrStr = rawText.slice(arrStart, arrEnd !== -1 ? arrEnd + 1 : rawText.length);
       const choiceRx = /\{[^}]*?"id"\s*:\s*"(\w+)"[^}]*?"label"\s*:\s*"([^"]+)"[^}]*?"risk"\s*:\s*"([^"]+)"(?:[^}]*?"hint"\s*:\s*"([^"]*)")?[^}]*?\}/g;
       for (const m of arrStr.matchAll(choiceRx)) {
-        result.choices.push({ id: m[1], label: m[2], risk: m[3], hint: m[4] || '' });
+        result.choices.push({
+          id: m[1],
+          label: decodeJsonStringEscapes(m[2]),
+          risk: m[3],
+          hint: decodeJsonStringEscapes(m[4] || '')
+        });
       }
     }
   }
@@ -1235,8 +1854,17 @@ function extractGameData(rawText) {
         if (ch === '\\') {
           const next = rawText[i + 1];
           if (next === 'n') { proseRaw += '\n'; i += 2; }
+          else if (next === 'r') { proseRaw += '\r'; i += 2; }
+          else if (next === 't') { proseRaw += '\t'; i += 2; }
+          else if (next === 'b') { proseRaw += '\b'; i += 2; }
+          else if (next === 'f') { proseRaw += '\f'; i += 2; }
+          else if (next === '/') { proseRaw += '/'; i += 2; }
           else if (next === '"') { proseRaw += '"'; i += 2; }
           else if (next === '\\') { proseRaw += '\\'; i += 2; }
+          else if (next === 'u' && /^[0-9a-fA-F]{4}$/.test(rawText.substr(i + 2, 4))) {
+            proseRaw += String.fromCharCode(parseInt(rawText.substr(i + 2, 4), 16));
+            i += 6;
+          }
           else { proseRaw += next; i += 2; }
         } else if (ch === '"') {
           break; // 找到結束引號
@@ -1271,16 +1899,53 @@ function parseJsonSafely(rawText) {
   try {
     return JSON.parse(clean);
   } catch (e) {
-    clean = clean.replace(/\\n/g, "\\n")  
-                 .replace(/\\'/g, "\\'")
-                 .replace(/\\"/g, '\\"')
-                 .replace(/\\&/g, "\\&")
-                 .replace(/\\r/g, "\\r")
-                 .replace(/\\t/g, "\\t")
-                 .replace(/\\b/g, "\\b")
-                 .replace(/\\f/g, "\\f");
-    return JSON.parse(clean);
+    // 大模型常見的兩種格式瑕疵：字串內夾帶未轉義的實體換行、以及結尾多餘逗號。
+    return JSON.parse(stripTrailingCommas(escapeRawControlCharsInJsonStrings(clean)));
   }
+}
+
+/** 將 JSON 字串常量內部未轉義的實體控制字元（換行/Tab/CR）轉為合法轉義序列 */
+function escapeRawControlCharsInJsonStrings(text) {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString && ch === '\\') {
+      out += ch + (text[i + 1] ?? '');
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      out += ch;
+      continue;
+    }
+    if (inString) {
+      if (ch === '\n') { out += '\\n'; continue; }
+      if (ch === '\r') { out += '\\r'; continue; }
+      if (ch === '\t') { out += '\\t'; continue; }
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/** 移除 } / ] 前的多餘逗號（僅處理字串常量之外的部分） */
+function stripTrailingCommas(text) {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString && ch === '\\') { out += ch + (text[i + 1] ?? ''); i++; continue; }
+    if (ch === '"') { inString = !inString; out += ch; continue; }
+    if (!inString && ch === ',') {
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j])) j++;
+      if (text[j] === '}' || text[j] === ']') continue; // 丟掉這個逗號
+    }
+    out += ch;
+  }
+  return out;
 }
 
 let lastRequestTimestamp = 0;
@@ -1295,6 +1960,7 @@ async function waitForRpmCooldown() {
   if (elapsed < MIN_REQUEST_GAP_MS) {
     let remainingSec = Math.ceil((MIN_REQUEST_GAP_MS - elapsed) / 1000);
     while (remainingSec > 0) {
+      throwIfGenerationAborted();
       if (dom.loadingText) {
         dom.loadingText.textContent = `筆觸沉澱冷卻中（剩餘 ${remainingSec} 秒）……`;
       }
@@ -1315,7 +1981,14 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
   const modelsToTry = [LLM_CONFIG.PRIMARY_MODEL, LLM_CONFIG.FALLBACK_MODEL].filter(Boolean);
   
   for (const model of modelsToTry) {
+    let timeoutId = null;
     try {
+      throwIfGenerationAborted();
+      const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      state.currentAbortController = controller;
+      timeoutId = setTimeout(() => {
+        if (controller) controller.abort();
+      }, 50000);
       const response = await fetch(workerUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1328,7 +2001,8 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
           temperature: LLM_CONFIG.TEMPERATURE,
           max_tokens: 4096,
           stream: true
-        })
+        }),
+        ...(controller ? { signal: controller.signal } : {})
       });
 
       if (!response.ok) throw new Error(`Worker HTTP ${response.status}`);
@@ -1343,6 +2017,7 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        throwIfGenerationAborted();
         
         const chunk = decoder.decode(value, { stream: true });
         buffer += chunk;
@@ -1415,7 +2090,12 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
       }
       console.warn(`[Worker] No usable content. fullContent(${fullContent.length}): ${fullContent.slice(0, 100)}`);
     } catch (err) {
+      // 只有玩家明確中止才停止整條備援鏈；單一模型逾時仍應嘗試下一模型。
+      if (state.generationAbortRequested) throw createGenerationAbortError();
       console.warn(`[Worker] Model ${model} error:`, err.message);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      state.currentAbortController = null;
     }
   }
   throw new Error('Worker Streaming failed, falling back to GAS.');
@@ -1426,7 +2106,10 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
     try {
       const res = await generateStoryWithWorkerStream(LLM_CONFIG.WORKER_URL, systemPrompt, userPrompt, onStreamUpdate);
       if (res) return res;
-    } catch(e) { console.warn('Worker error, fallback to GAS', e); }
+    } catch(e) {
+      if (isGenerationAbortError(e)) throw createGenerationAbortError();
+      console.warn('Worker error, fallback to GAS', e);
+    }
   }
   const models = [
     'mistral-large-3',
@@ -1438,10 +2121,12 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
   await waitForRpmCooldown();
   for (let mIdx = 0; mIdx < models.length; mIdx++) {
     const model = models[mIdx];
+    let timeoutId = null;
     try {
+      throwIfGenerationAborted();
       const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       state.currentAbortController = controller;
-      const timeoutId = setTimeout(() => {
+      timeoutId = setTimeout(() => {
         if (controller) controller.abort();
       }, 50000); // 延長至 50 秒以配合 GAS 代理
       const fetchOptions = {
@@ -1467,7 +2152,6 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
         fetchOptions.signal = controller.signal;
       }
       const response = await fetch(state.gasApiUrl, fetchOptions);
-      clearTimeout(timeoutId);
       lastRequestTimestamp = Date.now();
       if (!response.ok) {
         const errText = await response.text();
@@ -1486,7 +2170,11 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
         return parsed;
       }
     } catch (err) {
+      if (state.generationAbortRequested) throw createGenerationAbortError();
       console.warn(`[Pure AI] Model ${model} attempt error:`, err.message);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      state.currentAbortController = null;
     }
   }
   throw new Error('所有 AI 創作模型生成逾時或回傳格式異常，請檢查網路連線。');
@@ -1536,23 +2224,54 @@ const ROSTER_ONE_LINERS = [
 /**
  * 動態在場配角偵測器 (Tier 2 NPC Detector)
  */
+/**
+ * 別名比對採「最長優先、位置獨佔」：短別名若落在已被更長別名佔用的區段內就不算命中。
+ * 這是必要的 —— 「副總」是楊紹宸的別名，而「副總統」是徐承勳的別名，
+ * 單純用 includes() 會讓每次提到副總統徐承勳都誤判楊紹宸在場並注入他的全量人設。
+ */
+function buildAliasMatchMap(scanTarget, roster) {
+  const entries = [];
+  roster.forEach(charObj => {
+    (charObj.aliases || []).forEach(alias => {
+      if (alias) entries.push({ id: charObj.id, alias: alias.toLowerCase() });
+    });
+  });
+  entries.sort((a, b) => b.alias.length - a.alias.length);
+
+  const claimed = new Array(scanTarget.length).fill(false);
+  const matchedIds = new Set();
+
+  entries.forEach(entry => {
+    let from = 0;
+    for (;;) {
+      const at = scanTarget.indexOf(entry.alias, from);
+      if (at === -1) break;
+      let free = true;
+      for (let i = at; i < at + entry.alias.length; i++) {
+        if (claimed[i]) { free = false; break; }
+      }
+      if (free) {
+        for (let i = at; i < at + entry.alias.length; i++) claimed[i] = true;
+        matchedIds.add(entry.id);
+        break;
+      }
+      from = at + 1;
+    }
+  });
+
+  return matchedIds;
+}
+
 function detectActiveNPCs(lastProseText, playerChoice, primaryLeadKey, defaultSupportingLeads = []) {
   const scanTarget = ((playerChoice || '') + ' ' + ((lastProseText || '').slice(-600))).toLowerCase();
   const activeNPCs = [];
+  const matchedIds = buildAliasMatchMap(scanTarget, ROSTER_ONE_LINERS);
 
   for (let i = 0; i < ROSTER_ONE_LINERS.length; i++) {
     const charObj = ROSTER_ONE_LINERS[i];
     if (charObj.id === primaryLeadKey || charObj.name === primaryLeadKey) continue;
 
-    let isMentioned = false;
-    for (let j = 0; j < charObj.aliases.length; j++) {
-      if (scanTarget.includes(charObj.aliases[j].toLowerCase())) {
-        isMentioned = true;
-        break;
-      }
-    }
-
-    if (isMentioned) {
+    if (matchedIds.has(charObj.id)) {
       activeNPCs.push(charObj);
       if (activeNPCs.length >= 2) break;
     }
@@ -1776,7 +2495,7 @@ ${summaryBlock}${recentHistory || '正處於交鋒對峙中'}
 }
 
 async function triggerRollingSummaryUpdate(turnCount) {
-  if (!state.saveState || turnCount <= 1) return;
+  if (!state.saveState || turnCount <= 1 || !state.token || state.token.startsWith('tok_local_')) return;
   console.log(`[MemoryPipeline] Triggering rolling summary compression for Turn ${turnCount}...`);
 
   const recent5Turns = (state.chapterHistoryList || []).slice(-5).map(h => ({
@@ -1790,29 +2509,32 @@ async function triggerRollingSummaryUpdate(turnCount) {
   const userPrompt = `--- 現有摘要池 ---\n${state.saveState.summaryPool || '（初始開局）'}\n\n--- 待整合的最新回合記錄 ---\n${JSON.stringify(recent5Turns, null, 2)}\n\n【請直接輸出更新後的純摘要文字】：`;
 
   try {
-    const response = await fetch(LLM_CONFIG.API_URL, {
+    const response = await fetch(state.gasApiUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${LLM_CONFIG.API_KEY}`
+        'Content-Type': 'text/plain;charset=utf-8'
       },
       body: JSON.stringify({
+        action: 'llm/proxy',
         model: 'aion-3.0-mini',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
         temperature: 0.2,
-        max_tokens: 1000
-      })
+        max_tokens: 1000,
+        token: state.token,
+        userId: state.userId
+      }),
+      redirect: 'follow'
     });
 
     if (response.ok) {
       const data = await response.json();
-      const newSummary = data.choices?.[0]?.message?.content?.trim();
+      const newSummary = data.success && data.data?.content?.trim();
       if (newSummary && newSummary.length > 20) {
         state.saveState.summaryPool = newSummary;
-        localStorage.setItem('undercurrent_current_save_state', JSON.stringify(state.saveState));
+        safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
         console.log(`[MemoryPipeline] Summary Pool successfully updated (${newSummary.length} chars).`);
         syncStateToGoogleDriveCloud(state.saveState, state.chapterData);
       }
@@ -1857,12 +2579,23 @@ async function handleCharacterCreationSubmit(e) {
   } catch (err) {
     console.error('[handleCharacterCreationSubmit Error]', err);
     sendTelemetryError('START_GAME_ERROR', err.message, { stack: err.stack });
-    alert('開局發生異常：' + err.message + '，正在嘗試為您自動恢復……');
+    await notifyDialog('開局發生異常：' + err.message + '\n系統正在嘗試自動恢復。', '開局異常');
     switchView('gameplay');
   }
 }
 
 async function startNewGameWithProfile(profile) {
+  if (state.isGenerating) return notifyUser('劇情正在生成，請稍候。');
+  const previousGameSnapshot = {
+    playerProfile: state.playerProfile,
+    saveState: state.saveState,
+    chapterData: state.chapterData,
+    chapterHistoryList: state.chapterHistoryList,
+    lastChoicePayload: state.lastChoicePayload,
+    previousStateSnapshot: state.previousStateSnapshot
+  };
+  setGenerationBusy(true);
+  state.generationAbortRequested = false;
   // 1. 徹底重置遊戲全域狀態與 DOM（絕不殘留舊局卡片）
   state.playerProfile = profile;
   state.chapterHistoryList = [];
@@ -1874,7 +2607,7 @@ async function startNewGameWithProfile(profile) {
   if (dom.choicesContainer) dom.choicesContainer.innerHTML = '';
   if (dom.customActionInput) dom.customActionInput.value = '';
 
-  localStorage.setItem('undercurrent_current_player_profile', JSON.stringify(profile));
+  safeLocalStorageSet('undercurrent_current_player_profile', JSON.stringify(profile));
 
   const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
   const targetLeadDisplay = isShura ? '全勢力男主（修羅場）' : profile.targetLeadName;
@@ -1918,7 +2651,7 @@ async function startNewGameWithProfile(profile) {
     turnHistory: []
   };
 
-  localStorage.setItem('undercurrent_current_save_state', JSON.stringify(state.saveState));
+  safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
 
   switchView('gameplay');
   showLoading('選項確認中……', '正在依照自訂人設與情境即時生成第 1 回……');
@@ -1931,7 +2664,7 @@ async function startNewGameWithProfile(profile) {
     const tempChapter = { act: 1, turn: 1, chosenLabel: '【正式開局】', prose: '', statusPanel: null, choices: [] };
     renderStoryStream(tempChapter);
     const proseEl = document.getElementById('stream-prose-content');
-    if (proseEl) proseEl.innerHTML = '<span class="animate-pulse text-brand-gold">命運推演中……</span>';
+    if (proseEl) proseEl.innerHTML = '<p class="mb-6 indent-6 sm:indent-8 animate-pulse text-brand-gold/80">命運推演中……</p>';
     
     let isFirstToken = true;
     let didStream = false;
@@ -1939,8 +2672,7 @@ async function startNewGameWithProfile(profile) {
          didStream = true;
          if (proseEl) {
              if (isFirstToken) { proseEl.innerHTML = ''; isFirstToken = false; }
-             const ps = streamedProse.split(/\n\n|\n/).filter(p => p.trim());
-             proseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p.trim()}</p>`).join('');
+             proseEl.innerHTML = buildProseHtml(streamedProse);
              // 只在使用者已接近底部（150px內）才自動追蹤捲動，不強制鎖定閱讀位置
              const distFromBottom = document.body.scrollHeight - window.scrollY - window.innerHeight;
              if (distFromBottom < 150) {
@@ -1950,8 +2682,31 @@ async function startNewGameWithProfile(profile) {
     });
     if (didStream) initialChapter.skipTypewriter = true;
   } catch (aiErr) {
+    if (isGenerationAbortError(aiErr)) {
+      state.playerProfile = previousGameSnapshot.playerProfile;
+      state.saveState = previousGameSnapshot.saveState;
+      state.chapterData = previousGameSnapshot.chapterData;
+      state.chapterHistoryList = previousGameSnapshot.chapterHistoryList || [];
+      state.lastChoicePayload = previousGameSnapshot.lastChoicePayload;
+      state.previousStateSnapshot = previousGameSnapshot.previousStateSnapshot;
+      if (state.saveState) safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+      else localStorage.removeItem('undercurrent_current_save_state');
+      safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+      if (state.playerProfile) safeLocalStorageSet('undercurrent_current_player_profile', JSON.stringify(state.playerProfile));
+      else localStorage.removeItem('undercurrent_current_player_profile');
+      if (state.chapterData) {
+        renderStoryStream(state.chapterData);
+        renderSaveState();
+        updateGameplayBreadcrumb();
+      } else {
+        if (dom.novelStreamContainer) dom.novelStreamContainer.innerHTML = '';
+        if (dom.choicesContainer) dom.choicesContainer.innerHTML = '';
+      }
+      notifyUser('已中止本次開局生成。', 'info');
+      return;
+    }
     console.error('[Pure AI] First turn generation error:', aiErr);
-    alert('AI 大模型生成逾時，正在為您重新連接……');
+    showErrorRecovery('AI 生成逾時，已先為您鋪上臨時開局。可點擊「重新生成」重試第 1 回。', { canRetry: false });
     initialChapter = {
       chapterTitle: `第 1 回．雨夜初會 · ${profile.targetLeadName || '徐令謙'}`,
       prose: `五月深夜的台北，暴雨如注。\n\n${profile.name}手握關鍵底牌踏入現場，對面男人的視線在第一時間精準鎖定了她……`,
@@ -1972,6 +2727,7 @@ async function startNewGameWithProfile(profile) {
     };
   } finally {
     hideLoading();
+    setGenerationBusy(false);
   }
 
   initialChapter.act = 1;
@@ -1980,7 +2736,7 @@ async function startNewGameWithProfile(profile) {
 
   state.chapterData = initialChapter;
   state.chapterHistoryList = [initialChapter];
-  localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+  safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
   
   renderStoryStream(initialChapter);
   renderSaveState();
@@ -1991,6 +2747,12 @@ async function startNewGameWithProfile(profile) {
 }
 
 async function makeChoice(choiceId, customInput, isRegenerating = false) {
+  if (state.isGenerating) return notifyUser('本回合正在生成，請稍候。');
+  setGenerationBusy(true);
+  state.generationAbortRequested = false;
+  const selectedChoice = (state.chapterData?.choices || []).find(choice => choice.id === choiceId);
+  const choiceLabel = customInput || selectedChoice?.label || choiceId;
+
   if (!isRegenerating) {
     state.previousStateSnapshot = {
       saveState: JSON.parse(JSON.stringify(state.saveState || {})),
@@ -2006,14 +2768,21 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
 
   if (dom.errorRecoveryBanner) dom.errorRecoveryBanner.style.display = 'none';
 
+  const transactionSnapshot = {
+    saveState: JSON.parse(JSON.stringify(state.saveState || {})),
+    chapterData: JSON.parse(JSON.stringify(state.chapterData || {})),
+    chapterHistoryList: JSON.parse(JSON.stringify(state.chapterHistoryList || []))
+  };
+
   try {
     state.saveState = state.saveState || {};
-    state.saveState.turnCount = (state.saveState.turnCount || 1) + 1;
+    const turnCountBeforeAdvance = state.saveState.turnCount || 1;
+    state.saveState.turnCount = turnCountBeforeAdvance + 1;
     
     const profile = getActivePlayerProfile();
     state.saveState.meta = state.saveState.meta || {};
     state.saveState.meta.playerProfile = profile;
-    localStorage.setItem('undercurrent_current_save_state', JSON.stringify(state.saveState));
+    safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
 
     let nextChapter = null;
 
@@ -2032,7 +2801,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
       const tempChapter = {
         act: state.saveState.meta.currentAct || 1,
         turn: state.saveState.turnCount,
-        chosenLabel: customInput || choiceLabel,
+        chosenLabel: choiceLabel,
         prose: '',
         statusPanel: null,
         choices: []
@@ -2040,7 +2809,9 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
       // 我們不把它放進 chapterHistoryList，直接呼叫 renderStoryStream 給它 activeChapter
       renderStoryStream(tempChapter);
       const proseEl = document.getElementById('stream-prose-content');
-      if (proseEl) proseEl.innerHTML = '<span class="animate-pulse text-brand-gold">命運推演中……</span>';
+      // D3: 佔位文字與正式段落用同一個排版容器，首個 token 到達時只替換內容，
+      // 不再出現「遮罩 → 空卡片 → 文字」三段視覺跳動。
+      if (proseEl) proseEl.innerHTML = '<p class="mb-6 indent-6 sm:indent-8 animate-pulse text-brand-gold/80">命運推演中……</p>';
       
       let isFirstToken = true;
       let didStream = false;
@@ -2049,8 +2820,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
          if (proseEl) {
              if (isFirstToken) { proseEl.innerHTML = ''; isFirstToken = false; }
              // 轉換段落
-             const ps = streamedProse.split(/\n\n|\n/).filter(p => p.trim());
-             proseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p.trim()}</p>`).join('');
+             proseEl.innerHTML = buildProseHtml(streamedProse);
              // 只在使用者已接近底部（150px內）才自動追蹤捲動，不強制鎖定閱讀位置
              const distFromBottom = document.body.scrollHeight - window.scrollY - window.innerHeight;
              if (distFromBottom < 150) {
@@ -2060,6 +2830,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
       });
       if (didStream) nextChapter.skipTypewriter = true;
     } catch (llmErr) {
+      if (isGenerationAbortError(llmErr)) throw createGenerationAbortError();
       console.warn('[Pure AI] Next turn LLM call failed, generating dynamic fallback turn:', llmErr);
       nextChapter = {
         chapterTitle: `第 1 幕 第 ${state.saveState.turnCount} 回：暗流激盪 · 局勢推進`,
@@ -2113,10 +2884,11 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
       state.saveState.relationships[leadKey] = Math.max(0, Math.min(100, curFav + delta));
     }
 
-    nextChapter.chosenLabel = customInput || choiceId;
+    nextChapter.chosenLabel = choiceLabel;
+    dismissError();
 
     state.chapterData = nextChapter;
-    appendChapterToHistory(nextChapter, customInput || choiceId);
+    appendChapterToHistory(nextChapter, choiceLabel);
     renderStoryStream(nextChapter);
     renderSaveState();
     updateGameplayBreadcrumb();
@@ -2130,9 +2902,22 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     startServerCooldown(10);
   } catch (err) {
     console.error('makeChoice execution error:', err);
-    alert('推進章節時發生錯誤: ' + err.message);
+    // 本回合未成功推進，把預先遞增的回合數還原，避免回合編號憑空跳號。
+    state.saveState = transactionSnapshot.saveState;
+    state.chapterData = transactionSnapshot.chapterData;
+    state.chapterHistoryList = transactionSnapshot.chapterHistoryList;
+    safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+    safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+    if (isGenerationAbortError(err)) {
+      renderStoryStream(state.chapterData);
+      renderSaveState();
+      notifyUser('已中止本次生成，回合進度未變更。', 'info');
+    } else {
+      showErrorRecovery('推進章節時發生錯誤：' + err.message);
+    }
   } finally {
     hideLoading();
+    setGenerationBusy(false);
   }
 }
 
@@ -2140,8 +2925,9 @@ function handleCustomActionSubmit() {
   const input = dom.customActionInput;
   if (!input) return;
   const val = input.value.trim();
-  if (!val) return alert('請輸入您的自訂行動或對白！');
+  if (!val) return notifyUser('請先輸入您的自訂行動或對白。', 'error');
   input.value = '';
+  autoGrowActionInput();
   makeChoice('CUSTOM', val, false);
 }
 
@@ -2152,35 +2938,86 @@ function appendChapterToHistory(chapter, chosenLabel) {
     chosenLabel: chosenLabel || '玩家行動'
   });
   state.chapterHistoryList.push(record);
-  localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+  safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
 }
 
 // ==========================================
 // 6. 小說瀑布流與打字機渲染 (Story Stream & Typewriter)
 // ==========================================
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// 統一的正文段落切分規則（\n\n 與單一 \n 皆視為換段），
+// 供串流即時渲染、打字機與歷史章節共用，避免三處行為不一致。
+/**
+ * 把正文段落轉為 HTML。對話段（以引號開頭）不縮排，
+ * 單獨的分隔符號段落轉為場景分隔線，避免長篇讀起來是一整塊。
+ */
+function buildProseHtml(text, extraClass = 'mb-6 indent-6 sm:indent-8') {
+  return splitProseParagraphs(text).map(raw => {
+    const para = raw.trim();
+    if (/^[*＊·・—\-–—]{2,}$/.test(para)) return '<hr class="scene-break">';
+    const isDialogue = /^[「『“"]/.test(para);
+    return `<p class="${extraClass}${isDialogue ? ' is-dialogue' : ''}">${escapeHtml(para)}</p>`;
+  }).join('');
+}
+
+function splitProseParagraphs(text) {
+  return String(text || '').split(/\n\n|\n/).map(p => p.trim()).filter(Boolean);
+}
+
 function renderStoryStream(activeChapter) {
   if (!dom.novelStreamContainer) return;
+  if (state.typewriterTimer) {
+    clearTimeout(state.typewriterTimer);
+    state.typewriterTimer = null;
+  }
+  state.isTyping = false;
 
   const chapters = state.chapterHistoryList || [];
   const count = chapters.length;
+  // activeChapter 若尚未寫入 chapterHistoryList（串流中的暫存回合），
+  // 過往章節必須完整渲染到最後一筆，否則上一回合會在生成期間憑空消失。
+  const activeInHistory = count > 0 && (chapters[count - 1] === activeChapter
+    || (activeChapter && chapters[count - 1]?.turn === activeChapter.turn));
+  const pastCount = activeInHistory ? count - 1 : count;
 
-  dom.novelStreamContainer.innerHTML = '';
+  // C3: 先前每回都 innerHTML='' 再重建全部歷史章節 —— 50 回時每次推進都要重新
+  // 解析數萬字 HTML，手機上明顯卡頓，且捲動位置會被打掉。現在只補上缺少的段落，
+  // 已渲染過的舊章節留在 DOM 裡不動。
+  const renderedSections = Array.from(dom.novelStreamContainer.children)
+    .filter(el => el.dataset && el.dataset.pastTurnIndex !== undefined);
+  const activeCardEl = document.getElementById('active-chapter-card');
+  if (activeCardEl) activeCardEl.remove();
 
-  for (let i = 0; i < count - 1; i++) {
+  // 章節數變少（悔棋／載入其他存檔）就整份重建，避免殘留別局的章節
+  if (renderedSections.length > pastCount) {
+    dom.novelStreamContainer.innerHTML = '';
+  }
+  const alreadyRendered = Array.from(dom.novelStreamContainer.children).length;
+
+  for (let i = alreadyRendered; i < pastCount; i++) {
     const past = chapters[i];
     if (!past) continue;
 
     const section = document.createElement('section');
+    section.dataset.pastTurnIndex = String(i);
+    section.id = `chapter-anchor-${past.turn || (i + 1)}`;
     section.className = 'bg-brand-surface/70 border border-brand-border/60 rounded-2xl p-5 sm:p-7 space-y-4 shadow-lg text-slate-300 opacity-90 transition';
 
-    const paragraphs = (past.prose || '').split(/\n\n|\n/).filter(p => p.trim());
-    const paragraphsHtml = paragraphs.map(p => `<p class="mb-4 leading-relaxed indent-6 sm:indent-8 select-text">${p.trim()}</p>`).join('');
+    const paragraphsHtml = buildProseHtml(past.prose, 'mb-4 leading-relaxed indent-6 sm:indent-8 select-text');
 
     let decisionPill = past.chosenLabel && past.chosenLabel !== '【正式開局】' ? `
       <div class="mb-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-brand-gold/15 text-brand-gold border border-brand-gold/30 text-xs font-bold font-serif">
         <span>✦ 玩家行動：</span>
-        <span class="text-amber-200 font-sans">${past.chosenLabel}</span>
+        <span class="text-amber-200 font-sans">${escapeHtml(past.chosenLabel)}</span>
       </div>
     ` : '';
 
@@ -2188,14 +3025,14 @@ function renderStoryStream(activeChapter) {
       <div class="border-b border-brand-border/40 pb-3">
         <div class="flex justify-between items-center mb-1">
           <div class="font-mono text-xs text-brand-gold tracking-widest uppercase bg-brand-gold/10 inline-block px-2 py-0.5 rounded border border-brand-gold/20">
-            第 ${past.act || 1} 幕 · 第 ${past.turn || (i + 1)} 回合
+            第 ${escapeHtml(past.act || 1)} 幕 · 第 ${escapeHtml(past.turn || (i + 1))} 回合
           </div>
           ${past.timestamp ? `<span class="font-mono text-[11px] text-slate-500">${new Date(past.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>` : ''}
         </div>
-        <h2 class="font-serif text-xl sm:text-2xl font-black text-slate-100">${past.chapterTitle}</h2>
+        <h2 class="font-serif text-xl sm:text-2xl font-black text-slate-100">${escapeHtml(past.chapterTitle || '未命名章節')}</h2>
       </div>
       ${decisionPill}
-      <article class="font-serif text-base sm:text-lg prose-tc select-text">${paragraphsHtml}</article>
+      <article class="font-serif prose-tc is-past select-text">${paragraphsHtml}</article>
     `;
 
     dom.novelStreamContainer.appendChild(section);
@@ -2207,11 +3044,11 @@ function renderStoryStream(activeChapter) {
 
   const currentTurnNum = state.saveState?.turnCount || count;
   const currentActNum = state.saveState?.meta?.currentAct || 1;
-  const activeRecord = chapters[count - 1] || activeChapter;
+  const activeRecord = activeChapter || chapters[count - 1];
   const activeActionPill = activeRecord && activeRecord.chosenLabel && activeRecord.chosenLabel !== '【正式開局】' ? `
     <div class="mb-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-brand-gold/15 text-brand-gold border border-brand-gold/30 text-xs font-bold font-serif">
       <span>✦ 玩家行動：</span>
-      <span class="text-amber-200 font-sans">${activeRecord.chosenLabel}</span>
+      <span class="text-amber-200 font-sans">${escapeHtml(activeRecord.chosenLabel)}</span>
     </div>
   ` : '';
 
@@ -2219,26 +3056,26 @@ function renderStoryStream(activeChapter) {
     <div class="flex justify-between items-start gap-2 border-b border-brand-border pb-4">
       <div>
         <div class="inline-block font-mono text-xs text-brand-gold tracking-widest uppercase bg-brand-gold/10 border border-brand-gold/20 px-2.5 py-1 rounded mb-2">
-          第 ${currentActNum} 幕 · 第 ${currentTurnNum} 回合（最新進度）
+          第 ${escapeHtml(currentActNum)} 幕 · 第 ${escapeHtml(currentTurnNum)} 回合（最新進度）
         </div>
         <h1 class="font-serif text-2xl sm:text-3xl font-black text-white leading-tight">
-          ${activeChapter.chapterTitle || '未命名章節'}
+          ${escapeHtml(activeChapter.chapterTitle || '未命名章節')}
         </h1>
       </div>
 
       <div class="flex items-center gap-1.5 shrink-0">
-        <button id="stream-regenerate-btn" class="text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-brand-gold px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1 cursor-pointer" title="重新生成本回演繹">
+        <button id="stream-regenerate-btn" class="game-action-control text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-brand-gold px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1 cursor-pointer" title="重新生成本回演繹">
           <span>重新生成</span>
         </button>
-        <button id="stream-rewind-btn" class="text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-amber-300 px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1 cursor-pointer" title="悔棋回退到上一回合">
-          <span>悔棋</span>
+        <button id="stream-rewind-btn" class="game-action-control text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-amber-300 px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1 cursor-pointer" title="回退到上一回合（可重新選擇）">
+          <span>回退</span>
         </button>
       </div>
     </div>
 
     ${activeActionPill}
 
-    <article id="stream-prose-content" class="font-serif text-lg sm:text-[1.18rem] leading-[2.2] text-[#d8dbe6] tracking-wide prose-tc cursor-pointer select-text" title="打字中點擊可直接顯示全文">
+    <article id="stream-prose-content" class="font-serif text-[#d8dbe6] tracking-wide prose-tc cursor-pointer select-text" title="打字中點擊可直接顯示全文">
       故事載入中……
     </article>
 
@@ -2248,29 +3085,29 @@ function renderStoryStream(activeChapter) {
       <div class="flex flex-wrap items-center gap-2">
         <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/70 border border-rose-700/50 text-rose-200">
           <span>張力值：</span>
-          <span class="font-mono font-bold text-rose-300">${activeChapter.statusPanel?.tension !== undefined ? activeChapter.statusPanel.tension : 65}%</span>
-          <span class="text-[10px] text-rose-400/80">(${activeChapter.statusPanel?.tensionLabel || '高壓推拉'})</span>
+          <span class="font-mono font-bold text-rose-300">${escapeHtml(activeChapter.statusPanel?.tension !== undefined ? activeChapter.statusPanel.tension : 65)}%</span>
+          <span class="text-[10px] text-rose-400/80">(${escapeHtml(activeChapter.statusPanel?.tensionLabel || '高壓推拉')})</span>
         </div>
         <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/70 border border-amber-700/50 text-amber-200">
           <span>微醺度：</span>
-          <span class="font-mono font-bold text-amber-300">${activeChapter.statusPanel?.intoxication !== undefined ? activeChapter.statusPanel.intoxication : 0}%</span>
-          <span class="text-[10px] text-amber-400/80">(${activeChapter.statusPanel?.intoxicationLabel || '清醒'})</span>
+          <span class="font-mono font-bold text-amber-300">${escapeHtml(activeChapter.statusPanel?.intoxication !== undefined ? activeChapter.statusPanel.intoxication : 0)}%</span>
+          <span class="text-[10px] text-amber-400/80">(${escapeHtml(activeChapter.statusPanel?.intoxicationLabel || '清醒')})</span>
         </div>
         ${activeChapter.statusPanel?.favorabilityDelta ? `
         <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/70 border border-emerald-700/50 text-emerald-200">
           <span>好感變動：</span>
-          <span class="font-mono font-bold text-emerald-300">${activeChapter.statusPanel.favorabilityDelta > 0 ? '+' : ''}${activeChapter.statusPanel.favorabilityDelta} pts</span>
-          ${activeChapter.statusPanel.favorabilityReason ? `<span class="text-[10px] text-emerald-400/80 hidden sm:inline">(${activeChapter.statusPanel.favorabilityReason})</span>` : ''}
+          <span class="font-mono font-bold text-emerald-300">${activeChapter.statusPanel.favorabilityDelta > 0 ? '+' : ''}${escapeHtml(activeChapter.statusPanel.favorabilityDelta)} pts</span>
+          ${activeChapter.statusPanel.favorabilityReason ? `<span class="text-[10px] text-emerald-400/80 hidden sm:inline">(${escapeHtml(activeChapter.statusPanel.favorabilityReason)})</span>` : ''}
         </div>` : ''}
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300 pt-1 border-t border-brand-border/40">
-        <div><strong>時空地點：</strong><span class="text-brand-gold">${activeChapter.statusPanel?.timeLocation || '台北市'}</span></div>
-        <div><strong>著裝神態：</strong><span class="text-slate-200">${activeChapter.statusPanel?.outfit || '-'}</span></div>
+        <div><strong>時空地點：</strong><span class="text-brand-gold">${escapeHtml(activeChapter.statusPanel?.timeLocation || '台北市')}</span></div>
+        <div><strong>著裝神態：</strong><span class="text-slate-200">${escapeHtml(activeChapter.statusPanel?.outfit || '-')}</span></div>
       </div>
-      <div class="text-slate-300"><strong>互動姿態：</strong><span class="text-slate-300">${activeChapter.statusPanel?.interaction || '-'}</span></div>
-      ${activeChapter.statusPanel?.inventory ? `<div class="text-slate-300"><strong>關鍵情報：</strong><span class="text-amber-200/90">${activeChapter.statusPanel.inventory}</span></div>` : ''}
-      ${activeChapter.statusPanel?.rumors ? `<div class="text-slate-400"><strong>政媒傳聞：</strong><span class="italic text-slate-400">${activeChapter.statusPanel.rumors}</span></div>` : ''}
+      <div class="text-slate-300"><strong>互動姿態：</strong><span class="text-slate-300">${escapeHtml(activeChapter.statusPanel?.interaction || '-')}</span></div>
+      ${activeChapter.statusPanel?.inventory ? `<div class="text-slate-300"><strong>關鍵情報：</strong><span class="text-amber-200/90">${escapeHtml(activeChapter.statusPanel.inventory)}</span></div>` : ''}
+      ${activeChapter.statusPanel?.rumors ? `<div class="text-slate-400"><strong>政媒傳聞：</strong><span class="italic text-slate-400">${escapeHtml(activeChapter.statusPanel.rumors)}</span></div>` : ''}
     </div>
   `;
 
@@ -2283,10 +3120,12 @@ function renderStoryStream(activeChapter) {
   const cleanProse = activeChapter.prose || '';
 
   if (activeChapter.skipTypewriter) {
-    const ps = cleanProse.split(/\n\n|\n/).filter(p => p.trim());
-    proseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p.trim()}</p>`).join('');
+    proseEl.innerHTML = buildProseHtml(cleanProse);
     renderChoices(activeChapter.choices || []);
   } else {
+    // C1: 先把選項畫出來（停用態），玩家才知道正文播完後有幾個選擇、內容是什麼；
+    // 先前要等打字機跑完才 renderChoices，「沉浸」模式下要盯著空白區域等一分半。
+    renderChoices(activeChapter.choices || []);
     streamTypewriterEffect(cleanProse, proseEl, null, () => {
       renderChoices(activeChapter.choices || []);
     });
@@ -2301,73 +3140,99 @@ function renderStoryStream(activeChapter) {
 
 function streamTypewriterEffect(fullText, targetEl, skipBtn, onComplete) {
   if (!targetEl) return;
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  const finish = () => {
+    targetEl.innerHTML = buildProseHtml(fullText);
+    state.isTyping = false;
+    hideSkipTypewriterControl();
+    setChoicesInteractive(!state.isGenerating);
+    if (onComplete) onComplete();
+  };
+
+  if (state.typeSpeed === 'instant' || reduceMotion) {
+    finish();
+    return;
+  }
+
   state.isTyping = true;
   state.skipTypewriterTriggered = false;
+  setChoicesInteractive(false);
 
   targetEl.innerHTML = '';
-  const paragraphs = fullText.split('\n\n');
+  // 與 buildProseHtml/歷史章節同一套切分規則（\n\n 與單一 \n 皆換段）
+  const paragraphs = splitProseParagraphs(fullText);
   let pIdx = 0;
   let charIdx = 0;
-  let currentP = document.createElement('p');
-  currentP.className = 'mb-6 indent-6 sm:indent-8';
+
+  const makeParagraph = (text) => {
+    const el = document.createElement('p');
+    el.className = 'mb-6 indent-6 sm:indent-8';
+    if (/^[「『“"]/.test(text)) el.classList.add('is-dialogue');
+    return el;
+  };
+  let currentP = makeParagraph(paragraphs[0] || '');
   targetEl.appendChild(currentP);
 
-  const baseSpeedMs = 30;
+  const baseSpeedMs = state.typeSpeed === 'fast' ? 9 : 30;
+  // C2: 跳過控制改為畫面底部的浮動膠囊。先前放在章節卡片頂端，
+  // 但玩家打字時眼睛盯著底部正在長出來的那一行，要跳過還得先往上滑。
+  showSkipTypewriterControl();
 
   function typeNext() {
     if (state.skipTypewriterTriggered || !state.isTyping) {
-      targetEl.innerHTML = '';
-      paragraphs.forEach(pt => {
-        const p = document.createElement('p');
-        p.className = 'mb-6 indent-6 sm:indent-8';
-        p.textContent = pt;
-        targetEl.appendChild(p);
-      });
-      state.isTyping = false;
-      if (onComplete) onComplete();
+      finish();
       return;
     }
 
-    if (pIdx < paragraphs.length) {
-      const curText = paragraphs[pIdx];
-      if (charIdx < curText.length) {
-        const char = curText.charAt(charIdx);
-        currentP.textContent += char;
-        charIdx++;
-        
-        // 智能標點符號停頓
-        let nextSpeed = baseSpeedMs;
-        if (char === '，' || char === '、') {
-          nextSpeed = 150;
-        } else if (char === '。' || char === '！' || char === '？' || char === '…') {
-          nextSpeed = 300;
-        } else {
-          // 隨機微調一般打字速度以增加擬真感
-          nextSpeed = baseSpeedMs + (Math.random() * 20 - 10);
-        }
-        
-        state.typewriterTimer = setTimeout(typeNext, nextSpeed);
+    if (pIdx >= paragraphs.length) {
+      finish();
+      return;
+    }
+
+    const curText = paragraphs[pIdx];
+    if (charIdx < curText.length) {
+      const char = curText.charAt(charIdx);
+      currentP.textContent += char;
+      charIdx++;
+
+      // 智能標點符號停頓
+      let nextSpeed;
+      if (char === '，' || char === '、') {
+        nextSpeed = 150;
+      } else if (char === '。' || char === '！' || char === '？' || char === '…') {
+        nextSpeed = 300;
       } else {
-        pIdx++;
-        charIdx = 0;
-        if (pIdx < paragraphs.length) {
-          currentP = document.createElement('p');
-          currentP.className = 'mb-6 indent-6 sm:indent-8';
-          targetEl.appendChild(currentP);
-          state.typewriterTimer = setTimeout(typeNext, 500); // 換行停頓更長
-        } else {
-          state.isTyping = false;
-          if (onComplete) onComplete();
-        }
+        nextSpeed = baseSpeedMs + (Math.random() * 20 - 10);
+      }
+
+      state.typewriterTimer = setTimeout(typeNext, nextSpeed);
+    } else {
+      pIdx++;
+      charIdx = 0;
+      if (pIdx < paragraphs.length) {
+        currentP = makeParagraph(paragraphs[pIdx]);
+        targetEl.appendChild(currentP);
+        state.typewriterTimer = setTimeout(typeNext, 500); // 換段停頓更長
+      } else {
+        finish();
       }
     }
   }
 
   typeNext();
 
-  targetEl.onclick = () => {
-    state.skipTypewriterTriggered = true;
-  };
+  targetEl.onclick = () => { state.skipTypewriterTriggered = true; };
+}
+
+function showSkipTypewriterControl() {
+  const fab = document.getElementById('skip-typewriter-fab');
+  if (fab) { fab.classList.remove('hidden'); fab.classList.add('flex'); }
+}
+
+function hideSkipTypewriterControl() {
+  const fab = document.getElementById('skip-typewriter-fab');
+  if (fab) { fab.classList.add('hidden'); fab.classList.remove('flex'); }
 }
 
 function renderChoices(choices) {
@@ -2380,26 +3245,38 @@ function renderChoices(choices) {
   }
 
   choices.forEach((c, idx) => {
+    const letter = String.fromCharCode(65 + idx);
     const btn = document.createElement('button');
-    const borderCls = c.risk === 'high' ? 'border-rose-500/50 hover:border-rose-400 bg-rose-950/20' : 
-                      c.risk === 'medium' ? 'border-amber-500/50 hover:border-amber-400 bg-amber-950/20' : 
+    const borderCls = c.risk === 'high' ? 'border-rose-500/50 hover:border-rose-400 bg-rose-950/20' :
+                      c.risk === 'medium' ? 'border-amber-500/50 hover:border-amber-400 bg-amber-950/20' :
                       'border-brand-border hover:border-brand-gold bg-brand-surface';
-    
+
     btn.className = `w-full text-left p-4 rounded-xl border ${borderCls} transition duration-150 flex flex-col gap-1.5 shadow-md group cursor-pointer`;
-    
-    const riskBadge = c.risk === 'high' ? '<span class="text-[10px] bg-rose-900/60 text-rose-300 px-1.5 py-0.5 rounded font-bold">高風險情慾/殺機</span>' :
-                      c.risk === 'medium' ? '<span class="text-[10px] bg-amber-900/60 text-amber-300 px-1.5 py-0.5 rounded font-bold">權謀推拉</span>' :
-                      '<span class="text-[10px] bg-emerald-900/60 text-emerald-300 px-1.5 py-0.5 rounded font-bold">穩健推進</span>';
+    btn.classList.add('game-action-control', 'choice-option-btn');
+    btn.dataset.choiceIndex = String(idx);
+    btn.setAttribute('aria-keyshortcuts', letter);
+
+    // G2: 不再用「高風險情慾/殺機」「穩健推進」直接把三個選項的結果講死，
+    // 改為不透露方向的強度標記，保留抉擇張力。
+    const intensity = c.risk === 'high' ? '◆◆◆' : c.risk === 'medium' ? '◆◆' : '◆';
+    const intensityCls = c.risk === 'high' ? 'text-rose-400' : c.risk === 'medium' ? 'text-amber-400' : 'text-emerald-400';
+    const intensityTitle = c.risk === 'high' ? '張力極高' : c.risk === 'medium' ? '張力中等' : '張力平穩';
+
+    // G1: label 本身已含提示詞規定的「[A] 」前綴，左上角再標一次會變成
+    // 「CHOICE A」＋「[A] …」重複顯示，這裡把前綴剝掉。
+    const cleanLabel = String(c.label || '').replace(/^\s*[\[［]\s*[A-Za-z]\s*[\]］]\s*/, '').trim() || c.label || '';
 
     btn.innerHTML = `
       <div class="flex items-center justify-between">
-        <span class="font-mono text-xs text-brand-gold font-bold">CHOICE ${String.fromCharCode(65 + idx)}</span>
-        ${riskBadge}
+        <span class="font-mono text-xs text-brand-gold font-bold">
+          <kbd class="not-italic font-mono bg-brand-gold/15 border border-brand-gold/30 rounded px-1.5 py-0.5">${letter}</kbd>
+        </span>
+        <span class="font-mono text-xs ${intensityCls} tracking-widest" title="${intensityTitle}" aria-label="${intensityTitle}">${intensity}</span>
       </div>
       <div class="font-serif font-bold text-sm text-slate-100 group-hover:text-brand-gold transition leading-snug">
-        ${c.label}
+        ${escapeHtml(cleanLabel)}
       </div>
-      ${c.hint ? `<div class="text-xs text-slate-400 font-sans mt-0.5">${c.hint}</div>` : ''}
+      ${c.hint ? `<div class="text-xs text-slate-400 font-sans mt-0.5">${escapeHtml(c.hint)}</div>` : ''}
     `;
 
     btn.addEventListener('click', () => {
@@ -2408,35 +3285,260 @@ function renderChoices(choices) {
 
     dom.choicesContainer.appendChild(btn);
   });
+
+  // C1: 打字機播放中先把選項渲染出來但停用，讓玩家看得到終點在哪
+  setChoicesInteractive(!state.isTyping && !state.isGenerating);
+}
+
+/** 打字機播放或生成中時，選項顯示但不可點 */
+function setChoicesInteractive(enabled) {
+  document.querySelectorAll('.choice-option-btn').forEach(btn => {
+    btn.disabled = !enabled;
+    btn.setAttribute('aria-disabled', String(!enabled));
+    btn.classList.toggle('opacity-45', !enabled);
+    btn.title = enabled ? '' : '正文播放中，可點擊正文或下方「顯示全文」立即跳過';
+  });
+}
+
+// ==========================================
+// 6.5 閱讀導覽、狀態顯示與提示 (Reader Nav & Status Indicators)
+// ==========================================
+
+/**
+ * C4: 章節目錄。長局進行到數十回時原本是一條數萬字的無盡瀑布流，
+ * 沒有目錄、沒有回合跳轉、也沒有回到最新章節的入口。
+ */
+function renderChapterNavList() {
+  const listEl = document.getElementById('chapter-nav-list');
+  if (!listEl) return;
+  const chapters = state.chapterHistoryList || [];
+  listEl.innerHTML = '';
+
+  if (chapters.length === 0) {
+    listEl.innerHTML = '<div class="text-slate-500 py-4 text-center">尚無章節紀錄。</div>';
+    return;
+  }
+
+  const currentTurn = state.saveState?.turnCount;
+  chapters.forEach((ch, idx) => {
+    const turn = ch.turn || (idx + 1);
+    const isCurrent = turn === currentTurn;
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = `w-full text-left px-3 py-2 rounded-lg border transition cursor-pointer ${
+      isCurrent
+        ? 'bg-brand-gold/15 border-brand-gold/50 text-brand-gold'
+        : 'bg-brand-card/60 border-brand-border/60 text-slate-300 hover:border-brand-gold/40 hover:text-white'
+    }`;
+    row.innerHTML = `
+      <div class="flex items-center gap-2">
+        <span class="font-mono text-[10px] shrink-0 opacity-70">第 ${ch.act || 1}-${turn} 回</span>
+        <span class="font-serif font-bold truncate">${escapeHtml(ch.chapterTitle || '未命名章節')}</span>
+        ${isCurrent ? '<span class="ml-auto text-[10px] font-mono shrink-0">目前</span>' : ''}
+      </div>
+    `;
+    row.addEventListener('click', () => {
+      closeChapterNav();
+      jumpToChapter(turn);
+    });
+    listEl.appendChild(row);
+  });
+}
+
+function jumpToChapter(turn) {
+  const target = document.getElementById(`chapter-anchor-${turn}`)
+    || (turn === state.saveState?.turnCount ? document.getElementById('active-chapter-card') : null);
+  if (!target) {
+    notifyUser('該章節尚未載入到畫面上。', 'info');
+    return;
+  }
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  target.classList.add('ring-2', 'ring-brand-gold/60');
+  setTimeout(() => target.classList.remove('ring-2', 'ring-brand-gold/60'), 1600);
+}
+
+function openChapterNav() {
+  renderChapterNavList();
+  openOverlay('chapter-nav-panel');
+  document.getElementById('chapter-nav-btn')?.setAttribute('aria-expanded', 'true');
+}
+
+function closeChapterNav() {
+  closeOverlay('chapter-nav-panel');
+  document.getElementById('chapter-nav-btn')?.setAttribute('aria-expanded', 'false');
+}
+
+/** C4: 捲離最新章節一段距離後浮出「回到最新章節」 */
+function updateBackToLatestFab() {
+  const fab = document.getElementById('back-to-latest-fab');
+  const activeCard = document.getElementById('active-chapter-card');
+  if (!fab || !activeCard) return;
+  // 打字機的跳過鍵優先佔用底部位置，避免兩顆疊在一起
+  if (state.isTyping || state.isGenerating) {
+    fab.classList.add('hidden');
+    fab.classList.remove('flex');
+    return;
+  }
+  const rect = activeCard.getBoundingClientRect();
+  const isFarAbove = rect.top > window.innerHeight;   // 最新章節還在畫面下方很遠
+  const isFarBelow = rect.bottom < 0;                // 已經捲過最新章節
+  const shouldShow = isFarAbove || isFarBelow;
+  fab.classList.toggle('hidden', !shouldShow);
+  fab.classList.toggle('flex', shouldShow);
+}
+
+/**
+ * B1: 雲端同步狀態徽章。先前是硬編死字「雲端已自動同步」，
+ * 本機模式、同步失敗、離線一律顯示綠燈，玩家會在以為有備份的狀態下遺失進度。
+ */
+function updateCloudSyncBadge(status, detail = '') {
+  const badge = document.getElementById('cloud-sync-status-badge');
+  const dot = document.getElementById('cloud-sync-dot');
+  const text = document.getElementById('cloud-sync-text');
+  if (!badge || !dot || !text) return;
+
+  const presets = {
+    syncing: ['bg-sky-950/60 border-sky-700/50 text-sky-300', 'bg-sky-400 animate-pulse', '同步中……'],
+    synced:  ['bg-emerald-950/60 border-emerald-700/50 text-emerald-300', 'bg-emerald-400', '已同步 ' + detail],
+    failed:  ['bg-rose-950/60 border-rose-700/50 text-rose-300', 'bg-rose-400', '同步失敗（點擊重試）'],
+    local:   ['bg-slate-800/70 border-slate-600/50 text-slate-400', 'bg-slate-500', '本機模式'],
+    idle:    ['bg-slate-800/70 border-slate-600/50 text-slate-300', 'bg-slate-500', '尚未同步']
+  };
+  const [badgeCls, dotCls, label] = presets[status] || presets.idle;
+  badge.className = 'hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-mono transition cursor-pointer ' + badgeCls;
+  dot.className = 'w-2 h-2 rounded-full ' + dotCls;
+  text.textContent = label;
+  badge.title = status === 'local'
+    ? '本機模式：進度只存在這台裝置，登入雲端帳號後才會備份'
+    : '雲端同步狀態（點擊立即同步）';
+}
+
+/** B2: 首頁「繼續當前冒險」卡片顯示真實進度，無進度時停用 */
+function updateHomeContinueCard() {
+  const desc = document.getElementById('home-continue-desc');
+  const meta = document.getElementById('home-continue-meta');
+  const card = document.getElementById('home-continue-game-btn');
+  if (!desc || !card) return;
+
+  const hasProgress = !!(state.chapterData && state.chapterHistoryList?.length);
+  const hasSaves = getNamedSavesList().length > 0;
+
+  if (hasProgress) {
+    const profile = getActivePlayerProfile();
+    const act = state.saveState?.meta?.currentAct || 1;
+    const turn = state.saveState?.turnCount || 1;
+    const title = state.chapterData.chapterTitle || `第 ${turn} 回`;
+    desc.textContent = title;
+    if (meta) {
+      meta.style.display = 'flex';
+      meta.innerHTML = `
+        <span class="px-2 py-0.5 rounded bg-sky-950/60 border border-sky-700/50 text-sky-300 font-mono">第 ${act} 幕 · 第 ${turn} 回</span>
+        <span class="px-2 py-0.5 rounded bg-brand-gold/15 border border-brand-gold/30 text-brand-gold">🎯 ${escapeHtml(profile.targetLeadName || '修羅場')}</span>
+        <span class="text-slate-500">${escapeHtml(profile.name || '主角')}</span>
+      `;
+    }
+    card.classList.remove('opacity-50', 'pointer-events-none');
+    card.removeAttribute('aria-disabled');
+  } else {
+    desc.textContent = hasSaves
+      ? '目前無進行中的章節，可從存檔庫挑選存檔載入。'
+      : '尚無進行中的冒險。請先點擊左側【開啟全新局】創角啟程。';
+    if (meta) { meta.style.display = 'none'; meta.innerHTML = ''; }
+    const shouldDisable = !hasSaves;
+    card.classList.toggle('opacity-50', shouldDisable);
+    card.classList.toggle('pointer-events-none', shouldDisable);
+    if (shouldDisable) card.setAttribute('aria-disabled', 'true');
+    else card.removeAttribute('aria-disabled');
+  }
+}
+
+/** G5: 回合數累積過多時主動建議執行卷末換窗 */
+const REBASE_SUGGEST_THRESHOLD = 30;
+let rebaseSuggestionDismissedAtTurn = 0;
+
+function updateRebaseSuggestion() {
+  const banner = document.getElementById('rebase-suggestion-banner');
+  const textEl = document.getElementById('rebase-suggestion-text');
+  if (!banner) return;
+
+  const turn = state.saveState?.turnCount || 1;
+  const act = state.saveState?.meta?.currentAct || 1;
+  const turnsInAct = (state.chapterHistoryList || []).length;
+  const shouldSuggest = turnsInAct >= REBASE_SUGGEST_THRESHOLD
+    && turn > rebaseSuggestionDismissedAtTurn + 10;
+
+  if (!shouldSuggest) {
+    banner.style.display = 'none';
+    return;
+  }
+  if (textEl) {
+    textEl.textContent = `第 ${act} 幕已累積 ${turnsInAct} 回，上下文已相當長。`
+      + '建議執行卷末換窗，把本幕濃縮為長期記憶檔案以維持劇情連貫度（數值與道具全部保留）。';
+  }
+  banner.style.display = 'flex';
+}
+
+function dismissRebaseSuggestion() {
+  rebaseSuggestionDismissedAtTurn = state.saveState?.turnCount || 1;
+  const banner = document.getElementById('rebase-suggestion-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+/** G8: 抉擇區代稱依玩家性別填入，不再固定寫「妳」 */
+function updateGenderedCopy() {
+  const el = document.getElementById('decisions-heading-pronoun');
+  if (!el) return;
+  const gender = (getActivePlayerProfile()?.gender || '').trim();
+  el.textContent = gender === '女' ? '妳' : gender === '男' ? '你' : '你';
 }
 
 // ==========================================
 // 7. 人設庫核心管理 (Profile Presets CRUD)
 // ==========================================
 
+function isPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isValidProfilePreset(value) {
+  if (!isPlainObject(value) || typeof value.name !== 'string') return false;
+  const stringFields = ['gender', 'age', 'profession', 'background', 'appearance', 'taboos', 'targetLead', 'targetLeadName', 'customScenario'];
+  return stringFields.every(key => value[key] === undefined || typeof value[key] === 'string')
+    && (value.supportingLeads === undefined || (Array.isArray(value.supportingLeads) && value.supportingLeads.every(item => typeof item === 'string')));
+}
+
+function normalizeProfilePresets(value) {
+  if (!isPlainObject(value)) return {};
+  const normalized = {};
+  Object.keys(value).slice(0, 200).forEach(key => {
+    if (key !== '__proto__' && key !== 'constructor' && key !== 'prototype' && isValidProfilePreset(value[key])) {
+      normalized[key] = value[key];
+    }
+  });
+  return normalized;
+}
+
 function getCustomPresets() {
   try {
-    return JSON.parse(localStorage.getItem('undercurrent_custom_profiles') || '{}');
+    return normalizeProfilePresets(JSON.parse(localStorage.getItem('undercurrent_custom_profiles') || '{}'));
   } catch (e) {
     return {};
   }
 }
 
 function persistCustomPresets(presets) {
-  localStorage.setItem('undercurrent_custom_profiles', JSON.stringify(presets));
+  safeLocalStorageSet('undercurrent_custom_profiles', JSON.stringify(presets));
   loadSavedProfilePresetsIntoSelect();
   renderProfileManagerList();
 }
 
 function openProfileManagerModal() {
-  if (dom.profileManagerModal) {
-    dom.profileManagerModal.style.display = 'flex';
-    renderProfileManagerList();
-  }
+  if (!openOverlay('profile-manager-modal', { focusSelector: '#search-profile-input' })) return;
+  renderProfileManagerList();
 }
 
 function closeProfileManagerModal() {
-  if (dom.profileManagerModal) dom.profileManagerModal.style.display = 'none';
+  closeOverlay('profile-manager-modal');
 }
 
 function renderProfileManagerList() {
@@ -2480,33 +3582,33 @@ function renderProfileManagerList() {
     card.innerHTML = `
       <div class="flex items-center justify-between border-b border-brand-border/60 pb-2">
         <div class="flex items-center gap-2">
-          <span class="font-serif font-bold text-sm text-white">${d.name}</span>
+          <span class="font-serif font-bold text-sm text-white">${escapeHtml(d.name)}</span>
           <span class="text-[11px] px-2 py-0.5 rounded ${p.isDefault ? 'bg-brand-gold/15 text-brand-gold border border-brand-gold/30' : 'bg-purple-950/60 text-purple-300 border border-purple-800/40'}">
             ${p.isDefault ? '官方預設' : '自訂人設'}
           </span>
-          <span class="text-xs text-slate-400">${d.gender || '女'} ｜ ${d.age || '24'}歲</span>
+          <span class="text-xs text-slate-400">${escapeHtml(d.gender || '女')} ｜ ${escapeHtml(d.age || '24')}歲</span>
         </div>
         <div class="flex items-center gap-1">
-          <button class="use-profile-btn px-2.5 py-1 rounded bg-brand-gold/15 hover:bg-brand-gold/30 text-brand-gold text-xs font-bold border border-brand-gold/30 transition cursor-pointer" data-key="${p.key}">
+          <button class="use-profile-btn px-2.5 py-1 rounded bg-brand-gold/15 hover:bg-brand-gold/30 text-brand-gold text-xs font-bold border border-brand-gold/30 transition cursor-pointer" data-key="${escapeHtml(p.key)}">
             ▶ 套用開局
           </button>
-          <button class="edit-profile-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-brand-border transition cursor-pointer" data-key="${p.key}">
+          <button class="edit-profile-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-brand-border transition cursor-pointer" data-key="${escapeHtml(p.key)}">
             ✏️ 編輯
           </button>
           ${!p.isDefault ? `
-            <button class="rename-profile-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white text-xs border border-brand-border transition cursor-pointer" data-key="${p.key}">
+            <button class="rename-profile-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white text-xs border border-brand-border transition cursor-pointer" data-key="${escapeHtml(p.key)}">
               🏷️ 重新命名
             </button>
-            <button class="delete-profile-btn px-2 py-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white text-xs border border-rose-800/40 transition cursor-pointer" data-key="${p.key}">
+            <button class="delete-profile-btn px-2 py-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white text-xs border border-rose-800/40 transition cursor-pointer" data-key="${escapeHtml(p.key)}">
               🗑️ 刪除
             </button>
           ` : ''}
         </div>
       </div>
-      <div class="text-xs text-slate-300"><strong>社會身分：</strong>${d.profession || '-'}</div>
-      <div class="text-xs text-slate-400 line-clamp-2"><strong>身世背景：</strong>${d.background || '-'}</div>
-      <div class="text-xs text-amber-200/90"><strong>攻略對象：</strong>${d.targetLeadName || '修羅場'} ｜ <strong>R-18：</strong>${d.allowR18 ? '開啟' : '關閉'}</div>
-      ${d.customScenario ? `<div class="text-[11px] text-slate-400 bg-brand-dark/60 p-2 rounded border border-brand-border/40"><strong>開場情境：</strong>${d.customScenario}</div>` : ''}
+      <div class="text-xs text-slate-300"><strong>社會身分：</strong>${escapeHtml(d.profession || '-')}</div>
+      <div class="text-xs text-slate-400 line-clamp-2"><strong>身世背景：</strong>${escapeHtml(d.background || '-')}</div>
+      <div class="text-xs text-amber-200/90"><strong>攻略對象：</strong>${escapeHtml(d.targetLeadName || '修羅場')} ｜ <strong>R-18：</strong>${d.allowR18 ? '開啟' : '關閉'}</div>
+      ${d.customScenario ? `<div class="text-[11px] text-slate-400 bg-brand-dark/60 p-2 rounded border border-brand-border/40"><strong>開場情境：</strong>${escapeHtml(d.customScenario)}</div>` : ''}
     `;
 
     card.querySelector('.use-profile-btn')?.addEventListener('click', () => {
@@ -2574,7 +3676,7 @@ function loadProfilePresetIntoForm(presetKey) {
 
 function saveCurrentFormAsPreset() {
   const name = document.getElementById('form-player-name').value.trim();
-  if (!name) return alert('請先輸入角色姓名！');
+  if (!name) return notifyUser('請先輸入角色姓名。', 'error');
 
   const targetSelect = dom.formTargetLead || document.getElementById('form-target-lead');
   const selectedOption = (targetSelect && targetSelect.options && targetSelect.selectedIndex >= 0) ? targetSelect.options[targetSelect.selectedIndex] : null;
@@ -2598,32 +3700,32 @@ function saveCurrentFormAsPreset() {
   custom[key] = profile;
   persistCustomPresets(custom);
   
-  alert(`🎉 人設「${name}」已成功另存為自訂範本！`);
+  notifyUser(`人設「${name}」已另存為自訂範本。`, 'success');
 }
 
-function renameProfilePreset(key) {
+async function renameProfilePreset(key) {
   const custom = getCustomPresets();
   const prof = custom[key];
   if (!prof) return;
 
-  const newName = prompt('請輸入新的人設姓名：', prof.name);
+  const newName = await promptDialog('請輸入新的人設姓名：', prof.name, { title: '重新命名人設' });
   if (newName && newName.trim()) {
     prof.name = newName.trim();
     custom[key] = prof;
     persistCustomPresets(custom);
-    alert('已成功重新命名人設！');
+    notifyUser('已重新命名人設。', 'success');
   }
 }
 
-function deleteProfilePreset(key) {
+async function deleteProfilePreset(key) {
   const custom = getCustomPresets();
   const prof = custom[key];
   if (!prof) return;
 
-  if (confirm(`確定要刪除自訂人設「${prof.name}」嗎？`)) {
+  if (await confirmDangerDialog(`確定要刪除自訂人設「${prof.name}」嗎？此操作無法復原。`, { title: '刪除人設', confirmText: '刪除' })) {
     delete custom[key];
     persistCustomPresets(custom);
-    alert('已刪除該自訂人設。');
+    notifyUser('已刪除該自訂人設。', 'success');
   }
 }
 
@@ -2645,12 +3747,15 @@ function importProfiles(e) {
   reader.onload = (evt) => {
     try {
       const imported = JSON.parse(evt.target.result);
+      if (!isPlainObject(imported)) throw new Error('檔案格式不正確，應為人設物件');
+      const normalized = normalizeProfilePresets(imported);
+      if (Object.keys(normalized).length !== Object.keys(imported).length) throw new Error('檔案包含無效或不安全的人設資料');
       const custom = getCustomPresets();
-      Object.assign(custom, imported);
+      Object.assign(custom, normalized);
       persistCustomPresets(custom);
-      alert('🎉 成功匯入自訂人設範本！');
+      notifyUser('已成功匯入自訂人設範本。', 'success');
     } catch (err) {
-      alert('人設檔案解析失敗：' + err.message);
+      notifyUser('人設檔案解析失敗：' + err.message, 'error', 5000);
     }
   };
   reader.readAsText(file);
@@ -2660,43 +3765,67 @@ function importProfiles(e) {
 // 8. 存檔庫核心管理 (Save Archives CRUD)
 // ==========================================
 
+function isValidNamedSave(value) {
+  return isPlainObject(value)
+    && typeof value.id === 'string'
+    && value.id.length > 0 && value.id.length <= 200
+    && typeof value.name === 'string'
+    && value.name.length <= 200
+    && (value.timestamp === undefined || typeof value.timestamp === 'string')
+    && (value.turnCount === undefined || (typeof value.turnCount === 'number' && Number.isFinite(value.turnCount)))
+    && (value.chapterTitle === undefined || typeof value.chapterTitle === 'string')
+    && (value.playerProfile === undefined || isValidProfilePreset(value.playerProfile))
+    && isPlainObject(value.saveState)
+    && isValidChapterRecord(value.chapterData)
+    && Array.isArray(value.chapterHistoryList)
+    && value.chapterHistoryList.length <= 500
+    && value.chapterHistoryList.every(isValidChapterRecord);
+}
+
+function isValidChapterRecord(value) {
+  return isPlainObject(value)
+    && typeof value.prose === 'string'
+    && value.prose.length <= 200000
+    && (value.chapterTitle === undefined || typeof value.chapterTitle === 'string')
+    && (value.choices === undefined || Array.isArray(value.choices));
+}
+
 function getNamedSavesList() {
   try {
     const raw = localStorage.getItem('undercurrent_named_saves');
-    return raw ? JSON.parse(raw) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter(isValidNamedSave).slice(0, 500) : [];
   } catch (e) {
     return [];
   }
 }
 
 function persistNamedSavesList(saves) {
-  localStorage.setItem('undercurrent_named_saves', JSON.stringify(saves));
+  safeLocalStorageSet('undercurrent_named_saves', JSON.stringify(saves));
   renderSaveArchivesList();
   renderHomeRecentSaves();
 }
 
 function openSaveArchiveModal() {
-  if (dom.saveArchiveModal) {
-    dom.saveArchiveModal.style.display = 'flex';
-    if (dom.newSaveNameInput) {
-      const pName = state.saveState?.meta?.playerProfile?.name || '主角';
-      const targetName = state.saveState?.meta?.playerProfile?.targetLeadName || '主線';
-      const turn = state.saveState?.turnCount || 1;
-      dom.newSaveNameInput.value = `${pName}-${targetName}第${turn}回`;
-    }
-    renderSaveArchivesList();
+  if (!openOverlay('save-archive-modal', { focusSelector: '#new-save-name-input' })) return;
+  if (dom.newSaveNameInput) {
+    const pName = state.saveState?.meta?.playerProfile?.name || '主角';
+    const targetName = state.saveState?.meta?.playerProfile?.targetLeadName || '主線';
+    const turn = state.saveState?.turnCount || 1;
+    dom.newSaveNameInput.value = `${pName}-${targetName}第${turn}回`;
   }
+  renderSaveArchivesList();
 }
 
 function closeSaveArchiveModal() {
-  if (dom.saveArchiveModal) dom.saveArchiveModal.style.display = 'none';
+  closeOverlay('save-archive-modal');
 }
 
 function createNamedSave(saveName) {
   const name = (saveName || '').trim();
-  if (!name) return alert('請輸入存檔名稱！');
+  if (!name) return notifyUser('請先輸入存檔名稱。', 'error');
   if (!state.chapterData && (!state.chapterHistoryList || state.chapterHistoryList.length === 0)) {
-    return alert('當前尚未有遊戲進度可儲存！請先開啟新局。');
+    return notifyUser('當前尚無遊戲進度可儲存，請先開啟新局。', 'error');
   }
 
   const saves = getNamedSavesList();
@@ -2717,48 +3846,51 @@ function createNamedSave(saveName) {
 
   saves.unshift(newSaveEntry);
   persistNamedSavesList(saves);
-  alert(`🎉 存檔「${name}」已成功儲存至存檔庫！`);
+  notifyUser(`存檔「${name}」已儲存。`, 'success');
   syncStateToGoogleDriveCloud(state.saveState, state.chapterData);
 }
 
-function renameNamedSave(saveId) {
+async function renameNamedSave(saveId) {
   const saves = getNamedSavesList();
   const target = saves.find(s => s.id === saveId);
   if (!target) return;
 
-  const newName = prompt('請輸入新的存檔名稱：', target.name);
+  const newName = await promptDialog('請輸入新的存檔名稱：', target.name, { title: '重新命名存檔' });
   if (newName && newName.trim()) {
     target.name = newName.trim();
     persistNamedSavesList(saves);
-    alert('已成功重新命名存檔！');
+    notifyUser('存檔已重新命名。', 'success');
   }
 }
 
-function deleteNamedSave(saveId) {
+async function deleteNamedSave(saveId) {
   const saves = getNamedSavesList();
   const target = saves.find(s => s.id === saveId);
   if (!target) return;
 
-  if (confirm(`確定要刪除存檔「${target.name}」嗎？`)) {
+  if (await confirmDangerDialog(`確定要刪除存檔「${target.name}」嗎？此操作無法復原。`, { title: '刪除存檔', confirmText: '刪除' })) {
     const remaining = saves.filter(s => s.id !== saveId);
     persistNamedSavesList(remaining);
-    alert('已刪除該筆存檔。');
+    notifyUser('已刪除該筆存檔。', 'success');
   }
 }
 
 function loadNamedSave(saveId) {
   const saves = getNamedSavesList();
   const target = saves.find(s => s.id === saveId);
-  if (!target) return alert('找不到該筆存檔！');
+  if (!target) return notifyUser('找不到該筆存檔。', 'error');
 
   state.saveState = target.saveState;
   state.chapterData = target.chapterData;
   state.chapterHistoryList = target.chapterHistoryList || [];
+  state.playerProfile = target.playerProfile || target.saveState?.meta?.playerProfile || null;
+  state.previousStateSnapshot = null;
+  state.lastChoicePayload = null;
 
-  localStorage.setItem('undercurrent_current_save_state', JSON.stringify(state.saveState));
-  localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+  safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+  safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
   if (target.playerProfile) {
-    localStorage.setItem('undercurrent_current_player_profile', JSON.stringify(target.playerProfile));
+    safeLocalStorageSet('undercurrent_current_player_profile', JSON.stringify(target.playerProfile));
   }
 
   closeSaveArchiveModal();
@@ -2768,7 +3900,7 @@ function loadNamedSave(saveId) {
   renderSaveState();
   updateGameplayBreadcrumb();
 
-  alert(`✦ 成功載入存檔「${target.name}」！`);
+  notifyUser(`已載入存檔「${target.name}」。`, 'success');
 }
 
 function renderSaveArchivesList() {
@@ -2798,7 +3930,7 @@ function renderSaveArchivesList() {
         <div class="flex items-center gap-2">
           <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
           <span class="font-mono text-xs font-bold text-brand-gold bg-brand-gold/20 px-2 py-0.5 rounded border border-brand-gold/40">CURRENT · 進行中</span>
-          <span class="font-serif font-bold text-sm text-white">當前即時進度（第 ${turn} 回 · ${title}）</span>
+          <span class="font-serif font-bold text-sm text-white">當前即時進度（第 ${escapeHtml(turn)} 回 · ${escapeHtml(title)}）</span>
         </div>
         <span class="text-[11px] text-amber-200/80 font-mono">剛剛動態更新</span>
       </div>
@@ -2806,17 +3938,17 @@ function renderSaveArchivesList() {
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300">
         <div class="flex items-center gap-2">
           <span class="text-slate-400">主角：</span>
-          <span class="font-bold text-white">${p.name || '女主'}</span>
-          <span class="text-slate-500">（${p.age || '25'}歲 · ${p.occupation || '政經分析師'}）</span>
+          <span class="font-bold text-white">${escapeHtml(p.name || '女主')}</span>
+          <span class="text-slate-500">（${escapeHtml(p.age || '25')}歲 · ${escapeHtml(p.occupation || '政經分析師')}）</span>
         </div>
         <div class="flex items-center gap-2">
           <span class="text-slate-400">🎯 攻略男主：</span>
-          <span class="font-bold text-amber-300">${lead}</span>
+          <span class="font-bold text-amber-300">${escapeHtml(lead)}</span>
         </div>
       </div>
 
       <div class="text-xs text-slate-300 bg-brand-dark/70 p-2.5 rounded-lg border border-brand-border/60 italic leading-relaxed">
-        "${snippet}"
+        "${escapeHtml(snippet)}"
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -2881,51 +4013,51 @@ function renderSaveArchivesList() {
       <div class="flex flex-wrap items-center justify-between gap-2 border-b border-brand-border/70 pb-2">
         <div class="flex items-center gap-2">
           <span class="font-mono text-xs font-black text-brand-gold bg-brand-gold/15 px-2 py-0.5 rounded border border-brand-gold/30">SLOT ${String(idx + 1).padStart(2, '0')}</span>
-          <span class="font-serif font-black text-sm text-white group-hover:text-brand-gold transition">${s.name}</span>
+          <span class="font-serif font-black text-sm text-white group-hover:text-brand-gold transition">${escapeHtml(s.name)}</span>
         </div>
         <div class="flex items-center gap-2 font-mono text-[11px] text-slate-400">
           <span>🕒</span>
-          <span>${s.timestamp}</span>
+          <span>${escapeHtml(s.timestamp || '-')}</span>
         </div>
       </div>
 
       <div class="flex flex-wrap items-center gap-3 text-xs">
         <div class="flex items-center gap-1.5 bg-brand-dark/80 px-2.5 py-1 rounded border border-brand-border/60">
           <span class="text-slate-400">主角：</span>
-          <span class="font-bold text-white">${p.name || '女主'}</span>
+          <span class="font-bold text-white">${escapeHtml(p.name || '女主')}</span>
         </div>
         <div class="flex items-center gap-1.5 bg-brand-dark/80 px-2.5 py-1 rounded border border-brand-border/60">
           <span class="text-slate-400">🎯 攻略：</span>
-          <span class="font-bold text-amber-300">${lead}</span>
+          <span class="font-bold text-amber-300">${escapeHtml(lead)}</span>
         </div>
         <div class="flex items-center gap-1.5 bg-brand-dark/80 px-2.5 py-1 rounded border border-brand-border/60">
           <span class="text-slate-400">📖 進度：</span>
-          <span class="font-bold text-sky-300">第 ${turn} 回（${chTitle}）</span>
+          <span class="font-bold text-sky-300">第 ${escapeHtml(turn)} 回（${escapeHtml(chTitle)}）</span>
         </div>
         <div class="flex items-center gap-2 text-[11px] text-slate-400 ml-auto">
-          <span>🌡️ 張力: <b class="text-rose-400">${tension}%</b></span>
-          <span>🍷 微醺: <b class="text-amber-400">${tipsy}%</b></span>
+          <span>🌡️ 張力: <b class="text-rose-400">${escapeHtml(tension)}%</b></span>
+          <span>🍷 微醺: <b class="text-amber-400">${escapeHtml(tipsy)}%</b></span>
         </div>
       </div>
 
       <div class="text-xs text-slate-300 bg-brand-dark/60 p-2.5 rounded-lg border border-brand-border/40 italic leading-relaxed">
-        "${snippet}"
+        "${escapeHtml(snippet)}"
       </div>
 
       <div class="flex flex-wrap items-center justify-end gap-2 pt-1 border-t border-brand-border/40">
-        <button class="load-archive-btn px-4 py-1.5 rounded-lg bg-brand-gold text-slate-950 font-black hover:bg-yellow-500 transition text-xs shadow-md cursor-pointer flex items-center gap-1" data-id="${s.id}">
+        <button class="load-archive-btn px-4 py-1.5 rounded-lg bg-brand-gold text-slate-950 font-black hover:bg-yellow-500 transition text-xs shadow-md cursor-pointer flex items-center gap-1" data-id="${escapeHtml(s.id || '')}">
           <span>▶</span>
           <span>讀取載入此存檔</span>
         </button>
-        <button class="rename-archive-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white transition text-xs border border-brand-border cursor-pointer flex items-center gap-1" data-id="${s.id}">
+        <button class="rename-archive-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white transition text-xs border border-brand-border cursor-pointer flex items-center gap-1" data-id="${escapeHtml(s.id || '')}">
           <span>✏️</span>
           <span>重新命名</span>
         </button>
-        <button class="sync-single-archive-btn px-3 py-1.5 rounded-lg bg-blue-950/70 hover:bg-blue-900 text-blue-200 hover:text-white transition text-xs border border-blue-700/50 cursor-pointer flex items-center gap-1" data-id="${s.id}">
+        <button class="sync-single-archive-btn px-3 py-1.5 rounded-lg bg-blue-950/70 hover:bg-blue-900 text-blue-200 hover:text-white transition text-xs border border-blue-700/50 cursor-pointer flex items-center gap-1" data-id="${escapeHtml(s.id || '')}">
           <span>☁️</span>
           <span>手動同步此檔至雲端（可跨裝置遊戲）</span>
         </button>
-        <button class="delete-archive-btn px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white transition text-xs border border-rose-800/40 cursor-pointer flex items-center gap-1" data-id="${s.id}">
+        <button class="delete-archive-btn px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white transition text-xs border border-rose-800/40 cursor-pointer flex items-center gap-1" data-id="${escapeHtml(s.id || '')}">
           <span>🗑️</span>
           <span>刪除</span>
         </button>
@@ -2944,6 +4076,7 @@ function renderSaveArchivesList() {
 }
 
 function renderHomeRecentSaves() {
+  updateHomeContinueCard();
   const container = dom.homeRecentSavesList;
   if (!container) return;
 
@@ -2962,10 +4095,10 @@ function renderHomeRecentSaves() {
     row.innerHTML = `
       <div class="flex items-center gap-2">
         <span class="text-brand-gold">💾</span>
-        <span class="font-bold text-white">${s.name}</span>
-        <span class="text-[11px] text-slate-400">（第 ${s.turnCount || 1} 回 · ${s.playerProfile?.targetLeadName || '主線'}）</span>
+        <span class="font-bold text-white">${escapeHtml(s.name)}</span>
+        <span class="text-[11px] text-slate-400">（第 ${escapeHtml(s.turnCount || 1)} 回 · ${escapeHtml(s.playerProfile?.targetLeadName || '主線')}）</span>
       </div>
-      <span class="font-mono text-[11px] text-slate-500">${s.timestamp}</span>
+      <span class="font-mono text-[11px] text-slate-500">${escapeHtml(s.timestamp || '-')}</span>
     `;
 
     row.addEventListener('click', () => loadNamedSave(s.id));
@@ -2976,19 +4109,23 @@ function renderHomeRecentSaves() {
 function handleContinueGame() {
   if (state.chapterHistoryList && state.chapterHistoryList.length > 0 && state.chapterData) {
     switchView('gameplay');
+    // switchView 只更新麵包屑，從不渲染故事本體 —— 先前續玩進來會看到一片空白，
+    // 選項也不會出現（renderChoices 是由 renderStoryStream 觸發的）。
+    renderStoryStream(state.chapterData);
+    renderSaveState();
   } else {
     const saves = getNamedSavesList();
     if (saves.length > 0) {
       openSaveArchiveModal();
     } else {
-      alert('目前尚無進行中的冒險進度，請先開啟全新局創角！');
+      notifyUser('目前尚無進行中的冒險進度，請先開啟全新局創角。', 'info', 4500);
       openCharacterCreationModal();
     }
   }
 }
 
 function handleQuickSave() {
-  if (!state.chapterData) return alert('目前尚無進行中的故事進度可存檔！');
+  if (!state.chapterData) return notifyUser('目前尚無進行中的故事進度可存檔。', 'error');
   const pName = state.saveState?.meta?.playerProfile?.name || '主角';
   const targetName = state.saveState?.meta?.playerProfile?.targetLeadName || '主線';
   const turn = state.saveState?.turnCount || 1;
@@ -3001,14 +4138,12 @@ function handleQuickSave() {
 // ==========================================
 
 function openGameGuideModal(initialTab = 'gameplay') {
-  if (dom.gameGuideModal) {
-    dom.gameGuideModal.style.display = 'flex';
-    switchGuideTab(initialTab);
-  }
+  if (!openOverlay('game-guide-modal')) return;
+  switchGuideTab(initialTab);
 }
 
 function closeGameGuideModal() {
-  if (dom.gameGuideModal) dom.gameGuideModal.style.display = 'none';
+  closeOverlay('game-guide-modal');
 }
 
 function switchGuideTab(tabName) {
@@ -3049,10 +4184,11 @@ function renderRosterGallery() {
   const charKeys = Object.keys(OFFICIAL_DRIVE_CHARACTERS);
   const filteredKeys = charKeys.filter(k => {
     const c = OFFICIAL_DRIVE_CHARACTERS[k];
+    const summary = c.summary || c.personality || c.identityRole || '';
     if (!search) return true;
     return c.name.toLowerCase().includes(search) ||
            c.identityRole.toLowerCase().includes(search) ||
-           c.summary.toLowerCase().includes(search) ||
+           summary.toLowerCase().includes(search) ||
            c.title.toLowerCase().includes(search);
   });
 
@@ -3063,8 +4199,9 @@ function renderRosterGallery() {
 
   filteredKeys.forEach(k => {
     const c = OFFICIAL_DRIVE_CHARACTERS[k];
+    const summary = c.summary || c.personality || c.identityRole || '';
     const rMatch = ROSTER_ONE_LINERS.find(r => r.id === k || r.name === c.name);
-    const oneLiner = rMatch ? rMatch.oneLiner : c.summary;
+    const oneLiner = rMatch ? rMatch.oneLiner : summary;
 
     const card = document.createElement('div');
     card.className = 'bg-brand-card p-3.5 rounded-xl border border-brand-border hover:border-brand-gold/60 transition space-y-2 flex flex-col justify-between shadow-md group';
@@ -3086,7 +4223,7 @@ function renderRosterGallery() {
           ${oneLiner}
         </div>
         <div class="text-[11px] text-slate-400 bg-brand-dark/60 p-2 rounded-lg border border-brand-border/40 mt-1 leading-normal">
-          ${c.summary}
+          ${summary}
         </div>
       </div>
       <div class="pt-2 flex items-center justify-end">
@@ -3129,14 +4266,16 @@ function importAllSaves(e) {
     try {
       const imported = JSON.parse(evt.target.result);
       if (!Array.isArray(imported)) throw new Error('檔案格式不正確，應為 JSON 陣列');
+      if (imported.length > 500) throw new Error('匯入檔超過 500 筆存檔上限');
+      if (!imported.every(isValidNamedSave)) throw new Error('檔案包含不完整或不安全的存檔資料');
       const existing = getNamedSavesList();
       const existingIds = new Set(existing.map(s => s.id));
       const newItems = imported.filter(s => !existingIds.has(s.id));
       const merged = [...newItems, ...existing];
       persistNamedSavesList(merged);
-      alert(`🎉 成功匯入 ${newItems.length} 筆新存檔！`);
+      notifyUser(`已成功匯入 ${newItems.length} 筆新存檔。`, 'success');
     } catch (err) {
-      alert('存檔匯入失敗：' + err.message);
+      notifyUser('存檔匯入失敗：' + err.message, 'error', 5000);
     }
   };
   reader.readAsText(file);
@@ -3147,8 +4286,7 @@ function importAllSaves(e) {
 // ==========================================
 
 function openCharacterCreationModal() {
-  if (dom.charCreationModal) {
-    dom.charCreationModal.style.display = 'flex';
+  if (openOverlay('character-creation-modal', { focusSelector: '#form-player-name' })) {
     dom.charCreationModal.scrollTop = 0;
     loadSavedProfilePresetsIntoSelect();
     const profile = getActivePlayerProfile();
@@ -3168,7 +4306,7 @@ function openCharacterCreationModal() {
 }
 
 function closeCharacterCreationModal() {
-  if (dom.charCreationModal) dom.charCreationModal.style.display = 'none';
+  closeOverlay('character-creation-modal');
 }
 
 function getActivePlayerProfile() {
@@ -3210,18 +4348,21 @@ function renderSaveState() {
     } else {
       leadNames.forEach(name => {
         const val = Math.max(0, Math.min(100, rels[name] || 0));
+        // G6: 門檻對齊實際初始值（單一攻略開局 25、修羅場 20/15/10），
+        // 先前 <30 全歸「初識審視」，導致所有人開局都是同一格灰條。
         let tierLabel = '初識審視';
         let barColor = 'from-slate-600 to-slate-400';
-        if (val >= 90) { tierLabel = '靈肉共沉'; barColor = 'from-rose-600 to-pink-500'; }
-        else if (val >= 75) { tierLabel = '致命深陷'; barColor = 'from-rose-500 to-amber-500'; }
+        if (val >= 88) { tierLabel = '靈肉共沉'; barColor = 'from-rose-600 to-pink-500'; }
+        else if (val >= 70) { tierLabel = '致命深陷'; barColor = 'from-rose-500 to-amber-500'; }
         else if (val >= 50) { tierLabel = '曖昧交鋒'; barColor = 'from-amber-500 to-yellow-400'; }
-        else if (val >= 30) { tierLabel = '利益試探'; barColor = 'from-blue-500 to-cyan-400'; }
+        else if (val >= 32) { tierLabel = '利益試探'; barColor = 'from-blue-500 to-cyan-400'; }
+        else if (val >= 18) { tierLabel = '初步結識'; barColor = 'from-slate-500 to-blue-400'; }
 
         const div = document.createElement('div');
         div.className = 'space-y-1 bg-brand-dark/60 p-2.5 rounded-lg border border-brand-border/60';
         div.innerHTML = `
           <div class="flex items-center justify-between text-xs">
-            <span class="font-bold text-white">${name}</span>
+            <span class="font-bold text-white">${escapeHtml(name)}</span>
             <span class="font-mono text-brand-gold font-bold">${val} <span class="text-[10px] text-slate-400 font-sans">(${tierLabel})</span></span>
           </div>
           <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
@@ -3242,7 +4383,7 @@ function renderSaveState() {
       inv.forEach(item => {
         const div = document.createElement('div');
         div.className = 'text-[11px] text-slate-300 flex items-center justify-between bg-brand-dark/40 px-2 py-1 rounded border border-brand-border/40';
-        div.innerHTML = `<span>💼 ${item.name || item}</span><span class="text-slate-500">x${item.count || 1}</span>`;
+        div.innerHTML = `<span>💼 ${escapeHtml(item.name || item)}</span><span class="text-slate-500">x${escapeHtml(item.count || 1)}</span>`;
         dom.inventoryList.appendChild(div);
       });
     }
@@ -3253,10 +4394,17 @@ function restoreSavedStateFromStorage() {
   try {
     const savedState = localStorage.getItem('undercurrent_current_save_state');
     const savedChapters = localStorage.getItem('undercurrent_full_story_chapters');
-    if (savedState && savedChapters) {
+    // 章節列表若遺失（配額清除等），仍必須恢復 saveState，否則玩家會誤以為整局進度不見了。
+    if (savedState) {
       state.saveState = JSON.parse(savedState);
-      state.chapterHistoryList = JSON.parse(savedChapters);
-      state.chapterData = state.chapterHistoryList[state.chapterHistoryList.length - 1];
+      state.playerProfile = state.saveState?.meta?.playerProfile || null;
+    }
+    if (savedChapters) {
+      const parsedChapters = JSON.parse(savedChapters);
+      if (Array.isArray(parsedChapters) && parsedChapters.length > 0) {
+        state.chapterHistoryList = parsedChapters;
+        state.chapterData = parsedChapters[parsedChapters.length - 1];
+      }
     }
   } catch (e) {
     console.warn('Failed to restore saved state from storage:', e);
@@ -3265,7 +4413,7 @@ function restoreSavedStateFromStorage() {
 
 function saveGameStateToSlot(slotId) {
   if (!state.saveState) return;
-  localStorage.setItem(`undercurrent_save_slot_${slotId}`, JSON.stringify({
+  safeLocalStorageSet(`undercurrent_save_slot_${slotId}`, JSON.stringify({
     saveState: state.saveState,
     chapterData: state.chapterData,
     chapterHistoryList: state.chapterHistoryList || [],
@@ -3274,9 +4422,12 @@ function saveGameStateToSlot(slotId) {
 }
 
 async function handleRegenerateTurn() {
+  if (state.isGenerating) return notifyUser('劇情正在生成，請稍候。');
   const turnCount = state.saveState?.turnCount || 1;
   
   if (turnCount <= 1 || !state.lastChoicePayload) {
+    setGenerationBusy(true);
+    state.generationAbortRequested = false;
     // 重新演繹第 1 回開局
     const profile = getActivePlayerProfile();
     showLoading('選項確認中……', '正在重新演算並構思第 1 回開局情節……');
@@ -3287,14 +4438,13 @@ async function handleRegenerateTurn() {
       const regenTemp = { act: 1, turn: 1, chosenLabel: '【重新生成】', prose: '', statusPanel: null, choices: [] };
       renderStoryStream(regenTemp);
       const rProseEl = document.getElementById('stream-prose-content');
-      if (rProseEl) rProseEl.innerHTML = '<span class="animate-pulse text-brand-gold">重新推演命運中……</span>';
+      if (rProseEl) rProseEl.innerHTML = '<p class="mb-6 indent-6 sm:indent-8 animate-pulse text-brand-gold/80">重新推演命運中……</p>';
       let rFirstToken = true, rDidStream = false;
       const regeneratedChapter = await generateStoryFromLLM(systemPrompt, userPrompt, (streamedProse) => {
         rDidStream = true;
         if (rProseEl) {
           if (rFirstToken) { rProseEl.innerHTML = ''; rFirstToken = false; }
-          const ps = streamedProse.split(/\n\n|\n/).filter(p => p.trim());
-          rProseEl.innerHTML = ps.map(p => `<p class="mb-6 indent-6 sm:indent-8">${p}</p>`).join('');
+          rProseEl.innerHTML = buildProseHtml(streamedProse);
           window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
         }
       });
@@ -3304,20 +4454,44 @@ async function handleRegenerateTurn() {
       regeneratedChapter.chosenLabel = '【正式開局】';
       state.chapterData = regeneratedChapter;
       state.chapterHistoryList = [regeneratedChapter];
-      localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+      safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
       renderStoryStream(regeneratedChapter);
       renderSaveState();
       saveGameStateToSlot('1');
       syncStateToGoogleDriveCloud(state.saveState, regeneratedChapter);
     } catch (err) {
       console.error('第 1 回重新生成失敗:', err);
-      alert('第 1 回重新生成逾時，請檢查網路連線或稍後再試。');
+      renderStoryStream(state.chapterData);
+      renderSaveState();
+      if (isGenerationAbortError(err)) notifyUser('已中止重新生成，原章節保持不變。', 'info');
+      else showErrorRecovery('第 1 回重新生成逾時，請檢查網路連線或稍後再試。', { canRetry: false });
     } finally {
       hideLoading();
+      setGenerationBusy(false);
     }
   } else {
+    if (!restorePreviousTurnForRetry()) {
+      notifyUser('找不到本回合的前一狀態，無法安全重新生成。', 'error', 5000);
+      return;
+    }
     makeChoice(state.lastChoicePayload.choiceId, state.lastChoicePayload.customInput, true);
   }
+}
+
+function restorePreviousTurnForRetry() {
+  if (!state.previousStateSnapshot) return false;
+
+  state.saveState = JSON.parse(JSON.stringify(state.previousStateSnapshot.saveState));
+  state.chapterData = JSON.parse(JSON.stringify(state.previousStateSnapshot.chapterData));
+  const restoredTurn = state.saveState?.turnCount || 1;
+  while (state.chapterHistoryList.length > 1) {
+    const lastTurn = state.chapterHistoryList[state.chapterHistoryList.length - 1]?.turn || 1;
+    if (lastTurn <= restoredTurn) break;
+    state.chapterHistoryList.pop();
+  }
+  safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+  safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+  return true;
 }
 
 function handleUndoTurn() {
@@ -3326,53 +4500,127 @@ function handleUndoTurn() {
     state.chapterData = JSON.parse(JSON.stringify(state.previousStateSnapshot.chapterData));
     if (state.chapterHistoryList.length > 1) {
       state.chapterHistoryList.pop();
-      localStorage.setItem('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
     }
+    safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+    safeLocalStorageSet('undercurrent_full_story_chapters', JSON.stringify(state.chapterHistoryList));
+    state.previousStateSnapshot = null;
+    state.lastChoicePayload = null;
     renderStoryStream(state.chapterData);
     renderSaveState();
-    alert('已成功悔棋回退至上一回合！');
+    updateGameplayBreadcrumb();
+    notifyUser('已回退至上一回合，可重新選擇。', 'success');
   } else {
-    alert('已無更早的上一動快照可回退。');
+    notifyUser('已無更早的回合可回退。', 'info');
   }
 }
 
 function handleRetryLastTurn() {
   if (state.lastChoicePayload) {
+    if (!restorePreviousTurnForRetry()) return;
     makeChoice(state.lastChoicePayload.choiceId, state.lastChoicePayload.customInput, true);
   }
 }
 
+function showStreamingAbortControl() {
+  const fab = document.getElementById('abort-streaming-fab');
+  if (fab) { fab.classList.remove('hidden'); fab.classList.add('flex'); }
+}
+
+function hideStreamingAbortControl() {
+  const fab = document.getElementById('abort-streaming-fab');
+  if (fab) { fab.classList.add('hidden'); fab.classList.remove('flex'); }
+}
+
 function handleAbortGeneration() {
+  state.generationAbortRequested = true;
   sendTelemetryError('USER_ABORT', '玩家主動中止生成', { duration: state.loadingSeconds || 0 });
   if (state.currentAbortController) {
     state.currentAbortController.abort();
     state.currentAbortController = null;
   }
+  setGenerationBusy(false);
   hideLoading();
-  alert('已中止本次生成。');
+  notifyUser('已中止本次生成。', 'info');
 }
 
-function handleActRebase() {
-  if (!confirm('確定要執行【卷末換窗 (Act Rebase)】嗎？\n這將把本幕所有章節濃縮為 800 字檔案重整視窗，保留數值與道具。')) return;
-  state.saveState.meta.currentAct = (state.saveState.meta.currentAct || 1) + 1;
-  alert('【卷末換窗完成】已晉升至第 ' + state.saveState.meta.currentAct + ' 幕！');
+async function handleActRebase() {
+  if (state.isGenerating) return notifyUser('目前有劇情正在生成，請完成後再重整幕篇。');
+  const rebaseOk = await confirmDialog(
+    '將把本幕所有章節濃縮為一份約 800 字的幕篇檔案，並重置上下文視窗。\n數值、好感度與道具全部保留，原始正文會另存備份。',
+    { title: '卷末換窗 (Act Rebase)', confirmText: '執行換窗' }
+  );
+  if (!rebaseOk) return;
+  if (!state.saveState) return notifyUser('目前尚無可重整的遊戲進度。', 'error');
+
+  if (!state.token || state.token.startsWith('tok_local_')) {
+    state.saveState.meta.currentAct = (state.saveState.meta.currentAct || 1) + 1;
+    safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+    updateGameplayBreadcrumb();
+    notifyUser('已切換至第 ' + state.saveState.meta.currentAct + ' 幕。本機模式不執行 AI 幕篇濃縮。', 'info', 5000);
+    return;
+  }
+
+  showLoading('卷末換窗中……', '正在將本幕濃縮為長期記憶檔案……');
+  setGenerationBusy(true);
+  try {
+    const response = await fetch(state.gasApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'novel/rebase',
+        token: state.token,
+        userId: state.userId,
+        saveState: state.saveState
+      }),
+      redirect: 'follow'
+    });
+    const data = await response.json();
+    if (!data.success || !data.data?.saveState) {
+      throw new Error(data.error?.message || '後端未回傳重整存檔');
+    }
+    state.saveState = data.data.saveState;
+    safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+    updateGameplayBreadcrumb();
+    renderSaveState();
+    notifyUser('卷末換窗完成，已晉升至第 ' + state.saveState.meta.currentAct + ' 幕。', 'success', 5000);
+  } catch (err) {
+    console.error('[Act Rebase] Failed:', err);
+    notifyUser('卷末換窗失敗：' + err.message, 'error', 6000);
+  } finally {
+    hideLoading();
+    setGenerationBusy(false);
+  }
 }
 
 function startServerCooldown(seconds) {
-  const text = document.getElementById('server-status-text');
-  if (!text) return;
+  const statusText = document.getElementById('server-status-text');
+  // B3: 原本右側顯示的是「RPM: 5/min」這種內部指標，對玩家沒有意義；
+  // 改成直接告訴玩家還要等幾秒才能送下一回。
+  const cooldownEls = Array.from(document.querySelectorAll('#server-cooldown-text'));
 
   let remaining = seconds || 10;
-  text.textContent = `冷卻中 (${remaining}s) · 防限流保護`;
-  
+  const paint = () => {
+    if (statusText) {
+      statusText.textContent = remaining > 0
+        ? '筆觸沉澱中 · 防限流保護'
+        : 'AI 主筆作家在線 · 動態演繹就緒';
+    }
+    cooldownEls.forEach(el => {
+      el.textContent = remaining > 0 ? `冷卻 ${remaining} 秒` : '可立即操作';
+      el.className = remaining > 0
+        ? 'text-[11px] font-mono text-amber-400'
+        : 'text-[11px] font-mono text-slate-500';
+    });
+  };
+  paint();
+
   if (state.cooldownInterval) clearInterval(state.cooldownInterval);
   state.cooldownInterval = setInterval(() => {
     remaining--;
+    paint();
     if (remaining <= 0) {
       clearInterval(state.cooldownInterval);
-      text.textContent = 'AI 主筆作家在線 · 動態演繹就緒';
-    } else {
-      text.textContent = `冷卻中 (${remaining}s) · 防限流保護`;
+      state.cooldownInterval = null;
     }
   }, 1000);
 }
@@ -3389,42 +4637,58 @@ const WAIT_ANIMATION_TEXTS = [
 let loadingTimer = null;
 let loadingStepInterval = null;
 
+const LOADING_TIMER_REVEAL_MS = 15000; // 超過這個時間才顯示已等待秒數
+const LOADING_TEXT_ROTATE_MS = 4000;
+
 function showLoading(initialText, initialSubtext) {
-  if (dom.loadingOverlay) {
-    dom.loadingOverlay.style.display = 'flex';
-    
-    let stepIndex = Math.floor(Math.random() * WAIT_ANIMATION_TEXTS.length);
-    
-    if (dom.loadingText) {
+  if (!dom.loadingOverlay) return;
+  dom.loadingOverlay.style.display = 'flex';
+
+  // D2: 先前 8 秒才換一句，短生成永遠只看到第一句、長生成又會繞回重複的句子。
+  // 改為 4 秒一句並從隨機起點依序推進，不重複同一句。
+  let stepIndex = Math.floor(Math.random() * WAIT_ANIMATION_TEXTS.length);
+  const paintStep = () => {
+    if (!dom.loadingText) return;
+    dom.loadingText.style.opacity = '0';
+    setTimeout(() => {
       dom.loadingText.textContent = WAIT_ANIMATION_TEXTS[stepIndex];
-      dom.loadingText.classList.add('animate-pulse', 'text-brand-gold');
-      dom.loadingText.style.transition = 'opacity 0.5s ease-in-out';
-    }
-    if (dom.loadingSubtext) {
-      dom.loadingSubtext.textContent = '暗流湧動，命運推演中……';
-    }
-    
-    let secondsElapsed = 0;
-    const timerSpan = document.getElementById('loading-timer-badge');
-    if (timerSpan) timerSpan.textContent = ''; // 隱藏生硬的計時器
+      dom.loadingText.style.opacity = '1';
+    }, 260);
+  };
 
-    if (loadingTimer) clearInterval(loadingTimer);
-    loadingTimer = setInterval(() => {
-      secondsElapsed++;
-    }, 1000);
-
-    if (loadingStepInterval) clearInterval(loadingStepInterval);
-    loadingStepInterval = setInterval(() => {
-      stepIndex = (stepIndex + 1) % WAIT_ANIMATION_TEXTS.length;
-      if (dom.loadingText) {
-        dom.loadingText.style.opacity = '0';
-        setTimeout(() => {
-          dom.loadingText.textContent = WAIT_ANIMATION_TEXTS[stepIndex];
-          dom.loadingText.style.opacity = '1';
-        }, 500);
-      }
-    }, 8000);
+  if (dom.loadingText) {
+    dom.loadingText.textContent = WAIT_ANIMATION_TEXTS[stepIndex];
+    dom.loadingText.classList.add('animate-pulse', 'text-brand-gold');
+    dom.loadingText.style.transition = 'opacity 0.26s ease-in-out';
+    dom.loadingText.style.opacity = '1';
   }
+  if (dom.loadingSubtext) {
+    dom.loadingSubtext.textContent = initialSubtext || '暗流湧動，命運推演中……';
+  }
+
+  // D1: 計時器原本每秒累加卻從不顯示，且 state.loadingSeconds 從未被設定，
+  // 遙測的等待時間永遠回報 0。現在維持氣氛（15 秒內不顯示），超時才淡入。
+  state.loadingSeconds = 0;
+  const timerBadge = document.getElementById('loading-timer-badge');
+  if (timerBadge) {
+    timerBadge.textContent = '';
+    timerBadge.classList.add('opacity-0');
+  }
+
+  if (loadingTimer) clearInterval(loadingTimer);
+  loadingTimer = setInterval(() => {
+    state.loadingSeconds++;
+    if (timerBadge && state.loadingSeconds * 1000 >= LOADING_TIMER_REVEAL_MS) {
+      timerBadge.textContent = `⏱️ 已等待 ${state.loadingSeconds} 秒 · 仍在生成中`;
+      timerBadge.classList.remove('opacity-0');
+    }
+  }, 1000);
+
+  if (loadingStepInterval) clearInterval(loadingStepInterval);
+  loadingStepInterval = setInterval(() => {
+    stepIndex = (stepIndex + 1) % WAIT_ANIMATION_TEXTS.length;
+    paintStep();
+  }, LOADING_TEXT_ROTATE_MS);
 }
 
 function hideLoading() {
@@ -3472,8 +4736,41 @@ if (typeof window !== 'undefined') {
   window.sendTelemetryError = sendTelemetryError;
   window.handleFeedbackSubmit = handleFeedbackSubmit;
   window.switchView = switchView;
+  window.openStatusDrawer = openStatusDrawer;
+  window.openMenuDrawer = openMenuDrawer;
+  window.closeDrawer = closeDrawer;
+  window.openChapterNav = openChapterNav;
+  window.closeChapterNav = closeChapterNav;
+  window.showDialog = showDialog;
+  window.showErrorRecovery = showErrorRecovery;
 }
 
+
+/**
+ * 顯示生成失敗的救援橫幅。
+ * 這個橫幅（含「重試此回」與「一鍵回報問題」）原本就寫在 index.html 裡，
+ * 但整份程式只有隱藏它、從來沒有任何一行顯示它 —— 玩家只會看到一個
+ * 按掉就沒了的原生 alert，拿不到任何重試或回報入口。
+ * @param {string} message 顯示給玩家的失敗原因
+ * @param {{canRetry?: boolean}} options canRetry 為 false 時隱藏「重試此回」
+ */
+function showErrorRecovery(message, options = {}) {
+  const { canRetry = true } = options;
+  const banner = document.getElementById('error-recovery-banner');
+  const textEl = document.getElementById('error-message-text');
+  const retryBtn = document.getElementById('retry-turn-btn');
+  if (textEl) textEl.textContent = message || '生成請求超時或中斷。';
+  if (retryBtn) {
+    const retryable = canRetry && !!state.lastChoicePayload;
+    retryBtn.style.display = retryable ? 'inline-flex' : 'none';
+  }
+  if (banner) {
+    banner.style.display = 'flex';
+    if (typeof banner.scrollIntoView === 'function') {
+      banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+}
 
 function dismissError() {
   const banner = document.getElementById('error-recovery-banner');
@@ -3488,8 +4785,29 @@ function dismissError() {
 /**
  * 非同步傳送系統異常日誌至 Google Drive 試算表與管理員 Email
  */
+const TELEMETRY_DEDUP_WINDOW_MS = 5 * 60 * 1000; // 同一類錯誤 5 分鐘內只上報一次
+const TELEMETRY_MAX_PER_SESSION = 10;
+const telemetrySentAt = new Map();
+let telemetrySentCount = 0;
+
 async function sendTelemetryError(category, message, details = {}) {
   try {
+    // 後端每筆日誌都會寄一封 MailApp 通知（每日配額 100 封）。
+    // 若不節流，模型全數失敗時的重試迴圈會在幾分鐘內打爆配額。
+    const dedupKey = (category || 'GENERAL_ERROR') + '|' + String(message || '').slice(0, 120);
+    const now = Date.now();
+    const lastSent = telemetrySentAt.get(dedupKey);
+    if (lastSent && now - lastSent < TELEMETRY_DEDUP_WINDOW_MS) {
+      console.warn('[Telemetry] 略過重複回報（' + dedupKey + '）');
+      return;
+    }
+    if (telemetrySentCount >= TELEMETRY_MAX_PER_SESSION) {
+      console.warn('[Telemetry] 本次工作階段回報數已達上限，後續錯誤僅記錄於主控台。');
+      return;
+    }
+    telemetrySentAt.set(dedupKey, now);
+    telemetrySentCount++;
+
     const payload = {
       action: 'telemetry/log-error',
       category: category || 'GENERAL_ERROR',
@@ -3505,7 +4823,8 @@ async function sendTelemetryError(category, message, details = {}) {
 
     console.warn('[Telemetry Alert]', payload);
 
-    const gasUrl = (typeof state !== 'undefined' && state.gasApiUrl) || 'https://script.google.com/macros/s/AKfycbwjdNrRMUveqcxhN2K9Okz8afuBmKrziHnj9Zr5EnoCaX2dlXifACHppa2iJuNRFc0CxQ/exec';
+    // 只使用當前部署的 API 端點；先前硬編在此的舊部署 URL 已失效，會把日誌送進黑洞。
+    const gasUrl = (typeof state !== 'undefined' && state.gasApiUrl) || '';
     if (gasUrl) {
       fetch(gasUrl, {
         method: 'POST',
@@ -3529,10 +4848,8 @@ async function sendTelemetryError(category, message, details = {}) {
  * 開啟意見回饋彈窗
  */
 function openFeedbackModal(prefilledData = {}) {
-  const modal = document.getElementById('feedback-modal');
+  const modal = openOverlay('feedback-modal', { focusSelector: '#feedback-content' });
   if (!modal) return;
-
-  modal.style.display = 'flex';
 
   const categorySel = document.getElementById('feedback-category');
   const contentArea = document.getElementById('feedback-content');
@@ -3553,8 +4870,7 @@ function openFeedbackModal(prefilledData = {}) {
  * 關閉意見回饋彈窗
  */
 function closeFeedbackModal() {
-  const modal = document.getElementById('feedback-modal');
-  if (modal) modal.style.display = 'none';
+  closeOverlay('feedback-modal');
 }
 
 /**
@@ -3573,7 +4889,7 @@ async function handleFeedbackSubmit(e) {
   if (checkedRating) rating = checkedRating.value;
 
   if (!content) {
-    return alert('請填寫具體回饋內容後再送出！');
+    return notifyUser('請填寫具體回饋內容後再送出。', 'error');
   }
 
   const submitBtn = document.getElementById('submit-feedback-btn');
@@ -3615,19 +4931,19 @@ async function handleFeedbackSubmit(e) {
       });
       const data = await res.json();
       if (data.success) {
-        alert('感謝您的寶貴回饋！意見已成功同步至開發管理團隊。');
+        notifyUser('感謝您的回饋，意見已同步至開發團隊。', 'success', 5000);
       } else {
-        alert('回饋提交失敗：' + (data.error?.message || '伺服器回應異常，請稍後再試。'));
+        notifyUser('回饋提交失敗：' + (data.error?.message || '伺服器回應異常，請稍後再試。'), 'error', 5000);
       }
     } else {
-      alert('系統尚未配置雲端端點，回饋已記錄於本機。');
+      notifyUser('系統尚未配置雲端端點，回饋已記錄於本機。', 'info', 5000);
     }
     closeFeedbackModal();
     const contentArea = document.getElementById('feedback-content');
     if (contentArea) contentArea.value = '';
   } catch (err) {
     console.error('Submit feedback error:', err);
-    alert('回饋提交失敗：無法連線至雲端伺服器。\n錯誤：' + err.message);
+    notifyUser('回饋提交失敗：無法連線至雲端伺服器。', 'error', 5000);
     closeFeedbackModal();
   } finally {
     if (submitBtn) {

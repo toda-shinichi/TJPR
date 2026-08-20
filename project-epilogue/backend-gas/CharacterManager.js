@@ -204,10 +204,49 @@ var CharacterManager = (function() {
    * @param {string} primaryLeadKey - 核心攻略男主（Tier 1 主角，自動排除）
    * @returns {Array<Object>} 在場配角物件陣列 (最多 2 位)
    */
+  /**
+   * 別名比對採「最長優先、位置獨佔」：短別名若落在已被更長別名佔用的區段內就不算命中。
+   * 這是必要的 —— 「副總」是楊紹宸的別名，「副總統」是徐承勳的別名，
+   * 單純用 indexOf 會讓每次提到副總統徐承勳都誤判楊紹宸在場並注入其全量人設。
+   */
+  function buildAliasMatchMap(scanTarget, roster) {
+    var entries = [];
+    for (var r = 0; r < roster.length; r++) {
+      var aliases = roster[r].aliases || [];
+      for (var a = 0; a < aliases.length; a++) {
+        if (aliases[a]) entries.push({ id: roster[r].id, alias: aliases[a] });
+      }
+    }
+    entries.sort(function(x, y) { return y.alias.length - x.alias.length; });
+
+    var claimed = [];
+    var matchedIds = {};
+    for (var e = 0; e < entries.length; e++) {
+      var alias = entries[e].alias;
+      var from = 0;
+      while (true) {
+        var at = scanTarget.indexOf(alias, from);
+        if (at === -1) break;
+        var free = true;
+        for (var k = at; k < at + alias.length; k++) {
+          if (claimed[k]) { free = false; break; }
+        }
+        if (free) {
+          for (var m = at; m < at + alias.length; m++) claimed[m] = true;
+          matchedIds[entries[e].id] = true;
+          break;
+        }
+        from = at + 1;
+      }
+    }
+    return matchedIds;
+  }
+
   function detectActiveNPCs(lastChapterText, playerChoice, primaryLeadKey) {
     var roster = getRosterIndex();
     var scanTarget = (playerChoice || '') + ' ' + ((lastChapterText || '').slice(-600));
     var activeNPCs = [];
+    var matchedIds = buildAliasMatchMap(scanTarget, roster);
 
     for (var i = 0; i < roster.length; i++) {
       var charObj = roster[i];
@@ -216,16 +255,7 @@ var CharacterManager = (function() {
         continue;
       }
 
-      var isMentioned = false;
-      for (var j = 0; j < charObj.aliases.length; j++) {
-        var alias = charObj.aliases[j];
-        if (scanTarget.indexOf(alias) !== -1) {
-          isMentioned = true;
-          break;
-        }
-      }
-
-      if (isMentioned) {
+      if (matchedIds[charObj.id]) {
         activeNPCs.push(charObj);
         if (activeNPCs.length >= 2) break; // 上限 2 位，避免 Token 膨脹
       }

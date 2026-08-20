@@ -40,28 +40,39 @@ function doPost(e) {
       return createSuccessResponse({ status: 'healthy', version: CONFIG.VERSION, timestamp: new Date().toISOString() });
     } else if (action === 'telemetry/log-error') {
       var errRes = TelemetryService.logError(payload);
-      return createSuccessResponse(errRes);
+      return errRes && errRes.success
+        ? createSuccessResponse(errRes)
+        : createErrorResponse((errRes && errRes.error) || 'Telemetry logging failed.', 500);
     } else if (action === 'telemetry/submit-feedback') {
       var fbRes = TelemetryService.submitFeedback(payload);
-      return createSuccessResponse(fbRes);
-    } else if (action === 'telemetry/init') {
-      var initRes = TelemetryService.initSpreadsheet();
-      return createSuccessResponse(initRes);
-    } else if (action === 'admin/bootstrap') {
-      var syncResult = bootstrapAllDriveFiles();
-      try {
-        StorageService.populateGlobalConfigsSheet();
-        TelemetryService.initSpreadsheet();
-      } catch (e) {
-        console.warn('populateGlobalConfigsSheet/Telemetry error: ' + e.message);
-      }
-      return createSuccessResponse(syncResult);
+      return fbRes && fbRes.success
+        ? createSuccessResponse(fbRes)
+        : createErrorResponse((fbRes && fbRes.error) || 'Feedback submission failed.', 500);
     }
 
     // Authenticate all protected actions
     var userSession = authenticateRequest(e, payload);
     if (!userSession.isValid) {
       return createErrorResponse(userSession.error || 'Unauthorized request.', 401);
+    }
+
+    // Administrative setup mutates shared Drive/Sheets resources and must never
+    // be callable by anonymous or regular player sessions.
+    if (action === 'telemetry/init' || action === 'admin/bootstrap') {
+      if (userSession.userId !== 'master_admin') {
+        return createErrorResponse('Administrator privileges required.', 403);
+      }
+      if (action === 'telemetry/init') {
+        return createSuccessResponse(TelemetryService.initSpreadsheet());
+      }
+      var syncResult = bootstrapAllDriveFiles();
+      try {
+        StorageService.populateGlobalConfigsSheet();
+        TelemetryService.initSpreadsheet();
+      } catch (adminInitErr) {
+        console.warn('populateGlobalConfigsSheet/Telemetry error: ' + adminInitErr.message);
+      }
+      return createSuccessResponse(syncResult);
     }
 
     // Router Dispatcher
@@ -128,19 +139,7 @@ function doGet(e) {
 
 
   if (action === 'init-telemetry' || action === 'init-sheet') {
-    try {
-      var initRes = TelemetryService.initSpreadsheet();
-      return ContentService.createTextOutput(JSON.stringify({
-        status: 'SUCCESS',
-        message: 'Telemetry spreadsheet created/verified successfully.',
-        data: initRes
-      })).setMimeType(ContentService.MimeType.JSON);
-    } catch (err) {
-      return ContentService.createTextOutput(JSON.stringify({
-        status: 'ERROR',
-        message: err.message
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
+    return createErrorResponse('Remote initialization is disabled. Run testCreateTelemetrySheet from the Apps Script editor.', 403);
   }
 
   var responseData = {
@@ -184,19 +183,7 @@ function authenticateRequest(e, payload) {
   }
 
   if (!token) {
-    token = 'tok_default_player';
-  }
-
-  // 支援訪客與前端直通 Token 暢行模式（自動查找或建立專屬 Drive 資料夾）
-  if (token.indexOf('guest_') === 0 || token.indexOf('local_') === 0 || token.indexOf('tok_') === 0 || token.indexOf('epi_mock_') === 0 || (payload && payload.userId === 'usr_guest') || token === 'tok_default_player') {
-    var uId = (payload && payload.userId) || 'usr_player';
-    var uFolder = StorageService.getOrCreateUserDriveFolder(uId);
-    return {
-      isValid: true,
-      userId: uId,
-      email: (payload && payload.email) || 'player@undercurrent.game',
-      driveFolderId: uFolder
-    };
+    return { isValid: false, error: 'Missing authentication token.' };
   }
 
   // Master Admin Override
@@ -236,7 +223,10 @@ function generateSaltedHash(rawString, salt) {
 function generateSessionToken(userId) {
   var randomUUID = Utilities.getUuid();
   var timestamp = new Date().getTime().toString();
-  var signature = generateSaltedHash(userId + timestamp + randomUUID, getSecrets().JWT_SECRET);
+  // JWT_SECRET 尚未設定時也不可退回公開固定字串；此 token 最終仍會以
+  // 隨機值寫入 Users 表並逐筆比對，臨時熵只用來避免可預測簽章。
+  var signingSecret = getSecrets().JWT_SECRET || (Utilities.getUuid() + Utilities.getUuid());
+  var signature = generateSaltedHash(userId + timestamp + randomUUID, signingSecret);
   return 'epi_' + Utilities.base64EncodeWebSafe(userId + ':' + timestamp + ':' + signature);
 }
 
@@ -287,10 +277,10 @@ function verifyUserToken(token) {
  * User Login Handler
  */
 function handleLogin(payload) {
-  var email = payload.email;
+  var email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
   var password = payload.password;
 
-  if (!email || !password) {
+  if (!email || !password || email.length > 254 || typeof password !== 'string' || password.length > 256) {
     return createErrorResponse('Email and password are required.', 400);
   }
 
@@ -305,6 +295,13 @@ function handleLogin(payload) {
   }
 
   var newToken = generateSessionToken(userRecord.userId);
+  if (userRecord.apiToken && userRecord.apiToken !== newToken) {
+    try {
+      CacheService.getScriptCache().remove('token_' + userRecord.apiToken);
+    } catch (cacheErr) {
+      console.warn('舊登入權杖快取清除失敗: ' + cacheErr.message);
+    }
+  }
   StorageService.updateUserToken(userRecord.userId, newToken);
 
   // Cache session
@@ -327,35 +324,47 @@ function handleLogin(payload) {
  * User Registration Handler
  */
 function handleRegister(payload) {
-  var email = payload.email;
+  var email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
   var password = payload.password;
 
-  if (!email || !password || password.length < 6) {
+  var validEmail = /^[^\s@=+\-][^\s@]*@[^\s@]+\.[^\s@]+$/.test(email);
+  if (!validEmail || typeof password !== 'string' || password.length < 6 || password.length > 256 || email.length > 254) {
     return createErrorResponse('Email and a password of at least 6 characters are required.', 400);
   }
 
-  var existing = StorageService.findUserByEmail(email);
-  if (existing) {
-    return createErrorResponse('A user with this email already exists.', 409);
+  var registrationLock = LockService.getScriptLock();
+  var registrationLocked = false;
+  var userId;
+  var token;
+  var userFolderId;
+  try {
+    registrationLock.waitLock(30000);
+    registrationLocked = true;
+    var existing = StorageService.findUserByEmail(email);
+    if (existing) {
+      return createErrorResponse('A user with this email already exists.', 409);
+    }
+
+    userId = 'usr_' + Utilities.getUuid().substring(0, 8);
+    var salt = Utilities.getUuid().substring(0, 16);
+    var passwordHash = generateSaltedHash(password, salt);
+    token = generateSessionToken(userId);
+    userFolderId = StorageService.getOrCreateUserDriveFolder(userId);
+
+    StorageService.registerNewUser({
+      userId: userId,
+      email: email,
+      passwordHash: passwordHash,
+      salt: salt,
+      apiToken: token,
+      driveFolderId: userFolderId,
+      createdAt: new Date().toISOString()
+    });
+  } finally {
+    if (registrationLocked) {
+      try { registrationLock.releaseLock(); } catch (releaseErr) { console.warn('註冊鎖釋放失敗: ' + releaseErr.message); }
+    }
   }
-
-  var userId = 'usr_' + Utilities.getUuid().substring(0, 8);
-  var salt = Utilities.getUuid().substring(0, 16);
-  var passwordHash = generateSaltedHash(password, salt);
-  var token = generateSessionToken(userId);
-
-  // Create dedicated Drive workspace folder for user
-  var userFolderId = StorageService.getOrCreateUserDriveFolder(userId);
-
-  StorageService.registerNewUser({
-    userId: userId,
-    email: email,
-    passwordHash: passwordHash,
-    salt: salt,
-    apiToken: token,
-    driveFolderId: userFolderId,
-    createdAt: new Date().toISOString()
-  });
 
   return createSuccessResponse({
     token: token,
@@ -410,7 +419,9 @@ function handleNextTurn(userSession, payload) {
   );
 
   // 5. Persist updated save_slot.json
-  StorageService.saveSaveState(userSession.driveFolderId, updatedSaveState);
+  if (!StorageService.saveSaveState(userSession.driveFolderId, updatedSaveState)) {
+    return createErrorResponse('Chapter generated but save-state persistence failed.', 500);
+  }
 
   return createSuccessResponse({
     turn: updatedSaveState.turnCount,
@@ -425,6 +436,7 @@ function handleNextTurn(userSession, payload) {
  */
 function handleAudit(userSession, payload) {
   var saveState = payload.saveState || StorageService.loadSaveState(userSession.driveFolderId);
+  if (!saveState) return createErrorResponse('No active save state found for this session.', 404);
   var auditReport = MemoryPipeline.runTurnAudit(userSession, saveState);
   return createSuccessResponse({ audit: auditReport });
 }
@@ -434,6 +446,7 @@ function handleAudit(userSession, payload) {
  */
 function handleActRebase(userSession, payload) {
   var saveState = payload.saveState || StorageService.loadSaveState(userSession.driveFolderId);
+  if (!saveState) return createErrorResponse('No active save state found for this session.', 404);
   var rebaseResult = MemoryPipeline.executeActRebase(userSession, saveState);
   return createSuccessResponse(rebaseResult);
 }
@@ -446,8 +459,13 @@ function handleSaveState(userSession, payload) {
   if (!stateData) {
     return createErrorResponse('Missing saveState in payload.', 400);
   }
+  // Keep the resumable chapter payload together with save_slot.json. Full_Novel.md
+  // remains the human-readable archive, while these fields restore the live UI.
+  stateData._chapterData = payload.chapter || null;
+  stateData._chapterHistoryList = payload.chapterHistory || [];
   var folderId = userSession.driveFolderId || StorageService.getOrCreateUserDriveFolder(userSession.userId);
-  StorageService.saveSaveState(folderId, stateData, payload.chapter, payload.playerProfile, payload.chapterHistory);
+  var saved = StorageService.saveSaveState(folderId, stateData, payload.chapter, payload.playerProfile, payload.chapterHistory);
+  if (!saved) return createErrorResponse('Failed to persist save state.', 500);
   return createSuccessResponse({ saved: true, folderId: folderId, timestamp: new Date().toISOString() });
 }
 
@@ -456,7 +474,18 @@ function handleSaveState(userSession, payload) {
  */
 function handleLoadState(userSession, payload) {
   var state = StorageService.loadSaveState(userSession.driveFolderId);
-  return createSuccessResponse({ saveState: state });
+  if (!state) {
+    return createSuccessResponse({ saveState: null, chapter: null, chapterHistory: [] });
+  }
+  var chapter = state._chapterData || null;
+  var chapterHistory = state._chapterHistoryList || [];
+  delete state._chapterData;
+  delete state._chapterHistoryList;
+  return createSuccessResponse({
+    saveState: state,
+    chapter: chapter,
+    chapterHistory: chapterHistory
+  });
 }
 
 /**
@@ -520,7 +549,10 @@ function handleDeleteAccount(userSession, payload) {
   if (!userSession || !userSession.userId) {
     return createErrorResponse('Unauthorized.', 401);
   }
-  StorageService.deleteUserAccount(userSession.userId);
+  var deleted = StorageService.deleteUserAccount(userSession.userId);
+  if (!deleted) {
+    return createErrorResponse('User account was not found or could not be deleted.', 404);
+  }
   return createSuccessResponse({ deleted: true, message: '使用者帳號及相關雲端資料已全數清除。' });
 }
 
@@ -528,6 +560,26 @@ function handleDeleteAccount(userSession, payload) {
  * 🛠️ 一鍵全域自動修復與雲端初始化工具 (可在 GAS 編輯器上方直接選擇此函式並按「執行」)
  */
 function adminPopulateEverything() {
+  // ⚠️ 破壞性操作：步驟 3 會用範例資料【覆寫每一位玩家】的 save_slot.json，
+  // 亦即抹除所有真實遊玩進度。除非確實是要重置測試環境，否則不要執行。
+  var ui = null;
+  try { ui = SpreadsheetApp.getUi(); } catch (noUiErr) { /* 非 UI 環境 */ }
+  if (ui) {
+    var answer = ui.alert(
+      '危險操作確認',
+      '此函式會用範例存檔覆寫 Player_Saves 底下【所有玩家】的 save_slot.json，\n' +
+      '真實遊玩進度將無法復原。確定要繼續嗎？',
+      ui.ButtonSet.YES_NO
+    );
+    if (answer !== ui.Button.YES) {
+      console.log('使用者取消 adminPopulateEverything。');
+      return { success: false, cancelled: true };
+    }
+  } else if (PropertiesService.getScriptProperties().getProperty('ALLOW_DESTRUCTIVE_RESEED') !== 'true') {
+    // 無 UI（例如從 API 或觸發器呼叫）時必須先明確設定指令碼屬性才放行。
+    throw new Error('adminPopulateEverything 為破壞性操作：請先將指令碼屬性 ALLOW_DESTRUCTIVE_RESEED 設為 true。');
+  }
+
   console.log('=== 開始執行全域雲端修復與資料庫填充 ===');
   
   // 1. 初始化 Global_Configs 與 Master_Index 試算表

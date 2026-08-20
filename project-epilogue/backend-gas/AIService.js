@@ -14,27 +14,40 @@ var AIService = (function() {
    */
   function enforceRateLimitRPM5() {
     var lock = LockService.getScriptLock();
+    var minInterval = CONFIG.API.MIN_REQUEST_INTERVAL_MS || 12500;
+    var waitTime = 0;
+    var acquired = false;
+
+    // 只在鎖內「預約」下一個可呼叫時點；實際 sleep 必須在鎖外進行。
+    // 先前是持鎖 sleep 12.5 秒，第二位並行玩家會在 waitLock(30000) 逾時後
+    // 落入 catch，接著完全繞過限速直接打 API，反而必定觸發 429。
     try {
       lock.waitLock(30000);
-      var cache = CacheService.getScriptCache();
-      var lastCallTimestamp = cache.get('LAST_API_CALL_TS');
-      var now = new Date().getTime();
-      var minInterval = CONFIG.API.MIN_REQUEST_INTERVAL_MS || 12500;
+      acquired = true;
+    } catch (lockErr) {
+      console.warn('Rate limiter 取鎖失敗，改用保守間隔: ' + lockErr.message);
+    }
 
-      if (lastCallTimestamp) {
-        var elapsed = now - parseInt(lastCallTimestamp, 10);
-        if (elapsed < minInterval) {
-          var waitTime = minInterval - elapsed;
-          console.info('【RPM=5 防護機制】自動等待 ' + waitTime + ' 毫秒以符合 5 RPM 呼叫頻率限制...');
-          Utilities.sleep(waitTime);
-          now = new Date().getTime();
-        }
-      }
-      cache.put('LAST_API_CALL_TS', now.toString(), 300);
+    try {
+      var cache = CacheService.getScriptCache();
+      var nextAllowedTs = parseInt(cache.get('NEXT_API_CALL_TS') || '0', 10);
+      var now = new Date().getTime();
+      var slotTs = Math.max(now, nextAllowedTs);
+      waitTime = slotTs - now;
+      cache.put('NEXT_API_CALL_TS', (slotTs + minInterval).toString(), 300);
     } catch (e) {
       console.warn('Rate limiter warning: ' + e.message);
+      // 取不到快取時寧可保守等待一個完整間隔，也不要無節制送出請求。
+      waitTime = acquired ? 0 : minInterval;
     } finally {
-      lock.releaseLock();
+      if (acquired) {
+        try { lock.releaseLock(); } catch (relErr) { /* 忽略 */ }
+      }
+    }
+
+    if (waitTime > 0) {
+      console.info('【RPM=5 防護機制】排隊等待 ' + waitTime + ' 毫秒以符合 5 RPM 呼叫頻率限制...');
+      Utilities.sleep(waitTime);
     }
   }
 
@@ -116,8 +129,11 @@ var AIService = (function() {
             console.warn('切換至備用模型：' + fallbackModel);
             payload.model = fallbackModel;
             requestOptions.payload = JSON.stringify(payload);
-            attempt = 1;
+            // for 迴圈結尾會自動 +1，因此設為 0，讓備援模型從第 1 次開始。
+            attempt = 0;
             targetModel = fallbackModel;
+            Utilities.sleep(delayMs);
+            continue;
           }
           Utilities.sleep(delayMs * Math.pow(2, attempt - 1));
           continue;
@@ -197,12 +213,15 @@ var AIService = (function() {
       { role: 'user', content: promptContext.userPrompt }
     ];
 
+    // 依 Config.js 實際定義的鍵名逐一列出（先前誤用 FALLBACK_2/FALLBACK_3，
+    // 導致 FALLBACK_4 的 aion-3.0 永遠不會被嘗試，與錯誤訊息所述不符）。
     var narratorModels = [
-      CONFIG.MODELS.NARRATOR.PRIMARY || 'aion-rp-1.0',
-      CONFIG.MODELS.NARRATOR.FALLBACK || 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
-      CONFIG.MODELS.NARRATOR.FALLBACK_2 || 'gpt-5.6-luna',
-      CONFIG.MODELS.NARRATOR.FALLBACK_3 || 'aion-3.0'
-    ];
+      CONFIG.MODELS.NARRATOR.PRIMARY,
+      CONFIG.MODELS.NARRATOR.FALLBACK,
+      CONFIG.MODELS.NARRATOR.FALLBACK_2,
+      CONFIG.MODELS.NARRATOR.FALLBACK_3,
+      CONFIG.MODELS.NARRATOR.FALLBACK_4
+    ].filter(function(m, idx, arr) { return m && arr.indexOf(m) === idx; });
 
     var lastError = null;
     for (var i = 0; i < narratorModels.length; i++) {
@@ -210,7 +229,11 @@ var AIService = (function() {
       try {
         var response = callAPI(currentModel, messages, {
           temperature: CONFIG.MODELS.NARRATOR.TEMPERATURE,
-          max_tokens: CONFIG.MODELS.NARRATOR.MAX_TOKENS
+          max_tokens: CONFIG.MODELS.NARRATOR.MAX_TOKENS,
+          top_p: CONFIG.MODELS.NARRATOR.TOP_P,
+          // 這一層已自行輪替全部備援模型，關閉 callAPI 內建的模型切換，
+          // 避免同一個備援模型被重複嘗試、把請求時間預算耗盡。
+          fallbackModel: currentModel
         });
         var parsedOutput = extractJsonFromResponse(response.content);
         return {
@@ -270,7 +293,9 @@ var AIService = (function() {
       try {
         var response = callAPI(currentModel, messages, {
           temperature: CONFIG.MODELS.AUDITOR.TEMPERATURE,
-          max_tokens: 1000
+          max_tokens: 1000,
+          top_p: CONFIG.MODELS.AUDITOR.TOP_P,
+          fallbackModel: currentModel
         });
         return response.content.trim();
       } catch (err) {
@@ -311,7 +336,7 @@ var AIService = (function() {
       '  "isConsistent": true 或 false,',
       '  "severity": "none" | "low" | "medium" | "critical",',
       '  "issues": ["列出所有邏輯破綻、角色OOC違和行為或道具矛盾問題"],',
-      '  "suggestedPatch": "給下一回敘事提示詞的具體修正指令，用於在後續情節中自然修復與圓融"' +
+      '  "suggestedPatch": "給下一回敘事提示詞的具體修正指令，用於在後續情節中自然修復與圓融"',
       '}'
     ].join('\n');
 
@@ -323,6 +348,7 @@ var AIService = (function() {
     var response = callAPI(CONFIG.MODELS.AUDITOR.PRIMARY, messages, {
       temperature: CONFIG.MODELS.AUDITOR.TEMPERATURE,
       max_tokens: CONFIG.MODELS.AUDITOR.MAX_TOKENS,
+      top_p: CONFIG.MODELS.AUDITOR.TOP_P,
       fallbackModel: CONFIG.MODELS.AUDITOR.FALLBACK
     });
 

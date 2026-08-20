@@ -25,12 +25,8 @@
   --reader-line-height: 1.95;
 }
 
-@media (min-width: 640px) {
-  :root {
-    --reader-font-size: 1.15rem;
-    --reader-line-height: 2.15;
-  }
-}
+/* 字級改由 JS 的 applyReaderFontSize() 以 px 寫入 --reader-font-size，
+   這裡不再用媒體查詢硬覆寫，否則會壓掉玩家在字級控制項上的設定。 */
 
 * {
   box-sizing: border-box;
@@ -45,7 +41,10 @@ html, body {
   background-color: var(--bg-main);
   color: var(--text-main);
   font-family: var(--font-sans);
-  overflow-x: hidden;
+  /* 必須用 clip 而非 hidden：overflow-x: hidden 會讓 overflow-y 計算成 auto，
+     使 body 成為捲動容器，header 與遊戲狀態條的 position: sticky 就完全失效
+     （一捲動就整條消失）。clip 同樣防止橫向溢出但不建立捲動容器。 */
+  overflow-x: clip;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -64,6 +63,62 @@ input, select, textarea {
 /* 📱 手機端觸控優化 */
 button, a, input, select, textarea, [role="button"] {
   touch-action: manipulation;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--text-accent);
+  outline-offset: 3px;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed !important;
+  opacity: 0.52;
+  filter: saturate(0.55);
+}
+
+.form-message {
+  display: none;
+  min-height: 1.25rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.6rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.form-message.is-visible {
+  display: block;
+}
+
+.form-message.is-error {
+  color: #fecdd3;
+  background: rgba(76, 5, 25, 0.72);
+  border: 1px solid rgba(244, 63, 94, 0.38);
+}
+
+.form-message.is-success {
+  color: #d1fae5;
+  background: rgba(2, 44, 34, 0.72);
+  border: 1px solid rgba(16, 185, 129, 0.38);
+}
+
+#toast-container > div {
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+#toast-container > div.toast-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 .touch-target {
@@ -89,6 +144,51 @@ button, a, input, select, textarea, [role="button"] {
 
 .prose-tc p:last-child {
   margin-bottom: 0.5rem;
+}
+
+/* 歷史章節略小一號並降低對比，維持「舊章節退後、當前章節在前」的層次 */
+.prose-tc.is-past {
+  font-size: calc(var(--reader-font-size) * 0.94);
+  color: var(--text-muted);
+}
+
+/* 對話段落（以引號開頭）不縮排，讓對白與敘述在視覺上分層 */
+.prose-tc p.is-dialogue {
+  text-indent: 0;
+  padding-left: 0.35em;
+}
+
+/* 場景分隔：連續敘述中的換場給一條低調的金線，避免 700 字讀起來是一整塊 */
+.prose-tc hr.scene-break {
+  border: 0;
+  height: 1px;
+  width: 38%;
+  margin: 2rem auto;
+  background: linear-gradient(to right, transparent, rgba(212, 175, 55, 0.45), transparent);
+}
+
+@media (max-width: 639px) {
+  .prose-tc p {
+    text-align: left;
+  }
+
+  #auth-modal:focus-within {
+    align-items: flex-start;
+  }
+
+  #auth-modal:focus-within > div {
+    margin-top: max(1rem, env(safe-area-inset-top));
+    margin-bottom: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* 彈窗滑動回彈優化 */
