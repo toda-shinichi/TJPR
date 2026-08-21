@@ -516,7 +516,7 @@ const htmlContent = `<!DOCTYPE html>
       <div class="bg-brand-card p-3.5 rounded-xl border border-brand-gold/30 space-y-2.5">
         <div class="text-xs font-bold text-slate-200">➕ 儲存當前遊戲進度為新存檔：</div>
         <div class="flex gap-2">
-          <input type="text" id="new-save-name-input" placeholder="輸入存檔名稱（例：楊慕璃-修羅場暴雨第3回、二爺深情暗道線...）" class="flex-1 bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
+          <input type="text" id="new-save-name-input" placeholder="輸入存檔名稱（例：楊慕璃-修羅場暴雨第3回、謙哥深情暗道線...）" class="flex-1 bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
           <button id="create-named-save-btn" class="px-4 py-2 rounded-lg bg-brand-gold text-slate-950 font-bold hover:bg-yellow-500 transition text-xs shrink-0 shadow-md cursor-pointer">
             💾 儲存存檔
           </button>
@@ -626,4 +626,3 @@ const htmlContent = `<!DOCTYPE html>
 
 fs.writeFileSync('/Users/huanhsu/Desktop/程式碼專案/TJPR/index.html', htmlContent, 'utf8');
 console.log('index.html fully rebuilt with character creation modal, app navbar, and universe intro!');
-

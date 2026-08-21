@@ -208,7 +208,7 @@ function generateDynamicFirstChapter(profile) {
       },
       choices: [
         { id: 'opt_init_a', label: \`[A] 掌局談判：迎上 \${leadName} 的視線，將隨身碟壓在指尖「既然找上了你，開價自然由我說了算」\`, risk: 'low', hint: '展現頂級大女主從容底氣' },
-        { id: 'opt_init_b', label: \`[B] 機鋒推拉：唇角勾起極淡輕笑，微退半步拉開距離「二爺這麼近，是想搶我的隨身碟，還是想搶我的人？」\`, risk: 'medium', hint: '危險試探，拉扯男性征服欲' },
+        { id: 'opt_init_b', label: \`[B] 機鋒推拉：唇角勾起極淡輕笑，微退半步拉開距離「謙哥這麼近，是想搶我的隨身碟，還是想搶我的人？」\`, risk: 'medium', hint: '危險試探，拉扯男性征服欲' },
         { id: 'opt_init_c', label: \`[C] 情慾反撩：指尖順著他的領口緩緩滑過「這份帳冊能要無數人的命，但今晚……我只想看看你能給我什麼」\`, risk: 'high', hint: '主動點火，將殺機化為極致性張力' }
       ]
     };
@@ -232,7 +232,7 @@ function generateDynamicFirstChapter(profile) {
       choices: [
         { id: 'opt_a', label: '[A] 借力打力：神情自若地拉開中央座椅坐下，將隨身碟壓在掌心「兩位既然都到了，不如聽聽我的開價」', risk: 'low', hint: '展現從容定力，在黑白夾縫中主導談判節奏' },
         { id: 'opt_b', label: '[B] 轉移焦點：抬眼直視韓正寰「韓檢若真想查辦，三年前的洗錢懸案為何至今不敢結案？」', risk: 'medium', hint: '直刺司法痛點，拉扯韓正寰心理防線' },
-        { id: 'opt_c', label: '[C] 危險推拉：側身朝徐令謙走近，傾身將隨身碟輕放在他的威士忌杯旁「二爺，您說這東西……我該給誰？」', risk: 'high', hint: '主動跨越安全距離，當著檢察官面與黑幫首領親暱試探' }
+        { id: 'opt_c', label: '[C] 危險推拉：側身朝徐令謙走近，傾身將隨身碟輕放在他的威士忌杯旁「徐顧問，您說這東西……我該給誰？」', risk: 'high', hint: '主動跨越安全距離，當著檢察官面與黑幫首領親暱試探' }
       ]
     };
   }
@@ -317,7 +317,7 @@ const oldLoadMockData = `function loadMockDataWithProfile(profile) {
       choices: [
         { id: 'opt_a', label: '[A] 借力打力：神情自若地拉開中央座椅坐下，將隨身碟壓在掌心「兩位既然都到了，不如聽聽我的開價」', risk: 'low', hint: '展現從容定力，在黑白夾縫中主導談判節奏' },
         { id: 'opt_b', label: \`[B] 轉移焦點：抬眼直視韓正寰「韓檢若真想查辦，三年前的洗錢懸案為何至今不敢結案？」\`, risk: 'medium', hint: '直刺司法痛點，拉扯韓正寰心理防線' },
-        { id: 'opt_c', label: \`[C] 危險推拉：側身朝徐令謙走近，傾身將隨身碟輕放在他的威士忌杯旁「二爺，您說這東西……我該給誰？」\`, risk: 'high', hint: '主動跨越安全距離，當著檢察官面與黑幫首領親暱試探' }
+        { id: 'opt_c', label: \`[C] 危險推拉：側身朝徐令謙走近，傾身將隨身碟輕放在他的威士忌杯旁「徐顧問，您說這東西……我該給誰？」\`, risk: 'high', hint: '主動跨越安全距離，當著檢察官面與黑幫首領親暱試探' }
       ]
     };
   } else {
@@ -336,8 +336,8 @@ const oldLoadMockData = `function loadMockDataWithProfile(profile) {
       },
       choices: [
         { id: 'opt_a', label: '[A] 順應節奏：神情自若地拉開椅子坐下，將隨身碟推向桌心，以籌碼換取保護', risk: 'low', hint: '展現職業從容，以籌碼換取信任' },
-        { id: 'opt_b', label: \`[B] 反向推拉：冷靜反詰「看來二爺很清楚，這份帳冊能讓士林地檢署把誰送進去」\`, risk: 'medium', hint: '言語機鋒試探底線，拉扯權力距離' },
-        { id: 'opt_c', label: \`[C] 情慾暗示：迎著他的視線傾身靠近，壓低聲音「那二爺打算怎麼處置我這個握著炸彈的人？」\`, risk: 'high', hint: '打破社交界限，主動拉近物理距離挑動危險氛圍' }
+        { id: 'opt_b', label: \`[B] 反向推拉：冷靜反詰「看來徐顧問很清楚，這份帳冊能讓士林地檢署把誰送進去」\`, risk: 'medium', hint: '言語機鋒試探底線，拉扯權力距離' },
+        { id: 'opt_c', label: \`[C] 情慾暗示：迎著他的視線傾身靠近，壓低聲音「那謙哥打算怎麼處置我這個握著炸彈的人？」\`, risk: 'high', hint: '打破社交界限，主動拉近物理距離挑動危險氛圍' }
       ]
     };
   }

@@ -10,6 +10,9 @@ const css = fs.readFileSync('style.css', 'utf8');
 const deployCss = fs.readFileSync('project-epilogue/frontend-web/style.css', 'utf8');
 const workerCode = fs.readFileSync('worker/index.js', 'utf8');
 const gasConfig = fs.readFileSync('project-epilogue/backend-gas/Config.js', 'utf8');
+const xuLingqianLore = fs.readFileSync('characters/01_徐令謙.md', 'utf8');
+const characterSeed = fs.readFileSync('project-epilogue/backend-gas/CharacterDataSeed.js', 'utf8');
+const characterManager = fs.readFileSync('project-epilogue/backend-gas/CharacterManager.js', 'utf8');
 
 assert.strictEqual(rootApp, deployApp, '根目錄與部署版 app.js 不一致');
 assert.strictEqual(html, deployHtml, '根目錄與部署版 index.html 不一致');
@@ -148,6 +151,10 @@ assert.match(rootApp, /e\.key === 'Enter' && !e\.shiftKey && !e\.isComposing/, '
 assert.strictEqual((rootApp.match(/on\('mobile-menu-btn', 'click'/g) || []).length, 1, '手機功能選單被重複綁定');
 assert.strictEqual((rootApp.match(/on\('drawer-backdrop', 'click'/g) || []).length, 1, '抽屜遮罩被重複綁定');
 assert.match(rootApp, /const FONT_SIZE_MIN = 16;/, '正文字級下限與指南標示不一致');
+const deprecatedXuTitle = new RegExp('\\u4e8c\\u723a');
+assert.doesNotMatch([rootApp, html, xuLingqianLore, characterSeed, characterManager].join('\n'), deprecatedXuTitle, '徐令謙仍殘留停用稱謂');
+assert.match(xuLingqianLore, /正式場合一律稱「徐顧問」[\s\S]*熟識者與江湖人物稱「謙哥」/, '徐令謙稱謂規則未明確寫入角色卡');
+assert.strictEqual((rootApp.match(/徐令謙在正式、政商場合稱「徐顧問」/g) || []).length, 2, '開局與續回提示詞未共同套用徐令謙稱謂規則');
 assert.doesNotMatch(rootApp, /text-\[#d8dbe6\]/, '最新回合仍使用深色主題遺留的低對比淺字');
 assert.match(css, /#stream-prose-content\s*\{[\s\S]*?color:\s*#3e363a\s*!important/, '最新回合正文缺少高對比色保護');
 assert.match(rootApp, /PRIMARY_MODEL: 'deepseek-v4-pro'/, '前端主要敘事模型未切換為 DeepSeek V4 Pro');
