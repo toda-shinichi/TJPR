@@ -5,7 +5,7 @@
 ---
 
 ## 1. 主要主筆作家提示詞 (Narrator System & Turn Prompt)
-* **執行模型**：`mistral-large-3`（備用：`deepseek-v4-pro`）
+* **執行模型**：`deepseek-v4-pro`
 * **調用位置**：[`MemoryPipeline.js`](file:///Users/huanhsu/Desktop/程式碼專案/TJPR/project-epilogue/backend-gas/MemoryPipeline.js) -> `buildTurnPromptContext()`
 * **目標**：生成 1,200 ~ 1,500 字長篇小說、3 個決策分支與狀態更新數值。
 

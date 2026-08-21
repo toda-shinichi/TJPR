@@ -26,7 +26,7 @@ const CONFIG = {
   MODELS: {
         // 主要敘事模型 (Narrator: DeepSeek V4 Pro 首選，gemini-3.6-flash 備援 1)
     NARRATOR: {
-      PRIMARY: 'deepseek/deepseek-v4-pro',
+      PRIMARY: 'deepseek-v4-pro',
       FALLBACK: 'gemini-3.6-flash',
       FALLBACK_2: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
       FALLBACK_3: 'gpt-5.6-luna',

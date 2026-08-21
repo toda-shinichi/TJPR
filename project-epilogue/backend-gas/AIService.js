@@ -3,7 +3,7 @@
  * 檔案：AIService.js
  * 
  * 透過相容 OpenAI 的 API 端點（https://api.banana2556.com/v1）驅動雙模型管線：
- * 1. 主要敘事模型 (Narrator: deepseek/deepseek-v4-pro)
+ * 1. 主要敘事模型 (Narrator: deepseek-v4-pro)
  * 2. 快速稽核模型 (Fast Auditor: gemini-3.6-flash / 備用 deepseek-v4-flash)
  */
 
@@ -201,9 +201,9 @@ var AIService = (function() {
   }
 
   /**
-   * 主要敘事模型 (Narrator: deepseek/deepseek-v4-pro)：
+   * 主要敘事模型 (Narrator: deepseek-v4-pro)：
    * 生成 1,200~1,500 字的精緻章節內文、3 個互動選項以及存檔狀態更新（Delta）。
-   * 順位：deepseek/deepseek-v4-pro -> gemini-3.6-flash -> dolphin-mistral -> gpt-5.6-luna -> aion-3.0
+   * 順位：deepseek-v4-pro -> gemini-3.6-flash -> dolphin-mistral -> gpt-5.6-luna -> aion-3.0
    * @param {Object} promptContext - 包含 System Prompt, 角色 Markdown, 摘要池與近期對話歷史
    * @returns {Object} 章節物件 { chapterTitle, prose, choices, stateDelta, narrativeSummaryDelta }
    */

@@ -97,7 +97,7 @@
 1. 使用任何瀏覽器開啟 [`frontend-web/index.html`](file:///Users/huanhsu/Desktop/程式碼專案/TJPR/project-epilogue/frontend-web/index.html)（或透過本機伺服器如 Live Server / `python -m http.server` 預覽）。
 2. 點擊畫面底部的 **狀態抽屜**。
 3. 在最下方的 **「GAS 後端 Web App URL 設定」** 欄位中，貼上剛才第三步複製的 Apps Script 部署網址，並點擊 **「儲存」**。
-4. 系統將正式連線至 Google Apps Script 雲端後端，開始調用 `deepseek/deepseek-v4-pro` 展開 1,200~1,500 字的長篇互動分支冒險！
+4. 系統將正式連線至 Google Apps Script 雲端後端，開始調用 `deepseek-v4-pro` 展開 1,200~1,500 字的長篇互動分支冒險！
 
 ---
 
