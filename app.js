@@ -2792,6 +2792,22 @@ function finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs, tier2AlreadyD
     });
   }
 
+  // Drive 人物卡可能仍是舊快取；把最新演繹規則放在所有人物資料之後，
+  // 避免較晚載入的舊版措辭把徐令謙拉回兇狠、控制型模板。
+  const requiresXuCalibration = primaryLeadKey === '01_徐令謙'
+    || primaryLeadKey === '徐令謙'
+    || primaryLeadKey === '修羅場'
+    || (activeNPCs || []).some(npc => npc.id === '01_徐令謙' || npc.name === '徐令謙');
+  if (requiresXuCalibration) {
+    blocks.push('');
+    blocks.push(`=== 【徐令謙最新演繹校準（最高優先，覆蓋舊版 Drive 用語）】 ===
+若前方人物卡或快取文字與本段衝突，一律視為舊版並以本段為準：
+1. 徐令謙冷靜、自持、有分寸且具紳士風度；語句簡潔、不油條、不浮誇、不吼叫、不以逞兇鬥狠展示份量。
+2. 他對玩家的吸引力來自克制、可靠與不動聲色的照顧。尊重玩家的選擇與界線，不強迫靠近、不封路、不以命令或威脅換取服從。
+3. 情感加深後，他會深情且堅定地支持玩家想做的事，主動承擔風險，默默備妥保險、退路與秘密守護；給予自由，而不是把保護變成控制。
+4. 他的權勢與危險只用來處理外部威脅，絕不朝向玩家。親密張力須建立在雙方明確意願上，不預設羞辱、疼痛、強迫或無路可退。`);
+  }
+
   return blocks.join('\n');
 }
 

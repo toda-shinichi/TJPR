@@ -159,6 +159,17 @@ assert.doesNotMatch(xuLingqianLore, /深沉狠戾|高階獵食者|退路全被�
 assert.match(xuLingqianLore, /力量方向：他的危險與權勢只朝向外部威脅，絕不朝向玩家/, '徐令謙角色卡缺少力量方向規則');
 assert.match(xuLingqianLore, /給玩家充分自由，不監禁、不命令、不以安全之名剝奪選擇/, '徐令謙角色卡缺少自由與守護規則');
 assert.strictEqual((rootApp.match(/徐令謙專屬例外：他的張力來自風度、克制、可靠承擔與深情守護/g) || []).length, 2, '開局與續回提示詞未共同套用徐令謙戀愛校準');
+assert.match(rootApp, /徐令謙最新演繹校準（最高優先，覆蓋舊版 Drive 用語）/, '缺少防止 Drive 舊人物卡覆蓋新版性格的最終校準');
+assert.match(
+  vm.runInContext("finishCharacterBlocks([], '01_徐令謙', [])", frontendContext),
+  /權勢與危險只用來處理外部威脅，絕不朝向玩家/,
+  '徐令謙作為主角時未套用最終演繹校準'
+);
+assert.match(
+  vm.runInContext("finishCharacterBlocks([], '修羅場', [])", frontendContext),
+  /給予自由，而不是把保護變成控制/,
+  '修羅場模式未套用徐令謙最終演繹校準'
+);
 assert.doesNotMatch(rootApp, /text-\[#d8dbe6\]/, '最新回合仍使用深色主題遺留的低對比淺字');
 assert.match(css, /#stream-prose-content\s*\{[\s\S]*?color:\s*#3e363a\s*!important/, '最新回合正文缺少高對比色保護');
 assert.match(rootApp, /PRIMARY_MODEL: 'deepseek-v4-pro'/, '前端主要敘事模型未切換為 DeepSeek V4 Pro');
