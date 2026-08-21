@@ -148,6 +148,8 @@ assert.match(rootApp, /e\.key === 'Enter' && !e\.shiftKey && !e\.isComposing/, '
 assert.strictEqual((rootApp.match(/on\('mobile-menu-btn', 'click'/g) || []).length, 1, '手機功能選單被重複綁定');
 assert.strictEqual((rootApp.match(/on\('drawer-backdrop', 'click'/g) || []).length, 1, '抽屜遮罩被重複綁定');
 assert.match(rootApp, /const FONT_SIZE_MIN = 16;/, '正文字級下限與指南標示不一致');
+assert.doesNotMatch(rootApp, /text-\[#d8dbe6\]/, '最新回合仍使用深色主題遺留的低對比淺字');
+assert.match(css, /#stream-prose-content\s*\{[\s\S]*?color:\s*#3e363a\s*!important/, '最新回合正文缺少高對比色保護');
 assert.match(rootApp, /PRIMARY_MODEL: 'deepseek-v4-pro'/, '前端主要敘事模型未切換為 DeepSeek V4 Pro');
 assert.match(workerCode, /'deepseek-v4-pro'/, 'Worker 模型白名單缺少 DeepSeek V4 Pro');
 assert.match(gasConfig, /PRIMARY: 'deepseek-v4-pro'/, 'GAS 主要敘事模型未切換為 DeepSeek V4 Pro');

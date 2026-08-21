@@ -3535,7 +3535,7 @@ function renderStoryStream(activeChapter) {
 
     ${activeActionPill}
 
-    <article id="stream-prose-content" class="font-serif text-[#d8dbe6] tracking-wide prose-tc cursor-pointer select-text" title="打字中點擊可直接顯示全文">
+    <article id="stream-prose-content" class="font-serif text-slate-800 tracking-wide prose-tc cursor-pointer select-text" title="打字中點擊可直接顯示全文">
       故事載入中……
     </article>
 

@@ -147,6 +147,12 @@ textarea:disabled,
   color: var(--text-main);
 }
 
+/* 最新回合曾保留深色主題的 #d8dbe6 淺字，Tailwind CDN 動態樣式會覆蓋
+   .prose-tc，導致米白背景上的正文幾乎消失。以具體節點固定高對比閱讀色。 */
+#stream-prose-content {
+  color: #3e363a !important;
+}
+
 .prose-tc p {
   max-width: 68ch;
   margin: 0 auto 1.35rem;
