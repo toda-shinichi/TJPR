@@ -106,6 +106,9 @@ export default {
     const { ok: originOk, origin, reason } = resolveOrigin(request, env);
 
     if (request.method === 'OPTIONS') {
+      if (!originOk) {
+        return json({ error: { message: 'Origin not allowed.' } }, 403, origin);
+      }
       return new Response(null, { headers: corsHeaders(origin) });
     }
     if (request.method !== 'POST') {
@@ -141,7 +144,7 @@ export default {
 
     try {
       const raw = await request.text();
-      if (raw.length > MAX_BODY_BYTES) {
+      if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
         return json({ error: { message: 'Request body too large.' } }, 413, origin);
       }
 
@@ -164,7 +167,10 @@ export default {
       }
 
       // 夾制輸出上限，避免有人指定極大的 max_tokens 燒額度
-      body.max_tokens = Math.min(Number(body.max_tokens) || MAX_TOKENS_CEILING, MAX_TOKENS_CEILING);
+      const requestedMaxTokens = Number(body.max_tokens);
+      body.max_tokens = Number.isFinite(requestedMaxTokens)
+        ? Math.max(1, Math.min(Math.floor(requestedMaxTokens), MAX_TOKENS_CEILING))
+        : MAX_TOKENS_CEILING;
       body.stream = true;
 
       const upstream = await fetch(UPSTREAM, {

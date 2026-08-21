@@ -360,6 +360,11 @@ const DEFAULT_PRESETS = {
   }
 };
 
+// 官方角色庫另含主角楊慕璃；攻略與配角選單只能列出 13 位男主。
+function getOfficialLeadKeys() {
+  return Object.keys(OFFICIAL_DRIVE_CHARACTERS).filter(key => key !== '14_楊慕璃');
+}
+
 // 全域狀態
 const state = {
   gasApiUrl: 'https://script.google.com/macros/s/AKfycby-MudkbcVPAfVDZk2B1zznDlOfjnJOqMB2A3586Ct3ZGq_CUNteKe1lZ4bbw8HwqS9sw/exec',
@@ -818,7 +823,7 @@ function setFormMessage(formName, message = '', type = 'error') {
   el.className = `form-message ${message ? 'is-visible' : ''} ${type === 'success' ? 'is-success' : 'is-error'}`;
 }
 
-const FONT_SIZE_MIN = 15;
+const FONT_SIZE_MIN = 16;
 const FONT_SIZE_MAX = 26;
 const SPEED_LABELS = { instant: '立即顯示', fast: '快速', normal: '沉浸' };
 
@@ -959,7 +964,7 @@ function initTargetLeadSelectOptions() {
   select.appendChild(shuraOpt);
 
   // 13 位官方男主
-  Object.keys(OFFICIAL_DRIVE_CHARACTERS).forEach(key => {
+  getOfficialLeadKeys().forEach(key => {
     const lead = OFFICIAL_DRIVE_CHARACTERS[key];
     const opt = document.createElement('option');
     opt.value = key;
@@ -999,7 +1004,7 @@ function renderSupportingLeadsChips(primaryLeadKey) {
 
   container.innerHTML = '';
 
-  Object.keys(OFFICIAL_DRIVE_CHARACTERS).forEach(key => {
+  getOfficialLeadKeys().forEach(key => {
     if (key === primaryLeadKey) return; // 排除主選對象
     const lead = OFFICIAL_DRIVE_CHARACTERS[key];
 
@@ -1070,7 +1075,6 @@ function setupEventListeners() {
     on('nav-presets-btn', 'click', openProfileManagerModal);
     on('nav-guide-btn', 'click', () => openGameGuideModal('gameplay'));
     on('mobile-nav-saves-btn', 'click', openSaveArchiveModal);
-    on('mobile-menu-btn', 'click', openDrawer);
 
     // 抽屜內全功能導航
     on('drawer-gameplay-btn', 'click', () => { closeDrawer(); handleContinueGame(); });
@@ -1137,7 +1141,7 @@ function setupEventListeners() {
     const customInputEl = document.getElementById('custom-action-input');
     if (customInputEl) {
       customInputEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.isComposing) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
           e.preventDefault();
           handleCustomActionSubmit();
         }
@@ -1163,7 +1167,6 @@ function setupEventListeners() {
     // ── 拆分後的兩個抽屜 ──
     on('mobile-menu-btn', 'click', openMenuDrawer);
     on('close-menu-drawer-btn', 'click', closeDrawer);
-    on('drawer-backdrop', 'click', closeDrawer);
     on('drawer-logout-btn', 'click', () => { closeDrawer(); handleLogout(); });
     on('drawer-clear-all-data-btn', 'click', () => { closeDrawer(); handleClearAllData(); });
     on('drawer-delete-account-btn', 'click', () => { closeDrawer(); handleDeleteAccount(); });
@@ -1336,6 +1339,12 @@ async function checkAuthAndInitUser() {
   state.driveFolderId = localStorage.getItem('undercurrent_drive_folder_id') || '';
   updateUserBadgeUI();
   closeAuthModal();
+
+  // 本機離線憑證不是雲端可驗證的 token；保留本機工作階段，避免重新整理後被誤判為過期。
+  if (storedToken.startsWith('tok_local_')) {
+    updateUserBadgeUI('offline');
+    return;
+  }
 
   // Background token verification (non-blocking)
   try {
@@ -4453,7 +4462,7 @@ function renderSaveArchivesList() {
         <div class="flex items-center gap-2">
           <span class="text-slate-400">主角：</span>
           <span class="font-bold text-white">${escapeHtml(p.name || '女主')}</span>
-          <span class="text-slate-500">（${escapeHtml(p.age || '25')}歲 · ${escapeHtml(p.occupation || '政經分析師')}）</span>
+          <span class="text-slate-500">（${escapeHtml(p.age || '25')}歲 · ${escapeHtml(p.profession || p.occupation || '政經分析師')}）</span>
         </div>
         <div class="flex items-center gap-2">
           <span class="text-slate-400">🎯 攻略男主：</span>
@@ -4714,6 +4723,7 @@ function renderRosterGallery() {
 
   filteredKeys.forEach(k => {
     const c = OFFICIAL_DRIVE_CHARACTERS[k];
+    const isProtagonist = k === '14_楊慕璃';
     const summary = c.summary || c.personality || c.identityRole || '';
     const rMatch = ROSTER_ONE_LINERS.find(r => r.id === k || r.name === c.name);
     const oneLiner = rMatch ? rMatch.oneLiner : summary;
@@ -4729,7 +4739,7 @@ function renderRosterGallery() {
             <span class="font-serif font-black text-sm text-white group-hover:text-brand-gold transition">${c.name}</span>
             <span class="text-[11px] text-slate-400 font-mono">（${c.age}）</span>
           </div>
-          <span class="text-[10px] font-bold text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">官方男主</span>
+          <span class="text-[10px] font-bold text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">${isProtagonist ? '官方主角' : '官方男主'}</span>
         </div>
         <div class="text-[11px] font-bold text-amber-200/90 leading-tight">
           ${c.identityRole}
@@ -4741,11 +4751,11 @@ function renderRosterGallery() {
           ${summary}
         </div>
       </div>
-      <div class="pt-2 flex items-center justify-end">
+      ${isProtagonist ? '' : `<div class="pt-2 flex items-center justify-end">
         <button class="select-this-lead-btn px-3 py-1.5 rounded-lg bg-brand-gold/20 hover:bg-brand-gold text-brand-gold hover:text-slate-950 font-bold text-xs transition border border-brand-gold/40 cursor-pointer shadow-sm" data-key="${k}">
           ✦ 以此男主開局 →
         </button>
-      </div>
+      </div>`}
     `;
 
     card.querySelector('.select-this-lead-btn')?.addEventListener('click', () => {
@@ -4814,6 +4824,7 @@ function openCharacterCreationModal() {
       setFormValue('form-player-appearance', profile.appearance || '隨機');
       setFormValue('form-player-taboos', profile.taboos || '無');
       setFormValue('form-target-lead', profile.targetLead || '01_徐令謙');
+      handleTargetLeadChange();
       setFormValue('form-allow-r18', profile.allowR18 !== false);
       setFormValue('form-custom-scenario', profile.customScenario || '');
     }

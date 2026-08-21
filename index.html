@@ -42,7 +42,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./style.css?v=f0cf26cf69">
+  <link rel="stylesheet" href="./style.css?v=7fe4c60f99">
 </head>
 <body class="bg-brand-dark text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-white">
 
@@ -666,7 +666,7 @@
       <div class="flex justify-between items-center pb-3 border-b border-brand-border">
         <div>
           <h3 class="font-serif font-bold text-lg text-brand-gold flex items-center gap-2">
-            <span>《暗流》遊戲指南與 13 位男主圖鑑</span>
+            <span>《暗流》遊戲指南與角色圖鑑</span>
           </h3>
           <p class="text-xs text-slate-400 mt-0.5">從創角、回合抉擇到存檔與閱讀設定；所有說明均依目前可用功能整理。</p>
         </div>
@@ -684,7 +684,7 @@
           系統功能說明
         </button>
         <button id="guide-tab-roster-btn" class="guide-tab-btn py-2 px-3 sm:px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition cursor-pointer whitespace-nowrap">
-          👥 13 位角色全景圖鑑
+          👥 13 位男主＋主角全景圖鑑
         </button>
       </div>
 
@@ -776,14 +776,14 @@
           </div>
         </div>
 
-        <!-- Tab 3: 13 位角色全景圖鑑 -->
+        <!-- Tab 3: 13 位男主＋主角全景圖鑑 -->
         <div id="guide-panel-roster" class="space-y-3" style="display:none;">
           <div class="flex items-center justify-between pb-1">
-            <span class="text-slate-400 text-xs">共收錄 13 位官方專屬男主：</span>
+            <span class="text-slate-400 text-xs">收錄 13 位官方男主，另附官方主角檔案：</span>
             <input type="text" id="search-roster-input" placeholder="🔍 搜尋男主姓名、勢力、職稱..." class="bg-brand-dark border border-brand-border rounded-lg px-3 py-1 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
           </div>
           <div id="roster-gallery-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <!-- 由 JS 動態生成 13 位男主圖鑑卡片 -->
+            <!-- 由 JS 動態生成 13 位男主與主角圖鑑卡片 -->
           </div>
         </div>
 
@@ -876,7 +876,7 @@
           <div class="text-[10px] text-slate-400">主角履歷與情境</div>
         </button>
         <button id="drawer-guide-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-amber-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
-          <div class="text-xs font-bold text-amber-300 flex items-center gap-1"><span>📜</span><span>13 男主圖鑑</span></div>
+          <div class="text-xs font-bold text-amber-300 flex items-center gap-1"><span>📜</span><span>角色圖鑑</span></div>
           <div class="text-[10px] text-slate-400">人物檔案與系統指南</div>
         </button>
                 <button id="drawer-feedback-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-sky-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
@@ -1102,6 +1102,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=f0cf26cf69" defer></script>
+    <script src="app.js?v=7fe4c60f99" defer></script>
 </body>
 </html>

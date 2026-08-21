@@ -142,6 +142,22 @@ assert.match(rootApp, /signal: controller\.signal/, 'Worker 串流未連接 Abor
 assert.match(rootApp, /chapterHistoryList: JSON\.parse\(JSON\.stringify\(state\.chapterHistoryList \|\| \[\]\)\)/, '回合交易快照未包含章節歷史');
 assert.match(rootApp, /const previousGameSnapshot = \{/, '新開局中止前未保存舊遊戲狀態');
 assert.match(rootApp, /state\.playerProfile = target\.playerProfile \|\| target\.saveState\?\.meta\?\.playerProfile \|\| null/, '載入命名存檔後仍可能沿用上一局玩家人設');
+assert.match(rootApp, /e\.key === 'Enter' && !e\.shiftKey && !e\.isComposing/, '自由行動欄的 Shift+Enter 仍會誤送出');
+assert.strictEqual((rootApp.match(/on\('mobile-menu-btn', 'click'/g) || []).length, 1, '手機功能選單被重複綁定');
+assert.strictEqual((rootApp.match(/on\('drawer-backdrop', 'click'/g) || []).length, 1, '抽屜遮罩被重複綁定');
+assert.match(rootApp, /const FONT_SIZE_MIN = 16;/, '正文字級下限與指南標示不一致');
+assert.match(rootApp, /if \(storedToken\.startsWith\('tok_local_'\)\) \{[\s\S]*?updateUserBadgeUI\('offline'\);[\s\S]*?return;/, '本機離線工作階段在重新整理後仍會被送往雲端並誤登出');
+assert.match(rootApp, /p\.profession \|\| p\.occupation \|\| '政經分析師'/, '進行中存檔卡未顯示目前人設的職業欄位');
+assert.match(rootApp, /function getOfficialLeadKeys\(\) \{[\s\S]*?key !== '14_楊慕璃'/, '攻略對象選單仍可能把官方主角列為男主');
+assert.strictEqual((rootApp.match(/getOfficialLeadKeys\(\)\.forEach/g) || []).length, 2, '攻略與配角選單未共同使用男主清單');
+assert.match(rootApp, /setFormValue\('form-target-lead',[\s\S]*?handleTargetLeadChange\(\);/, '重開創角視窗後攻略對象與配角區顯示狀態未同步');
+assert.strictEqual(vm.runInContext('getOfficialLeadKeys().length', frontendContext), 13, '官方男主清單不是 13 人');
+assert.strictEqual(vm.runInContext("getOfficialLeadKeys().includes('14_楊慕璃')", frontendContext), false, '官方主角仍混入攻略男主清單');
+assert.deepStrictEqual(
+  JSON.parse(vm.runInContext('JSON.stringify(chapterWindow(Array.from({ length: 15 }, (_, i) => i + 1)))', frontendContext)),
+  [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  '長篇遊戲章節視窗未保留最新 12 回'
+);
 
 vm.runInContext(`
   state.saveState = { turnCount: 3 };
