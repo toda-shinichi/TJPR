@@ -182,7 +182,7 @@ function generateDynamicFirstChapter(profile) {
       settingProse = 
         \`陽明山夜色深沉，暴雨瘋狂拍打著隱密山莊的歐式防彈落地窗。\n\n\` +
         \`\${pName}身著\${resolvedOutfit}，端坐在真皮沙發前。胡桃木壁爐內燃燒著幽微的火光，將對面男人英挺深邃的輪廓映照得宛如雕塑。\n\n\` +
-        \`\${leadName}緩緩搖晃著水晶杯中的威士忌，嘴角勾起一抹極淡而玩味的弧度：「今晚這座山莊只有我們兩個人。走出這裡，全台北都會為了妳手中的籌碼掀起血雨腥風；但留在這裡……妳必須先學會如何取悅這盤棋局的執棋者。」\` +
+        \`\${leadName}緩緩放下水晶杯，視線沉靜而專注：「今晚這座山莊只有我們兩個人。走出這裡，妳手中的籌碼會讓許多人失去分寸；妳仍然可以走，但如果決定留下，我會把所有風險說清楚。」\` +
         (isShura ? \`\n\n話音剛落，山莊大門傳來沉重的密碼解鎖聲，另一道冷酷挺拔的身影攜帶著滿身風雨強勢踏入，多方博弈在密閉空間中瞬間點燃！\` : '');
     } else {
       // 泛用自訂開場適配
@@ -208,7 +208,7 @@ function generateDynamicFirstChapter(profile) {
       },
       choices: [
         { id: 'opt_init_a', label: \`[A] 掌局談判：迎上 \${leadName} 的視線，將隨身碟壓在指尖「既然找上了你，開價自然由我說了算」\`, risk: 'low', hint: '展現頂級大女主從容底氣' },
-        { id: 'opt_init_b', label: \`[B] 機鋒推拉：唇角勾起極淡輕笑，微退半步拉開距離「謙哥這麼近，是想搶我的隨身碟，還是想搶我的人？」\`, risk: 'medium', hint: '危險試探，拉扯男性征服欲' },
+        { id: 'opt_init_b', label: \`[B] 機鋒推拉：微退半步拉開距離，迎著他的視線問「謙哥這麼近，是在評估我的籌碼，還是在擔心我的安全？」\`, risk: 'medium', hint: '試探他克制之下未曾明說的關心' },
         { id: 'opt_init_c', label: \`[C] 情慾反撩：指尖順著他的領口緩緩滑過「這份帳冊能要無數人的命，但今晚……我只想看看你能給我什麼」\`, risk: 'high', hint: '主動點火，將殺機化為極致性張力' }
       ]
     };
@@ -239,7 +239,7 @@ function generateDynamicFirstChapter(profile) {
 
   return {
     chapterTitle: \`第 1 回．暴雨初會 · \${leadInfo.name}\`,
-    prose: \`五月深夜的台北，窗外暴雨如注，重重雨幕將整座城市的霓虹燈火模糊成一片斑駁血色。\n\n室內空氣中瀰漫著\${leadInfo.scent}。\${pName}身著\${resolvedOutfit}，指尖握著足以掀翻台北政商黑白兩道的加密隨身碟。\n\n長桌對側，\${leadInfo.name}（\${leadInfo.title}）一身\${leadInfo.outfit}，神態從容而深邃，目光如手術刀般精準落在\${pName}身上：\n\n「\${pName}，在台北這片地界，敢帶著這份底牌直接找上我的人，妳是第一個。」男人的聲音低沉而富有磁性，上位者的壓迫感與若有似無的情慾性張力在空氣中迅速蔓延，\n\n「進了這扇門，妳要麼成為我的專屬盟友，要麼……就準備好承受代價。」\`,
+    prose: \`五月深夜的台北，窗外暴雨如注，重重雨幕將整座城市的霓虹燈火模糊成一片斑駁血色。\n\n室內空氣中瀰漫著\${leadInfo.scent}。\${pName}身著\${resolvedOutfit}，指尖握著足以掀翻台北政商黑白兩道的加密隨身碟。\n\n長桌對側，\${leadInfo.name}（\${leadInfo.title}）一身\${leadInfo.outfit}，神態從容而深邃，目光精準落在\${pName}身上：\n\n「\${pName}，敢帶著這份底牌直接來談，妳比我預想得更有膽識。」男人的聲音平穩而富有磁性，不必提高音量便讓室內安靜下來。\n\n「妳可以離開，也可以留下。無論選哪一個，我都希望妳是在知道全部代價後才決定。」\`,
     statusPanel: {
       timeLocation: \`2026年5月12日 21:30 星期二 於 \${leadInfo.locationDefault}\`,
       tension: '張力值 [68%]',
