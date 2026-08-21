@@ -1752,6 +1752,7 @@ function updateUserBadgeUI(status = 'active') {
 // =========================================================================
 
 const NARRATIVE_MODELS = [
+  'deepseek/deepseek-v4-pro',
   'mistral-large-3',
   'gemini-3.6-flash',
   'cognitivecomputations/dolphin-mistral-24b-venice-edition',
@@ -1766,7 +1767,7 @@ const LLM_CONFIG = {
   STALL_TIMEOUT_MS: 25000,
   API_URL: 'https://api.banana2556.com/v1/chat/completions',
   API_KEY: '', // 安全起見，已轉移至 GAS Proxy
-  PRIMARY_MODEL: 'mistral-large-3',
+  PRIMARY_MODEL: 'deepseek/deepseek-v4-pro',
   // 備援必須也是不會自我審查的模型。gemini-3.6-flash 會擋掉情慾內容，
   // 而那是本作的核心 —— 放在備援第一位等於「主要模型一失手就被消音」。
   // dolphin-mistral-24b-venice-edition 是未審查變體，速度也比 mistral 快。
@@ -2164,11 +2165,12 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
       console.warn('Worker error, fallback to GAS', e);
     }
   }
-  // GAS 路徑的模型順序。刻意不放 mistral-large-3：它需要約 67 秒才寫完，
+  // GAS 路徑優先使用與 Worker 相同的 DeepSeek 主模型。刻意不放 mistral-large-3：它需要約 67 秒才寫完，
   // 而 Apps Script 的 UrlFetchApp 約 60 秒就會斷，在這條路徑上永遠不可能成功，
   // 擺在前面只是白等 50 秒。mistral 由 Worker 路徑負責。
   // gemini-3.6-flash 放最後 —— 它會自我審查、擋掉情慾內容。
   const models = [
+    'deepseek/deepseek-v4-pro',
     'cognitivecomputations/dolphin-mistral-24b-venice-edition',
     'aion-3.0',
     'gpt-5.6-luna',
@@ -5341,7 +5343,7 @@ async function sendTelemetryError(category, message, details = {}) {
       action: 'telemetry/log-error',
       category: category || 'GENERAL_ERROR',
       message: String(message || '未知錯誤'),
-      model: LLM_CONFIG.PRIMARY_MODEL || 'mistral-large-3',
+      model: LLM_CONFIG.PRIMARY_MODEL || 'deepseek/deepseek-v4-pro',
       userId: state.username || state.userId || localStorage.getItem('undercurrent_user_name') || 'guest',
       act: state.saveState?.meta?.currentAct || 1,
       turn: state.saveState?.turnCount || 1,
@@ -5432,7 +5434,7 @@ async function handleFeedbackSubmit(e) {
     turn: state.saveState?.turnCount || 1,
     targetLead: state.saveState?.meta?.targetLeadName || '未指定',
     playerProfile: state.saveState?.meta?.playerProfile || null,
-    model: LLM_CONFIG.PRIMARY_MODEL || 'mistral-large-3',
+    model: LLM_CONFIG.PRIMARY_MODEL || 'deepseek/deepseek-v4-pro',
     status: state.saveState?.protagonist || null
   } : null;
 

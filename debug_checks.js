@@ -8,6 +8,8 @@ const html = fs.readFileSync('index.html', 'utf8');
 const deployHtml = fs.readFileSync('project-epilogue/frontend-web/index.html', 'utf8');
 const css = fs.readFileSync('style.css', 'utf8');
 const deployCss = fs.readFileSync('project-epilogue/frontend-web/style.css', 'utf8');
+const workerCode = fs.readFileSync('worker/index.js', 'utf8');
+const gasConfig = fs.readFileSync('project-epilogue/backend-gas/Config.js', 'utf8');
 
 assert.strictEqual(rootApp, deployApp, '根目錄與部署版 app.js 不一致');
 assert.strictEqual(html, deployHtml, '根目錄與部署版 index.html 不一致');
@@ -146,6 +148,9 @@ assert.match(rootApp, /e\.key === 'Enter' && !e\.shiftKey && !e\.isComposing/, '
 assert.strictEqual((rootApp.match(/on\('mobile-menu-btn', 'click'/g) || []).length, 1, '手機功能選單被重複綁定');
 assert.strictEqual((rootApp.match(/on\('drawer-backdrop', 'click'/g) || []).length, 1, '抽屜遮罩被重複綁定');
 assert.match(rootApp, /const FONT_SIZE_MIN = 16;/, '正文字級下限與指南標示不一致');
+assert.match(rootApp, /PRIMARY_MODEL: 'deepseek\/deepseek-v4-pro'/, '前端主要敘事模型未切換為 DeepSeek V4 Pro');
+assert.match(workerCode, /'deepseek\/deepseek-v4-pro'/, 'Worker 模型白名單缺少 DeepSeek V4 Pro');
+assert.match(gasConfig, /PRIMARY: 'deepseek\/deepseek-v4-pro'/, 'GAS 主要敘事模型未切換為 DeepSeek V4 Pro');
 assert.match(rootApp, /if \(storedToken\.startsWith\('tok_local_'\)\) \{[\s\S]*?updateUserBadgeUI\('offline'\);[\s\S]*?return;/, '本機離線工作階段在重新整理後仍會被送往雲端並誤登出');
 assert.match(rootApp, /p\.profession \|\| p\.occupation \|\| '政經分析師'/, '進行中存檔卡未顯示目前人設的職業欄位');
 assert.match(rootApp, /function getOfficialLeadKeys\(\) \{[\s\S]*?key !== '14_楊慕璃'/, '攻略對象選單仍可能把官方主角列為男主');

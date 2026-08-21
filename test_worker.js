@@ -20,7 +20,7 @@ function post(body, headers = {}) {
 }
 
 const validPayload = {
-  model: 'mistral-large-3',
+  model: 'deepseek/deepseek-v4-pro',
   messages: [{ role: 'user', content: 'test' }],
   max_tokens: 100,
   stream: false
