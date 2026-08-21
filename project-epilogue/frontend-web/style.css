@@ -8,15 +8,15 @@
   --border-subtle: rgba(112, 88, 96, 0.18);
   --border-active: rgba(152, 95, 114, 0.48);
 
-  --text-main: #3c3438;
-  --text-secondary: #5f555a;
-  --text-muted: #766a70;
-  --text-accent: #8f5669;
-  --accent-gold: #985f72;
-  --accent-blue: #6f8190;
-  --accent-crimson: #ad6578;
-  --accent-emerald: #6e8274;
-  --accent-tea: #8b6953;
+  --text-main: #342d31;
+  --text-secondary: #4b4247;
+  --text-muted: #62585d;
+  --text-accent: #7f4559;
+  --accent-gold: #8d5266;
+  --accent-blue: #435e70;
+  --accent-crimson: #8b4157;
+  --accent-emerald: #435f4c;
+  --accent-tea: #6e513f;
   --tint-rose: #f5e8ec;
   --tint-blue: #e9eff2;
   --tint-sage: #e8efea;
@@ -264,6 +264,16 @@ main {
   line-height: 1.55 !important;
 }
 
+body [class~="text-[10px]"] {
+  font-size: 0.75rem !important;
+  line-height: 1.5 !important;
+}
+
+body [class~="text-[11px]"] {
+  font-size: 0.78125rem !important;
+  line-height: 1.5 !important;
+}
+
 .text-sm {
   line-height: 1.7 !important;
 }
@@ -271,24 +281,26 @@ main {
 /* 原介面為深色設計，以下將既有文字 utility 統一映射到淺色閱讀色階。 */
 body .text-white,
 body .text-slate-100 { color: var(--text-main) !important; }
-body .text-slate-950 { color: #30282c !important; }
+body .text-slate-950 { color: #292226 !important; }
 body .text-slate-900 { color: var(--text-main) !important; }
-body .text-slate-800 { color: #463d42 !important; }
-body .text-slate-700 { color: #51474c !important; }
-body .text-slate-600 { color: #655a60 !important; }
-body .text-slate-200 { color: #51474c !important; }
-body .text-slate-300 { color: #62575c !important; }
-body .text-slate-400 { color: #766a70 !important; }
-body .text-slate-500 { color: #766a70 !important; }
+body .text-slate-800 { color: #3e363a !important; }
+body .text-slate-700 { color: #463d42 !important; }
+body .text-slate-600 { color: #51484d !important; }
+body .text-slate-200 { color: #443b40 !important; }
+body .text-slate-300 { color: #51484d !important; }
+body .text-slate-400 { color: #5b5156 !important; }
+body .text-slate-500 { color: var(--text-muted) !important; }
+body [class*="text-brand-gold"] { color: var(--text-accent) !important; }
 body [class*="text-amber-1"],
-body [class*="text-yellow-"] { color: #7c5e4c !important; }
+body [class*="text-amber-"],
+body [class*="text-yellow-"] { color: #6e513f !important; }
 body [class*="text-sky-"],
-body [class*="text-blue-"] { color: #5d7484 !important; }
+body [class*="text-blue-"] { color: var(--accent-blue) !important; }
 body [class*="text-emerald-"],
-body [class*="text-green-"] { color: #5f7967 !important; }
-body [class*="text-purple-"] { color: #806786 !important; }
+body [class*="text-green-"] { color: var(--accent-emerald) !important; }
+body [class*="text-purple-"] { color: #6b536f !important; }
 body [class*="text-rose-"],
-body [class*="text-red-"] { color: #9a5266 !important; }
+body [class*="text-red-"] { color: var(--accent-crimson) !important; }
 
 /* 實心按鈕保留白字，以符合 WCAG 對比需求。 */
 body .bg-brand-gold.text-white,
@@ -355,7 +367,7 @@ textarea {
 }
 
 input::placeholder,
-textarea::placeholder { color: #a29599 !important; }
+textarea::placeholder { color: #786e72 !important; }
 
 input:focus,
 select:focus,
@@ -386,14 +398,14 @@ select option { color: var(--text-main); background: #fffdfa; }
 }
 
 #home-view h1 {
-  color: #895267 !important;
+  color: #784458 !important;
   font-weight: 900;
   letter-spacing: 0.15em;
   text-shadow: none !important;
 }
 
 #home-view > div:first-child > p {
-  color: #6f5c63 !important;
+  color: #55494f !important;
   max-width: 42rem;
   font-style: normal;
   line-height: 1.95 !important;
