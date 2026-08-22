@@ -84,7 +84,7 @@ const CONFIG = {
     AUDIT_CADENCE: 10,           // 每 10 回合觸發邏輯一致性稽核
     SUMMARY_POOL_MAX_CHARS: 2000,// 滾動摘要池上限 2,000 字元
     ACT_DOSSIER_MAX_WORDS: 800,  // 幕篇重整（Act Rebase）壓縮至約 800 字
-    RECENT_TURNS_CONTEXT_LIMIT: 4// 提示詞中保留的最新對話回合數
+    RECENT_TURNS_CONTEXT_LIMIT: 5// 提示詞中保留的最新對話回合數
   },
 
   // 存檔與快取設定

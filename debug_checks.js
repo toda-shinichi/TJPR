@@ -13,6 +13,7 @@ const gasConfig = fs.readFileSync('project-epilogue/backend-gas/Config.js', 'utf
 const xuLingqianLore = fs.readFileSync('characters/01_徐令謙.md', 'utf8');
 const characterSeed = fs.readFileSync('project-epilogue/backend-gas/CharacterDataSeed.js', 'utf8');
 const characterManager = fs.readFileSync('project-epilogue/backend-gas/CharacterManager.js', 'utf8');
+const memoryPipelineCode = fs.readFileSync('project-epilogue/backend-gas/MemoryPipeline.js', 'utf8');
 
 assert.strictEqual(rootApp, deployApp, '根目錄與部署版 app.js 不一致');
 assert.strictEqual(html, deployHtml, '根目錄與部署版 index.html 不一致');
@@ -105,6 +106,15 @@ assert.deepStrictEqual(
   '不同渲染路徑的單換行段落切分不一致'
 );
 
+const recentHistoryPrompt = vm.runInContext(`buildRecentHistoryBlock([
+  { turn: 1, prose: '第一回' }, { turn: 2, prose: '第二回' },
+  { turn: 3, prose: '第三回' }, { turn: 4, prose: '第四回' },
+  { turn: 5, prose: '第五回' }, { turn: 6, prose: '第六回' }
+])`, frontendContext);
+assert.doesNotMatch(recentHistoryPrompt, /── 第 1 回：/, '近期全文視窗錯誤保留了第 6 回以前的內容');
+assert.match(recentHistoryPrompt, /最近 5 回全文/, '近期全文視窗沒有保留 5 回');
+assert.match(recentHistoryPrompt, /── 第 2 回：[\s\S]*── 第 6 回：/, '近期全文視窗未正確包含最後 5 回');
+
 const novelContainer = makeFakeElement();
 fakeElements.set('novel-stream-container', novelContainer);
 vm.runInContext(`
@@ -173,6 +183,17 @@ assert.match(
 assert.doesNotMatch(rootApp, /text-\[#d8dbe6\]/, '最新回合仍使用深色主題遺留的低對比淺字');
 assert.match(css, /#stream-prose-content\s*\{[\s\S]*?color:\s*#3e363a\s*!important/, '最新回合正文缺少高對比色保護');
 assert.match(rootApp, /PRIMARY_MODEL: 'deepseek-v4-pro'/, '前端主要敘事模型未切換為 DeepSeek V4 Pro');
+assert.strictEqual((rootApp.match(/800–1000 個中文字/g) || []).length, 4, '開局與續回的正文篇幅目標未完整更新');
+assert.doesNotMatch(rootApp, /字數上限強制執行|600~800 個中文字/, '前端提示詞仍殘留硬性字數上限');
+assert.match(rootApp, /不為守住字數把場景切成兩半[\s\S]*不為湊字數重複描寫或灌水/, '開局提示詞缺少場景完整與避免灌水規則');
+assert.match(rootApp, /不得為守住數字把場景切成兩半[\s\S]*不得為湊字數重複描寫或灌水/, '續回提示詞缺少場景完整與避免灌水規則');
+assert.strictEqual((memoryPipelineCode.match(/800–1000 個中文字/g) || []).length, 3, '長期記憶管線的正文篇幅目標未完整更新');
+assert.doesNotMatch(memoryPipelineCode, /上限強制執行|600(?:~| 至 )800 個中文字/, '長期記憶管線仍殘留硬性字數上限');
+assert.match(rootApp, /recentTurns:\s*5/, '前端近期全文視窗不是 5 回');
+assert.doesNotMatch(rootApp, /snippet:\s*\(h\.prose[\s\S]*?substring\(0,\s*250\)/, '摘要器仍只讀取每回前 250 字');
+assert.match(rootApp, /prose:\s*clampBlock\(h\.prose,\s*CONTEXT_BUDGET\.recentProsePerTurn\)/, '摘要器未讀取每回較完整正文');
+assert.match(gasConfig, /RECENT_TURNS_CONTEXT_LIMIT:\s*5/, '備用後端近期全文視窗不是 5 回');
+assert.match(memoryPipelineCode, /prose:\s*\(turnOutput\.prose \|\| ''\)\.substring\(0, 1800\)/, '備用後端未保存近期完整正文');
 assert.match(workerCode, /'deepseek-v4-pro'/, 'Worker 模型白名單缺少 DeepSeek V4 Pro');
 assert.match(gasConfig, /PRIMARY: 'deepseek-v4-pro'/, 'GAS 主要敘事模型未切換為 DeepSeek V4 Pro');
 assert.doesNotMatch(rootApp, /deepseek\/deepseek-v4-pro/, '前端仍殘留錯誤的 DeepSeek 模型 ID');
@@ -333,7 +354,7 @@ assert.ok(telemetryRow[2].startsWith("'+"), '遙測訊息可觸發試算表公�
 const memoryContext = {
   console,
   CONFIG: {
-    PIPELINE: { SUMMARY_UPDATE_CADENCE: 5, AUDIT_CADENCE: 10 },
+    PIPELINE: { SUMMARY_UPDATE_CADENCE: 5, AUDIT_CADENCE: 10, RECENT_TURNS_CONTEXT_LIMIT: 5 },
     STORAGE: { NOVEL_FILE_NAME: 'Full_Novel.md' }
   },
   AIService: {},
@@ -354,11 +375,12 @@ vm.runInContext(`
   };
   MemoryPipeline.applyTurnUpdate({
     saveState: testSave,
-    turnOutput: { stateDelta: { relationshipChanges: { npc: 10 } } },
+    turnOutput: { prose: '本回完整正文', stateDelta: { relationshipChanges: { npc: 10 } } },
     choiceSelected: 'A'
   });
 `, memoryContext);
 assert.strictEqual(vm.runInContext('testSave.relationships.npc', memoryContext), 100);
+assert.strictEqual(vm.runInContext('testSave.turnHistory[0].prose', memoryContext), '本回完整正文');
 
 vm.runInContext(`
   novelResetContent = '';

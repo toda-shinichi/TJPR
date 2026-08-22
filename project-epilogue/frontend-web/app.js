@@ -2457,7 +2457,7 @@ function warmLoreCache(profile) {
  * 以下各區塊都有明確的字元上限，避免任何單一區塊在長局中失控膨脹。
  */
 const CONTEXT_BUDGET = {
-  recentTurns: 3,              // 近期劇情回合數（全文，不截斷）
+  recentTurns: 5,              // 近期劇情回合數（保留足夠對話與場景細節）
   recentProsePerTurn: 1800,    // 單回正文上限（mistral 實測約 1,458 字，留餘裕）
   actDossiers: 2,              // 保留最近幾幕的幕篇檔案
   actDossierChars: 900,        // 單份幕篇檔案上限
@@ -2831,7 +2831,7 @@ ${CHARACTER_IDENTITY_FIREWALL}
 請嚴格遵守《情慾文學指引》與《系統核心指令》：
 1. 風格與成人情慾（R-18）：極致性張力、高位推拉、五感具象（體溫、喘息、香氣、眼神壓迫、肢體碰觸）、權謀殺伐與多方博弈，使用純台灣繁體中文。
    - 徐令謙專屬例外：他的張力來自風度、克制、可靠承擔與深情守護；除非玩家主動表達偏好，不得預設威脅、羞辱、疼痛、強迫或封鎖退路。
-2. 【字數上限強制執行】prose 正文嚴格控制在 600~800 個中文字以內（以中文字元計數，標點不計），不得超過，絕不套用固定模板。
+2. 【正文篇幅目標】prose 建議以 800–1000 個中文字為目標範圍，但這不是硬性限制。以完整寫完一個有情節推進、情緒變化且自然收束的場景段落為優先；可依內容需要略多或略少，絕不為守住字數把場景切成兩半，也不為湊字數重複描寫或灌水，且不套用固定模板。
 3. 【數值真實性運算規則】：
    - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
    - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，數值必須保持 0！
@@ -2855,7 +2855,7 @@ ${characterPromptBlock}
     "inventory": "隨身攜帶之關鍵情報或物品",
     "rumors": "台北政媒黑白兩道最新暗流傳聞"
   },
-  "prose": "【600~800 個中文字的極具性張力、權謀拉扯與成人情慾描寫長篇小說正文】",
+  "prose": "【以 800–1000 個中文字為建議目標、優先完整推進並自然收束場景的小說正文；可依內容需要略多或略少，不截斷、不灌水】",
   "choices": [
     { "id": "A", "label": "[A] 【選項A完整行動與對白描述】", "risk": "low", "hint": "策略提示" },
     { "id": "B", "label": "[B] 【選項B完整行動與對白描述】", "risk": "medium", "hint": "策略提示" },
@@ -2911,7 +2911,7 @@ ${CHARACTER_IDENTITY_FIREWALL}
 4. 【血緣與親情既定事實】：楊慕璃與二哥楊紹宸同住陽明山大宅，熟知彼此生活習慣，嚴禁任何初次見面的陌生化描寫！
 
 請嚴格遵守《情慾文學指引》與《系統核心指令》：
-1. 嚴格依據玩家剛才執行的最新行動/抉擇，即時推進後續正文。【字數上限強制執行】prose 嚴格控制在 600~800 個中文字以內（以中文字元計數，標點不計），不得超過。
+1. 嚴格依據玩家剛才執行的最新行動/抉擇，即時推進後續正文。prose 建議以 800–1000 個中文字為目標範圍，但不是硬性限制；以完整寫完一個有推進、情緒變化且自然收束的場景段落為優先。可依內容需要略多或略少，不得為守住數字把場景切成兩半，也不得為湊字數重複描寫或灌水。
 2. 描寫要求：極致性張力、上位者男性佔有欲、五感溫度、喘息、支配與臣服、細節肢體碰觸、成人情慾拉扯與權謀博弈，使用純台灣繁體中文。
    - 徐令謙專屬例外：他的張力來自風度、克制、可靠承擔與深情守護；給玩家自由並在暗處備妥保險。除非玩家主動表達偏好，不得預設威脅、羞辱、疼痛、強迫或封鎖退路。
 3. 絕不重複前篇標題與對話，每次推進都是全新事件與衝突升級！
@@ -2926,7 +2926,7 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
 6. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼標記）：
 {
   "chapterTitle": "第 1 幕 第 ${turnCount} 回：【全新章節標題】",
-  "prose": "【600~800 個中文字、緊接玩家行動推進的長篇小說正文】",
+  "prose": "【以 800–1000 個中文字為建議目標、緊接玩家行動並完整推進至自然收束的小說正文；可依內容需要略多或略少，不截斷、不灌水】",
   "statusPanel": {
     "timeLocation": "時空地點",
     "tension": 70,
@@ -2978,10 +2978,11 @@ async function triggerRollingSummaryUpdate(turnCount) {
     turn: h.turn,
     title: h.chapterTitle,
     action: h.chosenLabel,
-    snippet: (h.prose || '').substring(0, 250)
+    prose: clampBlock(h.prose, CONTEXT_BUDGET.recentProsePerTurn),
+    offeredChoices: (h.choices || []).map(choice => choice.label).filter(Boolean)
   }));
 
-  const systemPrompt = '你是小說記憶統整引擎。請將現有摘要與最新 5 回合故事紀錄濃縮為 1,000 ~ 1,500 字元高資訊密度摘要池（保留關鍵物品、人物好感度轉折、重大線索與承諾）。請一律使用台灣繁體中文輸出純文字摘要，不要多餘寒暄。';
+  const systemPrompt = '你是小說記憶統整引擎。請將現有摘要與最新 5 回合完整故事紀錄濃縮為 1,000 ~ 1,500 字元高資訊密度摘要池。務必保留關鍵對話與承諾、人物知道或不知道的資訊、場景位置與時間、物品、關係轉折、重大線索及尚未完成的行動。請一律使用台灣繁體中文輸出純文字摘要，不要多餘寒暄。';
   const userPrompt = `--- 現有摘要池 ---\n${state.saveState.summaryPool || '（初始開局）'}\n\n--- 待整合的最新回合記錄 ---\n${JSON.stringify(recent5Turns, null, 2)}\n\n【請直接輸出更新後的純摘要文字】：`;
 
   try {
@@ -2998,7 +2999,7 @@ async function triggerRollingSummaryUpdate(turnCount) {
           { role: 'user', content: userPrompt }
         ],
         temperature: 0.2,
-        max_tokens: 1000,
+        max_tokens: 2000,
         token: state.token,
         userId: state.userId
       }),

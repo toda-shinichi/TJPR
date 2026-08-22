@@ -79,7 +79,7 @@ var MemoryPipeline = (function() {
       turn: 1,
       choice: 'START_STORY',
       title: chapterData.chapterTitle || ('第 1 回．初會 ' + targetLeadName),
-      prosePreview: (chapterData.prose || '').substring(0, 120) + '...',
+      prose: (chapterData.prose || '').substring(0, 1800),
       summaryDelta: chapterData.narrativeSummaryDelta || ('與 ' + targetLeadName + ' 的初次交鋒')
     };
     initialSaveState.turnHistory.push(turnRecord);
@@ -172,7 +172,7 @@ var MemoryPipeline = (function() {
       '【最高指導原則】',
       '1. 絕對禁止OOC：100%沉浸式角色扮演，角色絕不承認是AI，依各自MBTI、身分背景、著裝風格與微表情細膩反應。',
       '2. 純文學沉浸正文：正文開頭【嚴禁出現「妳做出了抉擇」等系統破梗語】！小說正文必須宛如出版實體書，直接從劇中人物的動作、微表情、眼神交會、肢體觸摸與對話自然推進！',
-      '3. 篇幅與深度：每回合正文輸出【嚴格維持 600 至 800 個中文字，以中文字元計數、標點不計，不得超過】，細緻描寫環境氣味、光影、肢體距離、呼吸心跳、對話交鋒與微表情變化，絕不套用固定模板。',
+      '3. 篇幅與深度：正文以 800–1000 個中文字為建議目標，但不是硬性限制；優先完整寫完一個有實質推進、情緒變化且自然收束的場景段落，可依內容需要略多或略少，不為守字數截斷場景，也不為湊字數灌水。細緻描寫環境氣味、光影、肢體距離、呼吸心跳、對話交鋒與微表情變化，且不套用固定模板。',
       '4. 嚴格身分防火牆：徐令謙是黑道玄辰幫二把手·天裕會中樞，絕非檢察官（士林地檢署檢察官是韓正寰），徐承勳是中華民國副總統，絕不可張冠李戴！',
       '5. 成人情慾文學指引（R-18）：極致性張力、高位推拉、寫實直白描寫肉體交纏、支配與臣服、五感具象（體溫、喘息、香氣、眼神壓迫、肢體撫摸）、權謀殺伐與多方博弈，使用純台灣繁體中文，拒絕隱晦暗喻！',
       '',
@@ -182,7 +182,7 @@ var MemoryPipeline = (function() {
       '你必須嚴格輸出標準 JSON 格式，請勿在 JSON 外附帶任何非 JSON 字串：',
       '{',
       '  "chapterTitle": "第 N 回．[自動生成章節名稱]",',
-      '  "prose": "600~800 個中文字的純文學長篇正文（以中文字元計數，標點不計，上限強制執行）。開頭嚴禁「妳選擇了」等系統語，直接由人物動作與情境切入。第三人稱現在式描寫五感細節、服裝著裝、微表情與對話交鋒；對話用引號「」。",',
+      '  "prose": "以 800–1000 個中文字為建議目標的純文學長篇正文，但不是硬性限制；優先完整寫完一個有推進、情緒變化且自然收束的場景段落，可依內容需要略多或略少，不為守字數截斷場景，也不為湊字數灌水。開頭嚴禁「妳選擇了」等系統語，直接由人物動作與情境切入。第三人稱現在式描寫五感細節、服裝著裝、微表情與對話交鋒；對話用引號「」。",',
       '  "narrativeSummaryDelta": "本回關鍵進展的 2~3 句話濃縮摘要（供記憶池更新）",',
       '  "statusPanel": {',
       '    "timeLocation": "時空（例如：2026年5月12日 21:30 星期二 於 台北市士林區德行法律事務所頂樓制策室）",',
@@ -241,7 +241,7 @@ var MemoryPipeline = (function() {
       '選擇識別碼: ' + (choiceId || 'CUSTOM_ACTION'),
       '自訂動作/具體內容: ' + (customInput || '依照選項推進'),
       '',
-      '請根據以上完整脈絡，撰寫下一回 600~800 個中文字的精緻長篇情節並回傳標準 JSON！'
+      '請根據以上完整脈絡撰寫下一回精緻長篇情節並回傳標準 JSON。篇幅以 800–1000 個中文字為建議目標，但場景完整與實質推進優先，可自然略多或略少；不要截斷場景，也不要為湊字數灌水。'
     ];
 
     return {
@@ -304,6 +304,7 @@ var MemoryPipeline = (function() {
       turn: saveState.turnCount,
       choice: choiceSelected,
       title: turnOutput.chapterTitle || ('第 ' + saveState.turnCount + ' 回合'),
+      prose: (turnOutput.prose || '').substring(0, 1800),
       summaryDelta: turnOutput.narrativeSummaryDelta || ''
     };
     saveState.turnHistory.push(turnRecord);
