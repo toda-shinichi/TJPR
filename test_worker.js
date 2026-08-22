@@ -20,7 +20,7 @@ function post(body, headers = {}) {
 }
 
 const validPayload = {
-  model: 'deepseek-v4-pro',
+  model: 'gemini-3.7-flash',
   messages: [{ role: 'user', content: 'test' }],
   max_tokens: 100,
   stream: false

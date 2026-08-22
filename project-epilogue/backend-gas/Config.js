@@ -24,11 +24,13 @@ const CONFIG = {
 
   // 雙模型配置
   MODELS: {
-        // 主要敘事模型 (Narrator: DeepSeek V4 Pro 首選，gemini-3.6-flash 備援 1)
+    // 主要敘事模型：gemini-3.7-flash 首選（快、便宜），但它會自我審查、
+    // 在情慾章節極可能拒絕。因此備援一律排未審查模型，
+    // 且前端會偵測拒絕並自動輪替（見 app.js 的 buildAttemptPlan）。
     NARRATOR: {
-      PRIMARY: 'deepseek-v4-pro',
-      FALLBACK: 'gemini-3.6-flash',
-      FALLBACK_2: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+      PRIMARY: 'gemini-3.7-flash',
+      FALLBACK: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+      FALLBACK_2: 'mistral-large-3',
       FALLBACK_3: 'gpt-5.6-luna',
       FALLBACK_4: 'aion-3.0',
       TEMPERATURE: 0.88,

@@ -97,7 +97,7 @@
 1. 使用任何瀏覽器開啟 [`frontend-web/index.html`](file:///Users/huanhsu/Desktop/程式碼專案/TJPR/project-epilogue/frontend-web/index.html)（或透過本機伺服器如 Live Server / `python -m http.server` 預覽）。
 2. 點擊畫面底部的 **狀態抽屜**。
 3. 在最下方的 **「GAS 後端 Web App URL 設定」** 欄位中，貼上剛才第三步複製的 Apps Script 部署網址，並點擊 **「儲存」**。
-4. 系統將正式連線至 Google Apps Script 雲端後端，開始調用 `deepseek-v4-pro` 展開 1,200~1,500 字的長篇互動分支冒險！
+4. 系統將正式連線至 Google Apps Script 雲端後端，開始調用 `gemini-3.7-flash`（情慾章節被拒時自動輪替至未審查模型）展開 1,200~1,500 字的長篇互動分支冒險！
 
 ---
 
@@ -228,3 +228,67 @@ npx wrangler deploy
 但 GAS 無法串流，改走該路徑會讓逐字流出的閱讀體驗消失，因此改為
 **保留 Worker 串流，只把角色卡取回前端快取後注入提示詞**。
 後端路徑目前仍未被前端使用。
+
+---
+
+## 情慾章節的模型輪替機制
+
+主模型是 `gemini-3.7-flash`（快、便宜），但 gemini 系列**會自我審查、擋掉情慾
+內容** —— 而那是本作的核心。因此在 `app.js` 建立了一套「重試後輪替」機制。
+
+### 為什麼需要拒絕偵測
+
+會審查的模型**不會回 HTTP 錯誤**，而是回 200 加上一段拒絕語，或是被淡化到
+失去張力的正文。先前的成功判定只看「有沒有 `prose`」，這種回應會被當成成功
+接受 —— 也就是說單純加重試次數是無效的，必須先能認出拒絕。
+
+`detectRefusal()` 的判定策略：
+
+- 正文 ≤ 220 字元時才用關鍵字比對（中英文常見拒絕語）。長篇正文裡角色本來
+  就可能說「我不能……」，長文命中關鍵字不代表模型拒絕。
+- 正文 < 80 字元一律視為拒絕（正常章節不會這麼短）。
+- 開頭 120 字元命中拒絕語即判為拒絕，即使後面接了長篇改寫建議。
+
+### 嘗試計畫
+
+`buildAttemptPlan()` 產生：主模型 × `PRIMARY_MAX_ATTEMPTS`（5）次，
+之後輪替 `UNCENSORED_FALLBACK_MODELS`：
+
+| 順位 | 模型 |
+| --- | --- |
+| 1–5 | `gemini-3.7-flash` |
+| 6 | `dolphin-mistral-24b-venice-edition`（未審查）|
+| 7 | `mistral-large-3` |
+
+重試 5 次是有意義的：溫度 0.88 下同一個提示詞未必每次都被拒。
+
+**逐章輪替起點**：每次真的用到未審查備援，`advanceUncensoredRotation()` 就
+把起點往前推一格（存在 localStorage）。連續幾個情慾章節因此會交替使用
+dolphin 與 mistral-large-3 —— 維持文風變化，也分散單一模型的失敗風險。
+
+### 「模型不可用」不重試
+
+`isModelUnavailableResponse()` 會辨識 `model_not_found`、
+`no available channel`、`model not allowed` 等回應。這類失敗是**確定性**的，
+重試同一個名字五次不會有不同結果，只是白打五次請求 —— 因此直接跳過該模型的
+其餘嘗試。拒絕（審查）則不同，會照計畫重試。
+
+### 玩家可見的回饋
+
+- 重試期間 loading 副標題顯示「模型 X（第 n/7 次嘗試）被拒絕，改試下一個……」，
+  避免五次重試期間畫面看起來像卡住。
+- 真的落到未審查備援時提示一次「主模型連續拒絕，本回改由 X 生成」——
+  玩家需要知道這一章換了模型寫，文風會有差異。
+- 主模型本身是會審查的模型，這是刻意選擇，因此**不會**每回都跳警告；
+  只有落到「非主模型的審查模型」才警告。
+
+### ⚠️ 已知待確認
+
+`gemini-3.7-flash` 是否存在於 `api.banana2556.com` **尚未驗證** ——
+線上 Worker 的舊白名單會先擋下它，必須重新部署 Worker 後才能實測。
+已確認的是：`gemini-3.6-flash` 在此帳號**已不可用**
+（上游回 `No available channel ... under group Tave`），而
+`dolphin-mistral-24b-venice-edition` 與 `mistral-large-3` 都正常。
+
+若 `gemini-3.7-flash` 不存在，機制會自動判定為「模型不可用」、只嘗試一次
+就跳到未審查備援，不會浪費五次呼叫，遊戲仍可正常運作。

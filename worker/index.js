@@ -28,7 +28,7 @@ const RATE_LIMIT = { windowSeconds: 60, maxRequests: 12 };
 
 /** 允許前端指定的模型白名單。避免有人拿這個端點去跑任意昂貴模型。 */
 const ALLOWED_MODELS = [
-  'deepseek-v4-pro',
+  'gemini-3.7-flash',
   'mistral-large-3',
   'gemini-3.6-flash',
   'cognitivecomputations/dolphin-mistral-24b-venice-edition',

@@ -3,8 +3,8 @@
  * 檔案：AIService.js
  * 
  * 透過相容 OpenAI 的 API 端點（https://api.banana2556.com/v1）驅動雙模型管線：
- * 1. 主要敘事模型 (Narrator: deepseek-v4-pro)
- * 2. 快速稽核模型 (Fast Auditor: gemini-3.6-flash / 備用 deepseek-v4-flash)
+ * 1. 主要敘事模型 (Narrator: gemini-3.7-flash，備援為未審查模型)
+ * 2. 快速稽核模型 (Fast Auditor: aion-3.0-mini / 備用 mistral-nemo)
  */
 
 var AIService = (function() {
@@ -201,9 +201,9 @@ var AIService = (function() {
   }
 
   /**
-   * 主要敘事模型 (Narrator: deepseek-v4-pro)：
+   * 主要敘事模型 (Narrator: gemini-3.7-flash)：
    * 生成 1,200~1,500 字的精緻章節內文、3 個互動選項以及存檔狀態更新（Delta）。
-   * 順位：deepseek-v4-pro -> gemini-3.6-flash -> dolphin-mistral -> gpt-5.6-luna -> aion-3.0
+   * 順位：gemini-3.7-flash -> dolphin-mistral(未審查) -> mistral-large-3 -> gpt-5.6-luna -> aion-3.0
    * @param {Object} promptContext - 包含 System Prompt, 角色 Markdown, 摘要池與近期對話歷史
    * @returns {Object} 章節物件 { chapterTitle, prose, choices, stateDelta, narrativeSummaryDelta }
    */
@@ -253,7 +253,7 @@ var AIService = (function() {
 
   /**
    * 快速稽核與記憶模型 (Fast Auditor: gemini-3.6-flash)：
-   * 順位：gemini-3.6-flash -> gemini-3.6-flash-lite (第一備援) -> deepseek-v4-flash (第二備援) -> mercury-2 (第三備援)
+   * 順位：aion-3.0-mini -> mistral-nemo (備援)
    * 每 5 回合壓縮更新滾動摘要池，嚴格維持在 2,000 字元以內。
    * @param {string} existingSummary - 現有摘要池文字
    * @param {Array<Object>} newTurns - 最新幾回合的故事摘記

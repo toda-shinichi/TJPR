@@ -1752,7 +1752,7 @@ function updateUserBadgeUI(status = 'active') {
 // =========================================================================
 
 const NARRATIVE_MODELS = [
-  'deepseek-v4-pro',
+  'gemini-3.7-flash',
   'mistral-large-3',
   'gemini-3.6-flash',
   'cognitivecomputations/dolphin-mistral-24b-venice-edition',
@@ -1767,13 +1767,21 @@ const LLM_CONFIG = {
   STALL_TIMEOUT_MS: 25000,
   API_URL: 'https://api.banana2556.com/v1/chat/completions',
   API_KEY: '', // 安全起見，已轉移至 GAS Proxy
-  PRIMARY_MODEL: 'deepseek-v4-pro',
-  // 備援必須也是不會自我審查的模型。gemini-3.6-flash 會擋掉情慾內容，
-  // 而那是本作的核心 —— 放在備援第一位等於「主要模型一失手就被消音」。
-  // dolphin-mistral-24b-venice-edition 是未審查變體，速度也比 mistral 快。
+  PRIMARY_MODEL: 'gemini-3.7-flash',
+  // 備援必須也是不會自我審查的模型 —— 情慾描寫是本作核心。
   FALLBACK_MODEL: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
-  // 最後手段：會自我審查，僅在其餘全部失敗時使用，並會提示玩家。
-  CENSORING_MODELS: ['gemini-3.6-flash'],
+  // gemini 系列會自我審查、擋掉情慾內容。主模型用 gemini-3.7-flash 是為了
+  // 速度與成本，代價是它在情慾章節極可能拒絕或淡化 —— 因此需要
+  // 「重試後輪替到未審查模型」機制（見 buildAttemptPlan）。
+  CENSORING_MODELS: ['gemini-3.6-flash', 'gemini-3.7-flash'],
+  // 主模型最多嘗試幾次（拒絕與硬失敗都計入）才改用未審查模型。
+  // 溫度 0.88 下同一個提示詞未必每次都被拒，所以重試是有意義的。
+  PRIMARY_MAX_ATTEMPTS: 5,
+  // 主模型連續失敗後改用的未審查模型，逐章輪替。
+  UNCENSORED_FALLBACK_MODELS: [
+    'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+    'mistral-large-3'
+  ],
   MODELS: NARRATIVE_MODELS,
   TEMPERATURE: 0.88
 };
@@ -1998,9 +2006,16 @@ async function waitForRpmCooldown() {
  */
 
 async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt, onStreamUpdate) {
-  const modelsToTry = [LLM_CONFIG.PRIMARY_MODEL, LLM_CONFIG.FALLBACK_MODEL].filter(Boolean);
-  
+  // 主模型重試 PRIMARY_MAX_ATTEMPTS 次後輪替到未審查模型（見 buildAttemptPlan）
+  const modelsToTry = buildAttemptPlan();
+  const primaryModel = LLM_CONFIG.PRIMARY_MODEL;
+  const unavailableModels = new Set();
+  let attemptNo = 0;
+
   for (const model of modelsToTry) {
+    attemptNo++;
+    // 已確認不可用的模型不再重試 —— 那是確定性失敗，重試只是白打請求
+    if (unavailableModels.has(model)) continue;
     let timeoutId = null;
     try {
       throwIfGenerationAborted();
@@ -2040,7 +2055,12 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         ...(controller ? { signal: controller.signal } : {})
       });
 
-      if (!response.ok) throw new Error(`Worker HTTP ${response.status}`);
+      if (!response.ok) {
+        let errBody = '';
+        try { errBody = await response.text(); } catch (e) { /* 忽略 */ }
+        if (isModelUnavailableResponse(errBody)) throw createModelUnavailableError(model, errBody);
+        throw new Error(`Worker HTTP ${response.status}${errBody ? ': ' + errBody.slice(0, 120) : ''}`);
+      }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
@@ -2109,7 +2129,11 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         }
         
         if (finalParsed && finalParsed.prose) {
-          console.log(`[Worker] Model ${model} succeeded, prose: ${finalParsed.prose.length} chars, choices: ${(finalParsed.choices||[]).length}`);
+          // 會審查的模型是回 200 加拒絕語，不是回錯誤 —— 必須主動判定
+          const verdict = detectRefusal(finalParsed);
+          if (verdict.refused) throw createRefusalError(model, verdict.reason);
+          console.log(`[Worker] ${model} 成功（第 ${attemptNo} 次嘗試），正文 ${finalParsed.prose.length} 字、選項 ${(finalParsed.choices||[]).length} 個`);
+          if (model !== primaryModel) noteUncensoredFallbackUsed(model, attemptNo);
           warnIfCensoringModel(model);
           return finalParsed;
         }
@@ -2120,6 +2144,10 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
           rawSlice = rawSlice.replace(/",\s*"[a-zA-Z].*$/s, '');
           const displayProse = rawSlice.replace(/\\n/g, '\n').replace(/\\"/g, '"');
           if (displayProse.length > 50) {
+            const salvage = { prose: displayProse, statusPanel: {}, choices: [], chapterTitle: '命運推演' };
+            const salvageVerdict = detectRefusal(salvage);
+            if (salvageVerdict.refused) throw createRefusalError(model, salvageVerdict.reason);
+            if (model !== primaryModel) noteUncensoredFallbackUsed(model, attemptNo);
             console.log('[Worker] JSON parse failed, using streamed prose, length:', displayProse.length);
             return { prose: displayProse, statusPanel: {}, choices: [], chapterTitle: '命運推演' };
           }
@@ -2127,9 +2155,19 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
       }
       console.warn(`[Worker] No usable content. fullContent(${fullContent.length}): ${fullContent.slice(0, 100)}`);
     } catch (err) {
-      // 只有玩家明確中止才停止整條備援鏈；單一模型逾時仍應嘗試下一模型。
+      // 只有玩家明確中止才停止整條備援鏈；逾時、拒絕、模型不可用都應繼續往下試。
       if (state.generationAbortRequested) throw createGenerationAbortError();
-      console.warn(`[Worker] Model ${model} error:`, err.message);
+      if (err && err.isModelUnavailable) {
+        unavailableModels.add(model);
+        console.warn(`[Worker] ${model} 在上游不可用，跳過其餘重試：`, err.message);
+        reportGenerationProgress(model, attemptNo, modelsToTry.length, '在上游不可用，跳過');
+      } else if (err && err.isRefusal) {
+        console.warn(`[Worker] ${model} 第 ${attemptNo} 次嘗試被判定為拒絕／審查：`, err.message);
+        reportGenerationProgress(model, attemptNo, modelsToTry.length, '被拒絕，改試下一個');
+      } else {
+        console.warn(`[Worker] Model ${model} error (attempt ${attemptNo}):`, err.message);
+        reportGenerationProgress(model, attemptNo, modelsToTry.length, '失敗，改試下一個');
+      }
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
       state.currentAbortController = null;
@@ -2139,12 +2177,161 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
 }
 
 /**
+ * 判斷回應是否代表「這個模型在上游根本不可用」（名稱錯誤、未開通、無可用通道）。
+ *
+ * 這類失敗是確定性的：重試同一個名字五次不會有不同結果，只是白打五次請求。
+ * 拒絕（審查）則不同 —— 溫度 0.88 下同一提示詞未必每次都被拒，重試有意義。
+ * 兩者必須分開處理。
+ */
+const MODEL_UNAVAILABLE_PATTERNS = [
+  /model_not_found/i,
+  /no available channel/i,
+  /model not allowed/i,
+  /unsupported model|invalid model/i
+];
+
+function isModelUnavailableResponse(text) {
+  return MODEL_UNAVAILABLE_PATTERNS.some(re => re.test(String(text || '')));
+}
+
+function createModelUnavailableError(model, detail) {
+  const err = new Error(`Model ${model} unavailable: ${String(detail).slice(0, 160)}`);
+  err.isModelUnavailable = true;
+  err.model = model;
+  return err;
+}
+
+/** 建立可辨識的「拒絕」錯誤，讓外層迴圈能與網路錯誤區分 */
+function createRefusalError(model, reason) {
+  const err = new Error(`Model ${model} refused: ${reason}`);
+  err.isRefusal = true;
+  err.model = model;
+  return err;
+}
+
+/**
+ * 真的用到未審查備援時：記錄、推進輪替、並告知玩家。
+ * 玩家需要知道這一章是換了模型寫的 —— 文風會有差異。
+ */
+function noteUncensoredFallbackUsed(model, attemptNo) {
+  const short = String(model).split('/').pop();
+  console.log(`[Fallback] 主模型連續失敗，本回改由 ${short} 生成（第 ${attemptNo} 次嘗試）。`);
+  advanceUncensoredRotation();
+  notifyUser(`主模型連續拒絕，本回改由 ${short} 生成。`, 'info', 6000);
+}
+
+/** 把重試進度寫進 loading 文字，避免五次重試期間畫面看起來像卡住 */
+function reportGenerationProgress(model, attemptNo, total, note) {
+  const short = String(model).split('/').pop();
+  if (dom.loadingSubtext) {
+    dom.loadingSubtext.textContent = `模型 ${short}（第 ${attemptNo}/${total} 次嘗試）${note}……`;
+  }
+}
+
+/**
+ * 拒絕／自我審查偵測。
+ *
+ * 這是整個輪替機制的關鍵：會審查的模型不會回 HTTP 錯誤，而是回 200 加上
+ * 一段拒絕語（或被淡化到失去情慾張力的正文）。先前的成功判定只看
+ * 「有沒有 prose」，那種回應會被當成成功接受 —— 也就是說「重試五次失敗」
+ * 在審查情境下根本不會被觸發。必須先能認出拒絕，重試與輪替才有意義。
+ */
+const REFUSAL_PATTERNS = [
+  // 中文常見拒絕語
+  /(很抱歉|抱歉|對不起)[，,。\s]*(我|本人|作為)?(無法|不能|不便|沒有辦法)/,
+  /我(無法|不能|不便)(協助|提供|繼續|完成|生成|撰寫|描寫)/,
+  /(不符合|違反|超出)(我的)?(使用|內容|安全)?(政策|規範|準則|原則|限制)/,
+  /我(是一個|只是一個)?(AI|人工智慧|語言模型)/,
+  /(改為|建議)(描寫|撰寫)(較為)?(含蓄|委婉|保守)/,
+  /無法(生成|產生|創作)(這類|此類|該類)(內容|情節|描寫)/,
+  // 英文常見拒絕語
+  /\bI\s+(can(?:'|’)?t|cannot|am\s+unable\s+to)\s+(help|assist|provide|continue|generate|write|create)/i,
+  /\b(against|violates?)\s+(my|the)\s+(guidelines|policy|policies|content\s+policy)/i,
+  /\bas\s+an\s+AI\s+(language\s+)?model\b/i,
+  /\bI\s+(must|have\s+to)\s+decline\b/i
+];
+
+/** 正文過短通常代表模型只回了一句拒絕，而不是真的寫了章節 */
+const REFUSAL_MAX_PROSE_CHARS = 220;
+
+/**
+ * @param {object} chapter 解析後的章節物件
+ * @returns {{refused: boolean, reason?: string}}
+ */
+function detectRefusal(chapter) {
+  const prose = String((chapter && chapter.prose) || '');
+  if (!prose) return { refused: true, reason: '沒有正文' };
+
+  // 只在正文很短時才用關鍵字判定：正常章節裡角色本來就可能說出
+  // 「我不能」這類台詞，長文命中關鍵字不代表模型拒絕。
+  if (prose.length <= REFUSAL_MAX_PROSE_CHARS) {
+    for (const re of REFUSAL_PATTERNS) {
+      if (re.test(prose)) return { refused: true, reason: `疑似拒絕語（正文僅 ${prose.length} 字）` };
+    }
+    if (prose.length < 80) return { refused: true, reason: `正文過短（${prose.length} 字）` };
+  }
+
+  // 開頭就是拒絕語：即使後面接了長篇說明，也算拒絕
+  const head = prose.slice(0, 120);
+  for (const re of REFUSAL_PATTERNS) {
+    if (re.test(head)) return { refused: true, reason: '正文開頭為拒絕語' };
+  }
+
+  return { refused: false };
+}
+
+/**
+ * 建立這一回的模型嘗試計畫：
+ *   主模型 × PRIMARY_MAX_ATTEMPTS 次，之後改用未審查模型（逐章輪替起點）。
+ *
+ * 為什麼要輪替起點：連續幾個情慾章節如果每次都從同一個備援模型開始，
+ * 文風會變得單一。逐章交替 dolphin 與 mistral-large-3 可以維持變化，
+ * 也分散單一模型的失敗風險。
+ */
+function buildAttemptPlan() {
+  const primary = LLM_CONFIG.PRIMARY_MODEL;
+  const maxPrimary = Math.max(1, LLM_CONFIG.PRIMARY_MAX_ATTEMPTS || 1);
+  const plan = new Array(maxPrimary).fill(primary);
+
+  const pool = (LLM_CONFIG.UNCENSORED_FALLBACK_MODELS || []).filter(Boolean);
+  if (pool.length) {
+    const start = getUncensoredRotationIndex();
+    for (let i = 0; i < pool.length; i++) {
+      plan.push(pool[(start + i) % pool.length]);
+    }
+  }
+  // 最後保留原本的 FALLBACK_MODEL 與其他備援，避免上面全掛時無路可走
+  if (LLM_CONFIG.FALLBACK_MODEL && !plan.includes(LLM_CONFIG.FALLBACK_MODEL)) {
+    plan.push(LLM_CONFIG.FALLBACK_MODEL);
+  }
+  return plan;
+}
+
+const UNCENSORED_ROTATION_KEY = 'undercurrent_uncensored_rotation';
+
+function getUncensoredRotationIndex() {
+  const raw = parseInt(localStorage.getItem(UNCENSORED_ROTATION_KEY) || '0', 10);
+  return isFinite(raw) ? Math.abs(raw) : 0;
+}
+
+/** 每次真的用到未審查備援時往前推一格，讓下一章從另一個模型開始 */
+function advanceUncensoredRotation() {
+  const pool = (LLM_CONFIG.UNCENSORED_FALLBACK_MODELS || []).filter(Boolean);
+  if (pool.length < 2) return;
+  const next = (getUncensoredRotationIndex() + 1) % pool.length;
+  safeLocalStorageSet(UNCENSORED_ROTATION_KEY, String(next));
+}
+
+/**
  * 落到會自我審查的模型時提示玩家一次。
  * 不提示的話，玩家只會發現「文風忽然變保守」卻不知道原因。
  */
 let censoringModelWarned = false;
 function warnIfCensoringModel(model) {
   if (!(LLM_CONFIG.CENSORING_MODELS || []).includes(model)) return;
+  // 主模型本身就是會審查的（刻意選擇：快又便宜），被拒時有輪替機制接手。
+  // 這種情況每回都提示只會變成雜訊 —— 只有「落到非主模型的審查模型」才值得警告。
+  if (model === LLM_CONFIG.PRIMARY_MODEL) return;
   if (censoringModelWarned) return;
   censoringModelWarned = true;
   notifyUser(
@@ -2165,20 +2352,21 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
       console.warn('Worker error, fallback to GAS', e);
     }
   }
-  // GAS 路徑優先使用與 Worker 相同的 DeepSeek 主模型。刻意不放 mistral-large-3：它需要約 67 秒才寫完，
+  // GAS 路徑套用與 Worker 相同的嘗試計畫（主模型重試後輪替到未審查模型）。
+  // 註：mistral-large-3 在這條路徑上需要約 67 秒才寫完，
   // 而 Apps Script 的 UrlFetchApp 約 60 秒就會斷，在這條路徑上永遠不可能成功，
   // 擺在前面只是白等 50 秒。mistral 由 Worker 路徑負責。
   // gemini-3.6-flash 放最後 —— 它會自我審查、擋掉情慾內容。
   const models = [
-    'deepseek-v4-pro',
-    'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+    ...buildAttemptPlan(),
     'aion-3.0',
-    'gpt-5.6-luna',
-    'gemini-3.6-flash'
-  ];
+    'gpt-5.6-luna'
+  ].filter((m, i, arr) => m && arr.indexOf(m) === i);
   await waitForRpmCooldown();
+  const unavailableModelsGas = new Set();
   for (let mIdx = 0; mIdx < models.length; mIdx++) {
     const model = models[mIdx];
+    if (unavailableModelsGas.has(model)) continue;
     let timeoutId = null;
     try {
       throwIfGenerationAborted();
@@ -2213,7 +2401,12 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
       lastRequestTimestamp = Date.now();
       if (!response.ok) {
         const errText = await response.text();
-        console.warn(`[Pure AI] Model ${model} HTTP ${response.status}: ${errText.slice(0, 100)}`);
+        if (isModelUnavailableResponse(errText)) {
+          console.warn(`[Pure AI] ${model} 在上游不可用，跳過其餘重試。`);
+          unavailableModelsGas.add(model);
+        } else {
+          console.warn(`[Pure AI] Model ${model} HTTP ${response.status}: ${errText.slice(0, 100)}`);
+        }
         continue;
       }
       const data = await response.json();
@@ -2224,7 +2417,14 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
       const rawContent = data.data.content;
       const parsed = parseJsonSafely(rawContent);
       if (parsed && parsed.prose) {
+        const verdict = detectRefusal(parsed);
+        if (verdict.refused) {
+          console.warn(`[Pure AI] ${model} 被判定為拒絕／審查（${verdict.reason}），改試下一個。`);
+          reportGenerationProgress(model, mIdx + 1, models.length, '被拒絕，改試下一個');
+          continue;
+        }
         console.log(`[Pure AI] Successfully generated with model: ${model} via proxy (${parsed.prose.length} chars)`);
+        if (model !== LLM_CONFIG.PRIMARY_MODEL) noteUncensoredFallbackUsed(model, mIdx + 1);
         warnIfCensoringModel(model);
         return parsed;
       }
@@ -5362,7 +5562,7 @@ async function sendTelemetryError(category, message, details = {}) {
       action: 'telemetry/log-error',
       category: category || 'GENERAL_ERROR',
       message: String(message || '未知錯誤'),
-      model: LLM_CONFIG.PRIMARY_MODEL || 'deepseek-v4-pro',
+      model: LLM_CONFIG.PRIMARY_MODEL || 'gemini-3.7-flash',
       userId: state.username || state.userId || localStorage.getItem('undercurrent_user_name') || 'guest',
       act: state.saveState?.meta?.currentAct || 1,
       turn: state.saveState?.turnCount || 1,
@@ -5453,7 +5653,7 @@ async function handleFeedbackSubmit(e) {
     turn: state.saveState?.turnCount || 1,
     targetLead: state.saveState?.meta?.targetLeadName || '未指定',
     playerProfile: state.saveState?.meta?.playerProfile || null,
-    model: LLM_CONFIG.PRIMARY_MODEL || 'deepseek-v4-pro',
+    model: LLM_CONFIG.PRIMARY_MODEL || 'gemini-3.7-flash',
     status: state.saveState?.protagonist || null
   } : null;
 

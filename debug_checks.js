@@ -182,7 +182,7 @@ assert.match(
 );
 assert.doesNotMatch(rootApp, /text-\[#d8dbe6\]/, '最新回合仍使用深色主題遺留的低對比淺字');
 assert.match(css, /#stream-prose-content\s*\{[\s\S]*?color:\s*#3e363a\s*!important/, '最新回合正文缺少高對比色保護');
-assert.match(rootApp, /PRIMARY_MODEL: 'deepseek-v4-pro'/, '前端主要敘事模型未切換為 DeepSeek V4 Pro');
+assert.match(rootApp, /PRIMARY_MODEL: 'gemini-3\.7-flash'/, '前端主要敘事模型未切換為 gemini-3.7-flash');
 assert.strictEqual((rootApp.match(/800–1000 個中文字/g) || []).length, 4, '開局與續回的正文篇幅目標未完整更新');
 assert.doesNotMatch(rootApp, /字數上限強制執行|600~800 個中文字/, '前端提示詞仍殘留硬性字數上限');
 assert.match(rootApp, /不為守住字數把場景切成兩半[\s\S]*不為湊字數重複描寫或灌水/, '開局提示詞缺少場景完整與避免灌水規則');
@@ -194,9 +194,72 @@ assert.doesNotMatch(rootApp, /snippet:\s*\(h\.prose[\s\S]*?substring\(0,\s*250\)
 assert.match(rootApp, /prose:\s*clampBlock\(h\.prose,\s*CONTEXT_BUDGET\.recentProsePerTurn\)/, '摘要器未讀取每回較完整正文');
 assert.match(gasConfig, /RECENT_TURNS_CONTEXT_LIMIT:\s*5/, '備用後端近期全文視窗不是 5 回');
 assert.match(memoryPipelineCode, /prose:\s*\(turnOutput\.prose \|\| ''\)\.substring\(0, 1800\)/, '備用後端未保存近期完整正文');
-assert.match(workerCode, /'deepseek-v4-pro'/, 'Worker 模型白名單缺少 DeepSeek V4 Pro');
-assert.match(gasConfig, /PRIMARY: 'deepseek-v4-pro'/, 'GAS 主要敘事模型未切換為 DeepSeek V4 Pro');
-assert.doesNotMatch(rootApp, /deepseek\/deepseek-v4-pro/, '前端仍殘留錯誤的 DeepSeek 模型 ID');
+assert.match(workerCode, /'gemini-3\.7-flash'/, 'Worker 模型白名單缺少 gemini-3.7-flash');
+assert.match(gasConfig, /PRIMARY: 'gemini-3\.7-flash'/, 'GAS 主要敘事模型未切換為 gemini-3.7-flash');
+assert.doesNotMatch(rootApp, /deepseek/i, '前端仍殘留已停用的 DeepSeek 模型參照');
+
+// ── 情慾章節的拒絕偵測與模型輪替機制 ──
+assert.match(rootApp, /PRIMARY_MAX_ATTEMPTS: 5/, '主模型重試次數不是 5 次');
+assert.match(
+  rootApp,
+  /UNCENSORED_FALLBACK_MODELS: \[\s*'cognitivecomputations\/dolphin-mistral-24b-venice-edition',\s*'mistral-large-3'\s*\]/,
+  '未審查備援模型清單不是 dolphin-mistral-24b 與 mistral-large-3'
+);
+assert.match(rootApp, /CENSORING_MODELS: \['gemini-3\.6-flash', 'gemini-3\.7-flash'\]/, 'gemini-3.7-flash 未被標記為會自我審查');
+assert.ok(
+  rootApp.includes('function detectRefusal(') && rootApp.includes('function buildAttemptPlan('),
+  '缺少拒絕偵測或模型嘗試計畫'
+);
+
+// 光是「函式存在」不夠 —— 這批機制先前就出現過只定義未接線的情況。
+// 這裡直接檢查兩條生成路徑的函式體內確實用上了它們。
+const workerFnBody = rootApp.slice(
+  rootApp.indexOf('async function generateStoryWithWorkerStream'),
+  rootApp.indexOf('async function generateStoryFromLLM')
+);
+const gasFnBody = rootApp.slice(rootApp.indexOf('async function generateStoryFromLLM'));
+[
+  ['buildAttemptPlan', 'Worker 路徑未使用模型嘗試計畫'],
+  ['detectRefusal', 'Worker 路徑未做拒絕偵測'],
+  ['isModelUnavailableResponse', 'Worker 路徑未判別模型不可用'],
+  ['noteUncensoredFallbackUsed', 'Worker 路徑未記錄未審查備援的使用']
+].forEach(([needle, msg]) => assert.ok(workerFnBody.includes(needle + '('), msg));
+[
+  ['buildAttemptPlan', 'GAS 路徑未使用模型嘗試計畫'],
+  ['detectRefusal', 'GAS 路徑未做拒絕偵測'],
+  ['isModelUnavailableResponse', 'GAS 路徑未判別模型不可用']
+].forEach(([needle, msg]) => assert.ok(gasFnBody.includes(needle + '('), msg));
+
+// 嘗試計畫：主模型 5 次 + 兩個未審查模型
+const plan = vm.runInContext('buildAttemptPlan()', frontendContext);
+assert.strictEqual(plan.filter(m => m === 'gemini-3.7-flash').length, 5, '嘗試計畫未包含 5 次主模型');
+assert.ok(
+  plan.includes('cognitivecomputations/dolphin-mistral-24b-venice-edition') && plan.includes('mistral-large-3'),
+  '嘗試計畫缺少未審查備援模型'
+);
+assert.strictEqual(plan[0], 'gemini-3.7-flash', '嘗試計畫的第一個不是主模型');
+
+// 拒絕偵測：短拒絕語要抓到、正常長篇正文不可誤判
+const refusalCases = [
+  ['很抱歉，我無法協助生成這類內容。', true],
+  ['I cannot help with that request.', true],
+  ['作為一個 AI 語言模型，我不能撰寫此類情節。', true],
+  ['', true]
+];
+refusalCases.forEach(([prose, expected]) => {
+  frontendContext.__probe = { prose };
+  const got = vm.runInContext('detectRefusal(__probe).refused', frontendContext);
+  assert.strictEqual(got, expected, `拒絕偵測誤判：${JSON.stringify(prose).slice(0, 40)}`);
+});
+// 長篇正文即使角色台詞裡有「我不能」也不可判為拒絕
+frontendContext.__probe = {
+  prose: '雨'.repeat(500) + '「我不能讓妳就這樣走出這扇門。」他低聲說。' + '雨'.repeat(400)
+};
+assert.strictEqual(
+  vm.runInContext('detectRefusal(__probe).refused', frontendContext),
+  false,
+  '長篇正文中的角色台詞被誤判為模型拒絕'
+);
 assert.match(rootApp, /if \(storedToken\.startsWith\('tok_local_'\)\) \{[\s\S]*?updateUserBadgeUI\('offline'\);[\s\S]*?return;/, '本機離線工作階段在重新整理後仍會被送往雲端並誤登出');
 assert.match(rootApp, /p\.profession \|\| p\.occupation \|\| '政經分析師'/, '進行中存檔卡未顯示目前人設的職業欄位');
 assert.match(rootApp, /function getOfficialLeadKeys\(\) \{[\s\S]*?key !== '14_楊慕璃'/, '攻略對象選單仍可能把官方主角列為男主');

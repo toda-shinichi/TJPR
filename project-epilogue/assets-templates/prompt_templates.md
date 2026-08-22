@@ -5,7 +5,7 @@
 ---
 
 ## 1. 主要主筆作家提示詞 (Narrator System & Turn Prompt)
-* **執行模型**：`deepseek-v4-pro`
+* **執行模型**：`gemini-3.7-flash`
 * **調用位置**：[`MemoryPipeline.js`](file:///Users/huanhsu/Desktop/程式碼專案/TJPR/project-epilogue/backend-gas/MemoryPipeline.js) -> `buildTurnPromptContext()`
 * **目標**：生成 1,200 ~ 1,500 字長篇小說、3 個決策分支與狀態更新數值。
 
@@ -51,7 +51,7 @@ ${tieredLore.tier3GlobalIndex}
 ---
 
 ## 2. 滾動摘要更迭提示詞 (Summary Pool Consolidator)
-* **執行模型**：`gemini-3.6-flash`（備用：`deepseek-v4-flash`）
+* **執行模型**：`aion-3.0-mini`（備用：`mistral-nemo`）
 * **調用週期**：每 5 回合觸發一次
 * **調用位置**：[`AIService.js`](file:///Users/huanhsu/Desktop/程式碼專案/TJPR/project-epilogue/backend-gas/AIService.js) -> `updateSummaryPool()`
 
@@ -75,7 +75,7 @@ ${JSON.stringify(newTurns, null, 2)}
 ---
 
 ## 3. 故事邏輯一致性審計提示詞 (Consistency Auditor)
-* **執行模型**：`gemini-3.6-flash`（備用：`deepseek-v4-flash`）
+* **執行模型**：`aion-3.0-mini`（備用：`mistral-nemo`）
 * **調用週期**：每 10 回合觸發一次
 * **調用位置**：[`AIService.js`](file:///Users/huanhsu/Desktop/程式碼專案/TJPR/project-epilogue/backend-gas/AIService.js) -> `auditTurnConsistency()`
 
