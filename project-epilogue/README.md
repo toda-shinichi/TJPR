@@ -251,16 +251,22 @@ npx wrangler deploy
 
 ### 嘗試計畫
 
-`buildAttemptPlan()` 產生：主模型 × `PRIMARY_MAX_ATTEMPTS`（5）次，
+`buildAttemptPlan()` 產生：主模型 × `PRIMARY_MAX_ATTEMPTS`（3）次，
 之後輪替 `UNCENSORED_FALLBACK_MODELS`：
 
 | 順位 | 模型 |
 | --- | --- |
-| 1–5 | `gemini-3.7-flash` |
-| 6 | `dolphin-mistral-24b-venice-edition`（未審查）|
-| 7 | `mistral-large-3` |
+| 1–3 | `gemini-3.7-flash` |
+| 4 | `dolphin-mistral-24b-venice-edition`（未審查）|
+| 5 | `mistral-large-3` |
 
-重試 5 次是有意義的：溫度 0.88 下同一個提示詞未必每次都被拒。
+重試是有意義的：溫度 0.88 下同一個提示詞未必每次都被拒。
+
+**為什麼上限是 3 而不是更多**：上游的速率限制是**每分鐘 5 次、且跨模型共用**
+（實測連續打不同模型會收到「您已达到请求数限制：1分钟内最多请求5次」）。
+3 + 2 = 剛好 5 次請求，一回之內不會撞 429。若設成 5，主模型連拒就會把整分鐘
+額度用光、後面的備援只拿到 429，整回生成因此失敗 —— 額度留給真正寫得出來的
+模型更有價值。`debug_checks.js` 有斷言鎖住 `plan.length <= 5`。
 
 **逐章輪替起點**：每次真的用到未審查備援，`advanceUncensoredRotation()` 就
 把起點往前推一格（存在 localStorage）。連續幾個情慾章節因此會交替使用
@@ -282,13 +288,21 @@ dolphin 與 mistral-large-3 —— 維持文風變化，也分散單一模型的
 - 主模型本身是會審查的模型，這是刻意選擇，因此**不會**每回都跳警告；
   只有落到「非主模型的審查模型」才警告。
 
-### ⚠️ 已知待確認
+### 上游速率限制（重要）
 
-`gemini-3.7-flash` 是否存在於 `api.banana2556.com` **尚未驗證** ——
-線上 Worker 的舊白名單會先擋下它，必須重新部署 Worker 後才能實測。
-已確認的是：`gemini-3.6-flash` 在此帳號**已不可用**
-（上游回 `No available channel ... under group Tave`），而
-`dolphin-mistral-24b-venice-edition` 與 `mistral-large-3` 都正常。
+**每分鐘 5 次，且跨模型共用**。`isRateLimitedResponse()` 會辨識上游的中文
+限流訊息並**中止整條嘗試鏈**（繼續往下試只會全部撞 429），同時提示玩家
+稍候約一分鐘。這也是 `PRIMARY_MAX_ATTEMPTS` 必須維持在 3 的原因。
 
-若 `gemini-3.7-flash` 不存在，機制會自動判定為「模型不可用」、只嘗試一次
-就跳到未審查備援，不會浪費五次呼叫，遊戲仍可正常運作。
+### gemini-3.7-flash 的浮動路由
+
+實測（間隔 14 秒探測 5 次）：**2/5 命中 3.7 Flash，3/5 被靜默降級**為
+`gemini-auto` → **3.5 Flash-Lite**。降級不會回錯誤，只有回應中的
+`upstream_model` 欄位會顯示實際模型。
+
+也就是說章節品質會忽好忽壞，而這不是程式的問題。若想確認某一回實際用了
+哪個模型，看回應裡的 `route_status`（`matched` / `auto`）與 `upstream_model`。
+
+已確認 `gemini-3.6-flash` 在此帳號**已不可用**（上游回
+`No available channel ... under group Tavern`）。`dolphin-mistral-24b-venice-edition`
+與 `mistral-large-3` 均穩定可用。

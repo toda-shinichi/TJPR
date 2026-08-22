@@ -199,7 +199,9 @@ assert.match(gasConfig, /PRIMARY: 'gemini-3\.7-flash'/, 'GAS 主要敘事模型�
 assert.doesNotMatch(rootApp, /deepseek/i, '前端仍殘留已停用的 DeepSeek 模型參照');
 
 // ── 情慾章節的拒絕偵測與模型輪替機制 ──
-assert.match(rootApp, /PRIMARY_MAX_ATTEMPTS: 5/, '主模型重試次數不是 5 次');
+// 3 次主模型 + 2 個未審查備援 = 5 次請求，剛好等於上游每分鐘的額度上限。
+// 調高會讓主模型連拒時把額度用光、備援只拿到 429。
+assert.match(rootApp, /PRIMARY_MAX_ATTEMPTS: 3/, '主模型重試次數不是 3 次');
 assert.match(
   rootApp,
   /UNCENSORED_FALLBACK_MODELS: \[\s*'cognitivecomputations\/dolphin-mistral-24b-venice-edition',\s*'mistral-large-3'\s*\]/,
@@ -232,7 +234,8 @@ const gasFnBody = rootApp.slice(rootApp.indexOf('async function generateStoryFro
 
 // 嘗試計畫：主模型 5 次 + 兩個未審查模型
 const plan = vm.runInContext('buildAttemptPlan()', frontendContext);
-assert.strictEqual(plan.filter(m => m === 'gemini-3.7-flash').length, 5, '嘗試計畫未包含 5 次主模型');
+assert.strictEqual(plan.filter(m => m === 'gemini-3.7-flash').length, 3, '嘗試計畫未包含 3 次主模型');
+assert.strictEqual(plan.length, 5, '嘗試計畫總次數超出上游每分鐘 5 次的額度');
 assert.ok(
   plan.includes('cognitivecomputations/dolphin-mistral-24b-venice-edition') && plan.includes('mistral-large-3'),
   '嘗試計畫缺少未審查備援模型'

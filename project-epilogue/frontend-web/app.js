@@ -1776,7 +1776,12 @@ const LLM_CONFIG = {
   CENSORING_MODELS: ['gemini-3.6-flash', 'gemini-3.7-flash'],
   // 主模型最多嘗試幾次（拒絕與硬失敗都計入）才改用未審查模型。
   // 溫度 0.88 下同一個提示詞未必每次都被拒，所以重試是有意義的。
-  PRIMARY_MAX_ATTEMPTS: 5,
+  //
+  // 為什麼是 3 而不是更多：上游的速率限制是【每分鐘 5 次、且跨模型共用】。
+  // 3 次主模型 + 2 個未審查備援 = 剛好 5 次請求，一回之內不會撞上 429。
+  // 若設成 5，主模型連拒就會把整分鐘額度用光，後面的備援只會拿到 429，
+  // 整回生成因此失敗 —— 額度留給真正寫得出來的模型更有價值。
+  PRIMARY_MAX_ATTEMPTS: 3,
   // 主模型連續失敗後改用的未審查模型，逐章輪替。
   UNCENSORED_FALLBACK_MODELS: [
     'cognitivecomputations/dolphin-mistral-24b-venice-edition',
@@ -2058,6 +2063,7 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
       if (!response.ok) {
         let errBody = '';
         try { errBody = await response.text(); } catch (e) { /* 忽略 */ }
+        if (isRateLimitedResponse(errBody)) throw createRateLimitError(model, errBody);
         if (isModelUnavailableResponse(errBody)) throw createModelUnavailableError(model, errBody);
         throw new Error(`Worker HTTP ${response.status}${errBody ? ': ' + errBody.slice(0, 120) : ''}`);
       }
@@ -2157,6 +2163,13 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
     } catch (err) {
       // 只有玩家明確中止才停止整條備援鏈；逾時、拒絕、模型不可用都應繼續往下試。
       if (state.generationAbortRequested) throw createGenerationAbortError();
+      if (err && err.isRateLimited) {
+        // 額度是帳號層級、跨模型共用的 —— 繼續往下試只會全部撞 429，
+        // 直接中止整條鏈並讓上層顯示「請稍候再試」比空轉有意義。
+        console.warn(`[Worker] 已達上游速率限制（${model}），停止本回其餘嘗試。`);
+        notifyUser('已達上游每分鐘請求上限，請稍候約一分鐘再重試本回。', 'error', 9000);
+        throw err;
+      }
       if (err && err.isModelUnavailable) {
         unavailableModels.add(model);
         console.warn(`[Worker] ${model} 在上游不可用，跳過其餘重試：`, err.message);
@@ -2192,6 +2205,32 @@ const MODEL_UNAVAILABLE_PATTERNS = [
 
 function isModelUnavailableResponse(text) {
   return MODEL_UNAVAILABLE_PATTERNS.some(re => re.test(String(text || '')));
+}
+
+/**
+ * 上游帳號層級的速率限制：每分鐘 5 次，且【跨模型共用】。
+ * 實測時連續打了幾個不同模型就收到
+ * 「您已达到请求数限制：1分钟内最多请求5次」，證實額度不是分模型計算的。
+ *
+ * 這對重試策略是硬約束：主模型連拒 5 次就會把整分鐘的額度用完，
+ * 後面的未審查備援只會拿到 429 —— 整回生成因此失敗。
+ * 收到 429 時必須停止往下試，並明確告知玩家要等待，而不是繼續空轉。
+ */
+const RATE_LIMIT_PATTERNS = [
+  /请求数限制|請求數限制/,
+  /rate limit|too many requests/i,
+  /1分钟内最多|1分鐘內最多/
+];
+
+function isRateLimitedResponse(text) {
+  return RATE_LIMIT_PATTERNS.some(re => re.test(String(text || '')));
+}
+
+function createRateLimitError(model, detail) {
+  const err = new Error(`Model ${model} rate limited: ${String(detail).slice(0, 160)}`);
+  err.isRateLimited = true;
+  err.model = model;
+  return err;
 }
 
 function createModelUnavailableError(model, detail) {
@@ -2401,6 +2440,11 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
       lastRequestTimestamp = Date.now();
       if (!response.ok) {
         const errText = await response.text();
+        if (isRateLimitedResponse(errText)) {
+          console.warn(`[Pure AI] 已達上游速率限制（${model}），停止其餘嘗試。`);
+          notifyUser('已達上游每分鐘請求上限，請稍候約一分鐘再重試本回。', 'error', 9000);
+          break;
+        }
         if (isModelUnavailableResponse(errText)) {
           console.warn(`[Pure AI] ${model} 在上游不可用，跳過其餘重試。`);
           unavailableModelsGas.add(model);
