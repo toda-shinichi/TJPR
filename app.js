@@ -489,6 +489,13 @@ const DOM_ID_MAP = {
   closeDrawerBtn: 'close-drawer-btn',
   gameplayDrawerBtn: 'gameplay-drawer-btn',
   gameplayQuickSaveBtn: 'gameplay-quick-save-btn',
+  gameplayMemoryBtn: 'gameplay-memory-btn',
+
+  memoryCenterModal: 'memory-center-modal',
+  memoryCenterContent: 'memory-center-content',
+  closeMemoryCenterBtn: 'close-memory-center-btn',
+  closeMemoryCenterBottomBtn: 'close-memory-center-bottom-btn',
+  forkCurrentStoryBtn: 'fork-current-story-btn',
   
   hpDisplay: 'hp-display',
   sanityDisplay: 'sanity-display',
@@ -1114,6 +1121,10 @@ function setupEventListeners() {
     on('export-all-saves-btn', 'click', exportAllSaves);
     on('import-all-saves-input', 'change', importAllSaves);
     on('gameplay-quick-save-btn', 'click', handleQuickSave);
+    on('gameplay-memory-btn', 'click', openMemoryCenter);
+    on('close-memory-center-btn', 'click', closeMemoryCenter);
+    on('close-memory-center-bottom-btn', 'click', closeMemoryCenter);
+    on('fork-current-story-btn', 'click', createCurrentStoryFork);
 
         // 意見回饋與問題回報彈窗
     on('nav-feedback-btn', 'click', () => openFeedbackModal());
@@ -1206,6 +1217,7 @@ function setupEventListeners() {
       if (isOverlayOpen('app-dialog')) return;
       const layers = [
         ['chapter-nav-panel', closeChapterNav],
+        ['memory-center-modal', closeMemoryCenter],
         ['feedback-modal', closeFeedbackModal],
         ['game-guide-modal', closeGameGuideModal],
         ['save-archive-modal', closeSaveArchiveModal],
@@ -1225,7 +1237,7 @@ function setupEventListeners() {
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
       if (state.isGenerating) return;
       // 任何浮層開著時不攔鍵盤
-      if (openDrawerKind || ['app-dialog', 'chapter-nav-panel', 'feedback-modal', 'game-guide-modal',
+      if (openDrawerKind || ['app-dialog', 'chapter-nav-panel', 'memory-center-modal', 'feedback-modal', 'game-guide-modal',
            'save-archive-modal', 'profile-manager-modal', 'character-creation-modal', 'auth-modal']
            .some(isOverlayOpen)) return;
 
@@ -1916,6 +1928,53 @@ function extractGameData(rawText) {
 
 // 向後兼容 alias
 function extractFirstJson(text) { return extractGameData(text); }
+
+/**
+ * 生成後的輕量品質閘門。只做可確定的結構修復；世界觀疑點保留正文並標記，
+ * 避免自動替字破壞小說語意或為了稽核額外消耗一次模型請求。
+ */
+function auditGeneratedChapter(input, profile) {
+  const chapter = isPlainObject(input) ? input : {};
+  chapter.chapterTitle = String(chapter.chapterTitle || '未命名章節').slice(0, 160);
+  chapter.prose = String(chapter.prose || '').trim();
+  chapter.statusPanel = isPlainObject(chapter.statusPanel) ? chapter.statusPanel : {};
+
+  const sp = chapter.statusPanel;
+  ['tension', 'intoxication'].forEach(key => {
+    if (sp[key] === undefined) return;
+    const n = typeof sp[key] === 'number' ? sp[key] : parseInt(String(sp[key]).replace(/[^0-9-]/g, ''), 10);
+    if (Number.isFinite(n)) sp[key] = Math.max(0, Math.min(100, Math.round(n)));
+  });
+  if (sp.favorabilityDelta !== undefined) {
+    const n = Number(sp.favorabilityDelta);
+    if (Number.isFinite(n)) sp.favorabilityDelta = Math.max(-5, Math.min(10, Math.round(n)));
+  }
+
+  const seen = new Set();
+  chapter.choices = (Array.isArray(chapter.choices) ? chapter.choices : []).slice(0, 3).map((choice, idx) => {
+    const c = isPlainObject(choice) ? choice : {};
+    let id = String(c.id || String.fromCharCode(65 + idx)).toUpperCase().slice(0, 8);
+    if (seen.has(id)) id = String.fromCharCode(65 + idx);
+    seen.add(id);
+    return {
+      id,
+      label: String(c.label || `選項 ${id}`).slice(0, 500),
+      risk: ['low', 'medium', 'high'].includes(c.risk) ? c.risk : 'medium',
+      hint: String(c.hint || '').slice(0, 240)
+    };
+  });
+
+  const warnings = [];
+  if (chapter.prose.length < 300) warnings.push('正文篇幅明顯偏短');
+  if (chapter.choices.length < 3) warnings.push(`僅取得 ${chapter.choices.length} 個可用選項`);
+  if (!sp.timeLocation) warnings.push('缺少明確時空地點');
+  const lead = profile?.targetLeadName || '';
+  if (lead === '徐令謙' && /徐令謙.{0,16}(?:檢察官|警察|刑警)|(?:檢察官|警察|刑警).{0,16}徐令謙/.test(chapter.prose)) {
+    warnings.push('疑似混淆徐令謙的官方職業');
+  }
+  chapter.qualityWarnings = warnings;
+  return chapter;
+}
 
 function parseJsonSafely(rawText) {
   if (!rawText) throw new Error('Empty response from LLM');
@@ -2776,6 +2835,26 @@ function buildRecentHistoryBlock(historyList) {
   return `【近期劇情（最近 ${recent.length} 回全文，請確保情節與細節完全銜接）】\n${parts.join('\n\n')}\n`;
 }
 
+/** 玩家指定不可遺忘的回合，以原文摘錄放在摘要之後、近期全文之前。 */
+function buildPinnedMemoryBlock(historyList, saveState = state.saveState) {
+  const list = Array.isArray(historyList) ? historyList : [];
+  const saved = Array.isArray(saveState?.pinnedMemories) ? saveState.pinnedMemories : [];
+  const byTurn = new Map();
+  saved.forEach(h => { if (h) byTurn.set(Number(h.turn), h); });
+  list.filter(h => h && h.memoryPinned).forEach(h => byTurn.set(Number(h.turn), h));
+  const pinned = Array.from(byTurn.values()).slice(-8);
+  if (pinned.length === 0) return '';
+  const entries = pinned.map(h => {
+    const facts = [
+      `── 第 ${h.turn || '?'} 回：${h.chapterTitle || '重要回合'} ──`,
+      h.chosenLabel ? `【玩家行動】${h.chosenLabel}` : '',
+      `【不可遺忘原文】${clampBlock(h.prose, 900)}`
+    ].filter(Boolean);
+    return facts.join('\n');
+  });
+  return `【玩家釘選的重要記憶（權威事實，後續不得遺忘或推翻）】\n${entries.join('\n\n')}\n`;
+}
+
 /**
  * 當前數值狀態。先前完全沒有送出 —— makeChoice 會把模型回傳的 statusPanel
  * 解析進 saveState（張力值、微醺度、好感度都存了），卻從來沒有餵回去，
@@ -3143,6 +3222,7 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
   const playerBlock = buildPlayerProfileBlock(profile);
   const dossierBlock = buildActDossierBlock(saveState);
   const recentHistory = buildRecentHistoryBlock(historyList);
+  const pinnedMemoryBlock = buildPinnedMemoryBlock(historyList, saveState);
   const liveStateBlock = buildLiveStateBlock(saveState, profile);
   const summaryBlock = summaryPool ? `【長期劇情摘要池（中期劇情的濃縮事實）】\n${summaryPool}\n` : '';
 
@@ -3200,6 +3280,7 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     '',
     dossierBlock,
     summaryBlock,
+    pinnedMemoryBlock,
     recentHistory,
     '',
     liveStateBlock,
@@ -3371,6 +3452,7 @@ async function startNewGameWithProfile(profile) {
       main_quest: isShura ? '暗流初會：在全勢力交鋒中破局' : `初會：與 ${profile.targetLeadName} 的交鋒`
     },
     summaryPool: `玩家 ${profile.name} 正式入局，情境設定：${(profile.customScenario || '全新開局').slice(0, 50)}...`,
+    pinnedMemories: [],
     turnHistory: []
   };
 
@@ -3453,11 +3535,13 @@ async function startNewGameWithProfile(profile) {
     setGenerationBusy(false);
   }
 
+  initialChapter = auditGeneratedChapter(initialChapter, profile);
   initialChapter.act = 1;
   initialChapter.turn = 1;
   initialChapter.chosenLabel = '【正式開局】';
 
   state.chapterData = initialChapter;
+  initialChapter.stateSnapshot = JSON.parse(JSON.stringify(state.saveState || {}));
   state.chapterHistoryList = [initialChapter];
   persistChapterHistory(state.chapterHistoryList);
   
@@ -3575,6 +3659,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
       };
     }
 
+    nextChapter = auditGeneratedChapter(nextChapter, profile);
     nextChapter.act = state.saveState.meta.currentAct || 1;
     nextChapter.turn = state.saveState.turnCount;
 
@@ -3649,16 +3734,19 @@ function handleCustomActionSubmit() {
   if (!input) return;
   const val = input.value.trim();
   if (!val) return notifyUser('請先輸入您的自訂行動或對白。', 'error');
+  const sourceChoiceId = input.dataset.choiceId || 'CUSTOM';
   input.value = '';
+  delete input.dataset.choiceId;
   autoGrowActionInput();
-  makeChoice('CUSTOM', val, false);
+  makeChoice(sourceChoiceId, val, false);
 }
 
 function appendChapterToHistory(chapter, chosenLabel) {
   if (!state.chapterHistoryList) state.chapterHistoryList = [];
   const record = Object.assign({}, chapter, {
     timestamp: new Date().toISOString(),
-    chosenLabel: chosenLabel || '玩家行動'
+    chosenLabel: chosenLabel || '玩家行動',
+    stateSnapshot: JSON.parse(JSON.stringify(state.saveState || {}))
   });
   state.chapterHistoryList.push(record);
   persistChapterHistory(state.chapterHistoryList);
@@ -3756,7 +3844,14 @@ function renderStoryStream(activeChapter) {
       </div>
       ${decisionPill}
       <article class="font-serif prose-tc is-past select-text">${paragraphsHtml}</article>
+      <div class="flex flex-wrap justify-end gap-2 pt-2 border-t border-brand-border/30">
+        <button class="past-pin-btn px-2.5 py-1.5 rounded-full border border-brand-border text-[11px] ${past.memoryPinned ? 'text-brand-gold border-brand-gold/50' : 'text-slate-500'} cursor-pointer" data-turn="${escapeHtml(past.turn || (i + 1))}">${past.memoryPinned ? '📌 已標記重要' : '📌 標記重要'}</button>
+        <button class="past-rewind-btn px-2.5 py-1.5 rounded-full border border-rose-300/50 text-[11px] text-rose-600 cursor-pointer" data-turn="${escapeHtml(past.turn || (i + 1))}">↩︎ 從此回分歧</button>
+      </div>
     `;
+
+    section.querySelector('.past-pin-btn')?.addEventListener('click', () => toggleMemoryPin(past.turn || (i + 1)));
+    section.querySelector('.past-rewind-btn')?.addEventListener('click', () => rewindStoryToTurn(past.turn || (i + 1)));
 
     dom.novelStreamContainer.appendChild(section);
   }
@@ -3786,9 +3881,12 @@ function renderStoryStream(activeChapter) {
         </h1>
       </div>
 
-      <div class="flex items-center gap-1.5 shrink-0">
+      <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0 max-w-[58%] sm:max-w-none">
         <button id="stream-regenerate-btn" class="game-action-control text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-brand-gold px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1 cursor-pointer" title="重新生成本回演繹">
           <span>重新生成</span>
+        </button>
+        <button id="stream-edit-last-btn" class="game-action-control text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-sky-500 px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1 cursor-pointer" title="修改上一個玩家行動再重新演繹">
+          <span>改寫行動</span>
         </button>
         <button id="stream-rewind-btn" class="game-action-control text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-amber-300 px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1 cursor-pointer" title="回退到上一回合（可重新選擇）">
           <span>回退</span>
@@ -3802,8 +3900,17 @@ function renderStoryStream(activeChapter) {
       故事載入中……
     </article>
 
+    ${(activeChapter.qualityWarnings || []).length ? `
+      <div class="rounded-xl border border-amber-300/60 bg-amber-50 p-3 text-xs text-amber-800">
+        <strong>本回品質檢查提醒：</strong>${escapeHtml(activeChapter.qualityWarnings.join('、'))}。內容已保留，可使用「重新生成」或「改寫行動」。
+      </div>` : ''}
+
     
     <div id="stream-status-panel" class="bg-brand-dark/85 border border-brand-border rounded-xl p-3 sm:p-4 text-xs font-sans space-y-2.5 shadow-md">
+      <div class="flex items-center justify-between gap-2">
+        <strong class="text-brand-gold">本回狀態摘要</strong>
+        <button id="toggle-status-details-btn" class="text-[11px] text-slate-500 hover:text-brand-gold cursor-pointer" aria-expanded="true">收合詳細 ▴</button>
+      </div>
       <!-- 數值即時標籤列 -->
       <div class="flex flex-wrap items-center gap-2">
         <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/70 border border-rose-700/50 text-rose-200">
@@ -3824,20 +3931,37 @@ function renderStoryStream(activeChapter) {
         </div>` : ''}
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300 pt-1 border-t border-brand-border/40">
-        <div><strong>時空地點：</strong><span class="text-brand-gold">${escapeHtml(activeChapter.statusPanel?.timeLocation || '台北市')}</span></div>
-        <div><strong>著裝神態：</strong><span class="text-slate-200">${escapeHtml(activeChapter.statusPanel?.outfit || '-')}</span></div>
+      <div id="status-detail-body" class="space-y-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300 pt-1 border-t border-brand-border/40">
+          <div><strong>時空地點：</strong><span class="text-brand-gold">${escapeHtml(activeChapter.statusPanel?.timeLocation || '台北市')}</span></div>
+          <div><strong>著裝神態：</strong><span class="text-slate-200">${escapeHtml(activeChapter.statusPanel?.outfit || '-')}</span></div>
+        </div>
+        <div class="text-slate-300"><strong>互動姿態：</strong><span class="text-slate-300">${escapeHtml(activeChapter.statusPanel?.interaction || '-')}</span></div>
+        ${activeChapter.statusPanel?.inventory ? `<div class="text-slate-300"><strong>關鍵情報：</strong><span class="text-amber-200/90">${escapeHtml(activeChapter.statusPanel.inventory)}</span></div>` : ''}
+        ${activeChapter.statusPanel?.rumors ? `<div class="text-slate-400"><strong>政媒傳聞：</strong><span class="italic text-slate-400">${escapeHtml(activeChapter.statusPanel.rumors)}</span></div>` : ''}
       </div>
-      <div class="text-slate-300"><strong>互動姿態：</strong><span class="text-slate-300">${escapeHtml(activeChapter.statusPanel?.interaction || '-')}</span></div>
-      ${activeChapter.statusPanel?.inventory ? `<div class="text-slate-300"><strong>關鍵情報：</strong><span class="text-amber-200/90">${escapeHtml(activeChapter.statusPanel.inventory)}</span></div>` : ''}
-      ${activeChapter.statusPanel?.rumors ? `<div class="text-slate-400"><strong>政媒傳聞：</strong><span class="italic text-slate-400">${escapeHtml(activeChapter.statusPanel.rumors)}</span></div>` : ''}
+    </div>
+    <div class="flex flex-wrap justify-end gap-2">
+      <button id="stream-pin-memory-btn" class="px-3 py-1.5 rounded-full border ${activeRecord?.memoryPinned ? 'border-brand-gold/60 text-brand-gold' : 'border-brand-border text-slate-500'} text-[11px] cursor-pointer">${activeRecord?.memoryPinned ? '📌 已標記重要' : '📌 標記重要'}</button>
+      <button id="stream-fork-btn" class="px-3 py-1.5 rounded-full border border-purple-300/50 text-purple-600 text-[11px] cursor-pointer">⑂ 建立分歧存檔</button>
     </div>
   `;
 
   dom.novelStreamContainer.appendChild(activeSection);
 
   document.getElementById('stream-regenerate-btn')?.addEventListener('click', handleRegenerateTurn);
+  document.getElementById('stream-edit-last-btn')?.addEventListener('click', handleEditLastAction);
   document.getElementById('stream-rewind-btn')?.addEventListener('click', handleUndoTurn);
+  document.getElementById('stream-pin-memory-btn')?.addEventListener('click', () => toggleMemoryPin(activeRecord?.turn || currentTurnNum));
+  document.getElementById('stream-fork-btn')?.addEventListener('click', createCurrentStoryFork);
+  document.getElementById('toggle-status-details-btn')?.addEventListener('click', (event) => {
+    const body = document.getElementById('status-detail-body');
+    if (!body) return;
+    const collapsed = !body.classList.contains('hidden');
+    body.classList.toggle('hidden', collapsed);
+    event.currentTarget.setAttribute('aria-expanded', String(!collapsed));
+    event.currentTarget.textContent = collapsed ? '展開詳細 ▾' : '收合詳細 ▴';
+  });
 
   const proseEl = document.getElementById('stream-prose-content');
   const cleanProse = activeChapter.prose || '';
@@ -4003,7 +4127,19 @@ function renderChoices(choices) {
     `;
 
     btn.addEventListener('click', () => {
-      makeChoice(c.id || `opt_${idx}`, c.label, false);
+      if (!dom.customActionInput) return;
+      document.querySelectorAll('.choice-option-btn').forEach(other => {
+        other.classList.remove('ring-2', 'ring-brand-gold/60', 'bg-brand-gold/10');
+        other.removeAttribute('aria-pressed');
+      });
+      btn.classList.add('ring-2', 'ring-brand-gold/60', 'bg-brand-gold/10');
+      btn.setAttribute('aria-pressed', 'true');
+      dom.customActionInput.value = cleanLabel;
+      dom.customActionInput.dataset.choiceId = c.id || `opt_${idx}`;
+      autoGrowActionInput();
+      dom.customActionInput.focus();
+      dom.customActionInput.setSelectionRange(cleanLabel.length, cleanLabel.length);
+      notifyUser('已帶入建議行動；可直接執行，或先改寫成更符合你的做法。', 'info', 2600);
     });
 
     dom.choicesContainer.appendChild(btn);
@@ -4560,6 +4696,7 @@ function isValidNamedSave(value) {
     && (value.timestamp === undefined || typeof value.timestamp === 'string')
     && (value.turnCount === undefined || (typeof value.turnCount === 'number' && Number.isFinite(value.turnCount)))
     && (value.chapterTitle === undefined || typeof value.chapterTitle === 'string')
+    && (value.branchOrigin === undefined || isPlainObject(value.branchOrigin))
     && (value.playerProfile === undefined || isValidProfilePreset(value.playerProfile))
     && isPlainObject(value.saveState)
     && isValidChapterRecord(value.chapterData)
@@ -4573,6 +4710,8 @@ function isValidChapterRecord(value) {
     && typeof value.prose === 'string'
     && value.prose.length <= 200000
     && (value.chapterTitle === undefined || typeof value.chapterTitle === 'string')
+    && (value.memoryPinned === undefined || typeof value.memoryPinned === 'boolean')
+    && (value.stateSnapshot === undefined || isPlainObject(value.stateSnapshot))
     && (value.choices === undefined || Array.isArray(value.choices));
 }
 
@@ -4607,7 +4746,139 @@ function closeSaveArchiveModal() {
   closeOverlay('save-archive-modal');
 }
 
-function createNamedSave(saveName) {
+function getPinnedMemories() {
+  const byTurn = new Map();
+  (Array.isArray(state.saveState?.pinnedMemories) ? state.saveState.pinnedMemories : [])
+    .forEach(ch => { if (ch) byTurn.set(Number(ch.turn), ch); });
+  (state.chapterHistoryList || []).filter(ch => ch && ch.memoryPinned)
+    .forEach(ch => byTurn.set(Number(ch.turn), ch));
+  return Array.from(byTurn.values()).slice(-8);
+}
+
+function renderMemoryCenter() {
+  const container = dom.memoryCenterContent;
+  if (!container) return;
+  const summary = state.saveState?.summaryPool || '目前尚未建立長期摘要；近期回合仍以完整正文保留。';
+  const pinned = getPinnedMemories();
+  const sp = state.chapterData?.statusPanel || {};
+  const rels = state.saveState?.relationships || {};
+  const recentCount = Math.min(CONTEXT_BUDGET.recentTurns, (state.chapterHistoryList || []).length);
+  const pinnedHtml = pinned.length ? pinned.map(ch => `
+    <article class="p-3 rounded-xl bg-brand-card border border-brand-border space-y-1.5">
+      <div class="flex items-center justify-between gap-2">
+        <strong class="font-serif text-brand-gold">第 ${escapeHtml(ch.turn || '?')} 回 · ${escapeHtml(ch.chapterTitle || '重要回合')}</strong>
+        <button class="memory-unpin-btn text-[11px] text-rose-500 hover:text-rose-700 cursor-pointer" data-turn="${escapeHtml(ch.turn || '')}">取消釘選</button>
+      </div>
+      ${ch.chosenLabel ? `<div class="text-slate-500">玩家行動：${escapeHtml(ch.chosenLabel)}</div>` : ''}
+      <p class="text-slate-600 leading-relaxed">${escapeHtml(String(ch.prose || '').slice(0, 260))}${String(ch.prose || '').length > 260 ? '……' : ''}</p>
+    </article>`).join('') : '<div class="p-3 rounded-xl bg-brand-card/60 border border-brand-border text-slate-500">尚未釘選重要回合。可在每一回章節卡片使用「標記重要」。</div>';
+
+  container.innerHTML = `
+    <section class="space-y-2">
+      <div class="flex items-center justify-between"><h4 class="font-serif font-bold text-brand-gold">長期劇情摘要</h4><span class="text-[10px] text-slate-500">近期 ${recentCount} 回另以全文保留</span></div>
+      <div class="whitespace-pre-wrap leading-relaxed p-3 rounded-xl bg-brand-card border border-brand-border text-slate-600">${escapeHtml(summary)}</div>
+    </section>
+    <section class="space-y-2">
+      <h4 class="font-serif font-bold text-brand-gold">目前狀態快照</h4>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div class="p-3 rounded-xl bg-brand-card border border-brand-border"><span class="text-slate-500">時空地點</span><div class="mt-1 text-slate-700">${escapeHtml(sp.timeLocation || '尚未記錄')}</div></div>
+        <div class="p-3 rounded-xl bg-brand-card border border-brand-border"><span class="text-slate-500">角色關係</span><div class="mt-1 text-slate-700">${escapeHtml(Object.entries(rels).map(([k,v]) => `${k} ${v}/100`).join('、') || '尚未記錄')}</div></div>
+      </div>
+    </section>
+    <section class="space-y-2"><h4 class="font-serif font-bold text-brand-gold">玩家釘選的重要記憶（${pinned.length}）</h4>${pinnedHtml}</section>
+  `;
+  container.querySelectorAll('.memory-unpin-btn').forEach(btn => {
+    btn.addEventListener('click', () => toggleMemoryPin(Number(btn.dataset.turn), false));
+  });
+}
+
+function openMemoryCenter() {
+  if (!state.chapterData) return notifyUser('目前尚無故事記憶可查看。', 'info');
+  renderMemoryCenter();
+  openOverlay('memory-center-modal');
+}
+
+function closeMemoryCenter() {
+  closeOverlay('memory-center-modal');
+}
+
+function toggleMemoryPin(turn, forceValue) {
+  const chapter = (state.chapterHistoryList || []).find(ch => Number(ch.turn) === Number(turn));
+  const storedBefore = Array.isArray(state.saveState?.pinnedMemories) ? state.saveState.pinnedMemories : [];
+  if (!chapter) {
+    if (forceValue === false && storedBefore.some(item => Number(item?.turn) === Number(turn))) {
+      state.saveState.pinnedMemories = storedBefore.filter(item => Number(item?.turn) !== Number(turn));
+      safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState || {}));
+      if (isOverlayOpen('memory-center-modal')) renderMemoryCenter();
+      return notifyUser('已取消重要記憶標記。', 'success');
+    }
+    return notifyUser('找不到這個回合，可能已不在本機章節視窗中。', 'error');
+  }
+  chapter.memoryPinned = typeof forceValue === 'boolean' ? forceValue : !chapter.memoryPinned;
+  if (state.chapterData && Number(state.chapterData.turn) === Number(turn)) {
+    state.chapterData.memoryPinned = chapter.memoryPinned;
+  }
+  state.saveState = state.saveState || {};
+  const stored = storedBefore;
+  const withoutTurn = stored.filter(item => Number(item?.turn) !== Number(turn));
+  state.saveState.pinnedMemories = chapter.memoryPinned
+    ? [...withoutTurn, {
+        turn: chapter.turn,
+        chapterTitle: chapter.chapterTitle || '',
+        chosenLabel: chapter.chosenLabel || '',
+        prose: String(chapter.prose || '').slice(0, 1200),
+        memoryPinned: true
+      }].slice(-8)
+    : withoutTurn;
+  persistChapterHistory(state.chapterHistoryList);
+  safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState || {}));
+  if (dom.novelStreamContainer) dom.novelStreamContainer.innerHTML = '';
+  renderStoryStream(state.chapterData);
+  if (isOverlayOpen('memory-center-modal')) renderMemoryCenter();
+  notifyUser(chapter.memoryPinned ? '已標記為重要記憶，後續回合會保留原文摘錄。' : '已取消重要記憶標記。', 'success');
+}
+
+function createCurrentStoryFork() {
+  if (!state.chapterData) return notifyUser('目前尚無進度可建立分歧。', 'error');
+  const turn = state.saveState?.turnCount || state.chapterData.turn || 1;
+  const title = String(state.chapterData.chapterTitle || '未命名章節').replace(/^第[^：:]*[：:]?\s*/, '').slice(0, 28);
+  const name = `分歧・第${turn}回・${title}`;
+  createNamedSave(name, { branchOrigin: { turn, title: state.chapterData.chapterTitle || '' } });
+}
+
+async function rewindStoryToTurn(turn) {
+  if (state.isGenerating) return notifyUser('生成進行中，請先完成或中止本回。', 'info');
+  const chapters = state.chapterHistoryList || [];
+  const index = chapters.findIndex(ch => Number(ch.turn) === Number(turn));
+  const target = chapters[index];
+  if (!target) return notifyUser('找不到指定回合。', 'error');
+  if (!target.stateSnapshot) {
+    return notifyUser('這是舊版章節，沒有完整數值快照；為避免狀態錯亂，不執行回溯。可改載入當時建立的具名存檔。', 'error', 7000);
+  }
+  const removed = chapters.length - index - 1;
+  if (removed <= 0) return notifyUser('目前已位於這個回合。', 'info');
+  const ok = await confirmDialog(`將先建立目前進度的安全分歧存檔，再回到第 ${turn} 回。\n其後 ${removed} 回會從目前時間線移除，但可由分歧存檔取回。`, {
+    title: '回溯故事時間線', confirmText: '建立分歧並回溯'
+  });
+  if (!ok) return;
+  createCurrentStoryFork();
+  state.saveState = JSON.parse(JSON.stringify(target.stateSnapshot));
+  state.chapterHistoryList = chapters.slice(0, index + 1);
+  state.chapterData = state.chapterHistoryList[state.chapterHistoryList.length - 1];
+  state.playerProfile = state.saveState?.meta?.playerProfile || state.playerProfile;
+  state.previousStateSnapshot = null;
+  state.lastChoicePayload = null;
+  safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+  persistChapterHistory(state.chapterHistoryList);
+  if (dom.novelStreamContainer) dom.novelStreamContainer.innerHTML = '';
+  renderStoryStream(state.chapterData);
+  renderSaveState();
+  updateGameplayBreadcrumb();
+  closeChapterNav();
+  notifyUser(`已回到第 ${turn} 回；原進度已保存為分歧存檔。`, 'success', 5500);
+}
+
+function createNamedSave(saveName, metadata = {}) {
   const name = (saveName || '').trim();
   if (!name) return notifyUser('請先輸入存檔名稱。', 'error');
   if (!state.chapterData && (!state.chapterHistoryList || state.chapterHistoryList.length === 0)) {
@@ -4624,6 +4895,7 @@ function createNamedSave(saveName) {
     timestamp: new Date().toLocaleString('zh-TW', { hour12: false }),
     turnCount: state.saveState?.turnCount || 1,
     chapterTitle: lastChapter?.chapterTitle || '第 1 回',
+    branchOrigin: metadata.branchOrigin,
     playerProfile: profile,
     saveState: state.saveState,
     chapterData: state.chapterData,
@@ -4822,6 +5094,7 @@ function renderSaveArchivesList() {
           <span class="text-slate-400">📖 進度：</span>
           <span class="font-bold text-sky-300">第 ${escapeHtml(turn)} 回（${escapeHtml(chTitle)}）</span>
         </div>
+        ${s.branchOrigin ? `<div class="flex items-center gap-1.5 bg-purple-50 px-2.5 py-1 rounded border border-purple-200"><span class="text-purple-600">⑂ 分歧來源：</span><span class="font-bold text-purple-700">第 ${escapeHtml(s.branchOrigin.turn || '?')} 回</span></div>` : ''}
         <div class="flex items-center gap-2 text-[11px] text-slate-400 ml-auto">
           <span>🌡️ 張力: <b class="text-rose-400">${escapeHtml(tension)}%</b></span>
           <span>🍷 微醺: <b class="text-amber-400">${escapeHtml(tipsy)}%</b></span>
@@ -5231,7 +5504,7 @@ async function handleRegenerateTurn() {
       const rProseEl = document.getElementById('stream-prose-content');
       if (rProseEl) rProseEl.innerHTML = '<p class="mb-6 indent-6 sm:indent-8 animate-pulse text-brand-gold/80">重新推演命運中……</p>';
       let rFirstToken = true, rDidStream = false;
-      const regeneratedChapter = await generateStoryFromLLM(systemPrompt, userPrompt, (streamedProse) => {
+      let regeneratedChapter = await generateStoryFromLLM(systemPrompt, userPrompt, (streamedProse) => {
         rDidStream = true;
         if (rProseEl) {
           if (rFirstToken) { rProseEl.innerHTML = ''; rFirstToken = false; }
@@ -5240,9 +5513,12 @@ async function handleRegenerateTurn() {
         }
       });
       if (rDidStream) regeneratedChapter.skipTypewriter = true;
+      const auditedRegeneratedChapter = auditGeneratedChapter(regeneratedChapter, profile);
+      regeneratedChapter = auditedRegeneratedChapter;
       regeneratedChapter.act = 1;
       regeneratedChapter.turn = 1;
       regeneratedChapter.chosenLabel = '【正式開局】';
+      regeneratedChapter.stateSnapshot = JSON.parse(JSON.stringify(state.saveState || {}));
       state.chapterData = regeneratedChapter;
       state.chapterHistoryList = [regeneratedChapter];
       persistChapterHistory(state.chapterHistoryList);
@@ -5310,6 +5586,27 @@ function handleRetryLastTurn() {
     if (!restorePreviousTurnForRetry()) return;
     makeChoice(state.lastChoicePayload.choiceId, state.lastChoicePayload.customInput, true);
   }
+}
+
+function handleEditLastAction() {
+  if (state.isGenerating) return notifyUser('劇情正在生成，請稍候。');
+  if (!state.lastChoicePayload || !state.previousStateSnapshot) {
+    return notifyUser('目前沒有可安全改寫的上一個行動。', 'info');
+  }
+  const original = state.lastChoicePayload.customInput
+    || (state.chapterData?.chosenLabel && state.chapterData.chosenLabel !== '【正式開局】' ? state.chapterData.chosenLabel : '');
+  if (!restorePreviousTurnForRetry()) return notifyUser('找不到上一回合快照。', 'error');
+  renderStoryStream(state.chapterData);
+  renderSaveState();
+  updateGameplayBreadcrumb();
+  if (dom.customActionInput) {
+    dom.customActionInput.value = String(original || '').replace(/^\s*[\[［][A-Za-z][\]］]\s*/, '');
+    dom.customActionInput.dataset.choiceId = state.lastChoicePayload.choiceId || 'CUSTOM';
+    autoGrowActionInput();
+    dom.customActionInput.focus();
+    dom.customActionInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  notifyUser('已回到上一回合並帶入原行動；修改後按「執行行動」即可重新演繹。', 'success', 5200);
 }
 
 function showStreamingAbortControl() {

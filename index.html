@@ -42,7 +42,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./style.css?v=06848ba0b4">
+  <link rel="stylesheet" href="./style.css?v=52c749c168">
 </head>
 <body class="bg-brand-dark text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-white">
 
@@ -243,6 +243,10 @@
             <span>💾</span>
             <span class="hidden sm:inline">存檔</span>
           </button>
+          <button id="gameplay-memory-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="查看 AI 長期記憶與重要回合">
+            <span>🧠</span>
+            <span class="hidden sm:inline">記憶</span>
+          </button>
           <button id="gameplay-drawer-btn" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="角色狀態">
             <span>📊</span>
             <span class="hidden sm:inline">狀態</span>
@@ -301,7 +305,7 @@
         <div class="flex items-center justify-between border-b border-brand-border/60 pb-3">
           <div class="flex items-center gap-2">
             <span class="text-brand-gold text-sm font-bold">✦ <span id="decisions-heading-pronoun">你</span>的下一步抉擇</span>
-            <span class="text-xs text-slate-400">（決定局勢走向與關係好感）</span>
+            <span class="text-xs text-slate-400">（點選後可先改寫，再決定是否送出）</span>
           </div>
           <div class="flex items-center gap-2">
             <div class="flex items-center gap-1" role="group" aria-label="正文字級">
@@ -659,6 +663,24 @@
     </div>
   </div>
 
+  <!-- 🧠 AI 記憶中心 -->
+  <div id="memory-center-modal" role="dialog" aria-modal="true" aria-label="AI 記憶中心" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[90] overflow-y-auto p-3 sm:p-6 flex justify-center items-start" style="display:none;">
+    <div class="bg-brand-surface border border-brand-gold/50 rounded-2xl max-w-3xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl p-5 sm:p-6 space-y-4">
+      <div class="flex items-start justify-between gap-3 pb-3 border-b border-brand-border">
+        <div>
+          <h3 class="font-serif font-black text-lg text-brand-gold">AI 記憶中心</h3>
+          <p class="text-xs text-slate-400 mt-1">查看長期摘要、當前狀態與玩家指定不可遺忘的重要回合。</p>
+        </div>
+        <button id="close-memory-center-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer" aria-label="關閉記憶中心">✕</button>
+      </div>
+      <div id="memory-center-content" class="modal-scroll-container flex-1 overflow-y-auto space-y-4 pr-1 text-xs"></div>
+      <div class="flex flex-wrap justify-end gap-2 pt-2 border-t border-brand-border">
+        <button id="fork-current-story-btn" class="px-4 py-2 rounded-xl bg-purple-950/60 hover:bg-purple-900 border border-purple-700/50 text-purple-200 font-bold text-xs cursor-pointer">建立目前進度的分歧存檔</button>
+        <button id="close-memory-center-bottom-btn" class="px-4 py-2 rounded-xl bg-brand-gold text-slate-950 font-black text-xs cursor-pointer">完成</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 📜 遊戲說明、系統功能與角色圖鑑彈窗 (Game Guide Modal) -->
   <div id="game-guide-modal" role="dialog" aria-modal="true" aria-label="遊戲指南與角色圖鑑" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[85] overflow-y-auto p-3 sm:p-6 flex justify-center items-start transition-opacity" style="display:none;">
     <div class="bg-brand-surface border border-brand-gold/50 rounded-2xl max-w-3xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl p-5 sm:p-6 space-y-4 relative">
@@ -744,7 +766,7 @@
               <span>🧠 2. 近期上下文與長期摘要</span>
             </h4>
             <p class="text-slate-300 text-xs">
-              每次推進會參考近期回合與既有劇情摘要；在雲端帳號模式下，系統約每 5 回合於背景更新一次摘要，保留關鍵事件、人物關係、道具與承諾。摘要用來維持長篇連貫，但仍建議在重要節點建立具名存檔。
+              每次推進會參考近期回合、既有劇情摘要與玩家釘選的重要回合；在雲端帳號模式下，系統約每 5 回合於背景更新一次摘要。遊玩畫面上方的「記憶」可查看 AI 目前掌握的摘要與狀態，重要承諾或轉折也可標記為不可遺忘。
             </p>
           </div>
 
@@ -753,7 +775,7 @@
               <span>💾 3. 自動進度、具名存檔與備份</span>
             </h4>
             <p class="text-slate-300 text-xs">
-              進行中的冒險會自動保留在本機；存檔庫可建立、搜尋、重新命名、載入與刪除具名存檔，也可匯出／匯入 JSON 備份。為控制長篇容量，具名存檔會保留最近的章節視窗；重大分歧前建議另存一份具名存檔。
+              進行中的冒險會自動保留在本機；存檔庫可建立、搜尋、重新命名、載入與刪除具名存檔，也可匯出／匯入 JSON 備份。每回可建立分歧存檔；從歷史回合回溯時，系統也會先保存原時間線，再安全切回當時的完整狀態快照。
             </p>
           </div>
 
@@ -1102,6 +1124,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=06848ba0b4" defer></script>
+    <script src="app.js?v=52c749c168" defer></script>
 </body>
 </html>

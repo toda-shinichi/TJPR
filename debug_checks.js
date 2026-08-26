@@ -21,7 +21,8 @@ assert.strictEqual(css, deployCss, '根目錄與部署版 style.css 不一致');
 
 const htmlIds = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 assert.strictEqual(new Set(htmlIds).size, htmlIds.length, 'index.html 存在重複 id');
-['toast-container', 'reading-speed-select', 'login-form-message', 'register-form-message'].forEach(id => {
+['toast-container', 'reading-speed-select', 'login-form-message', 'register-form-message',
+ 'gameplay-memory-btn', 'memory-center-modal', 'memory-center-content'].forEach(id => {
   assert.ok(htmlIds.includes(id), `index.html 缺少 UX 元件 #${id}`);
 });
 
@@ -49,6 +50,7 @@ function makeFakeElement() {
     getAttribute() { return null; },
     getBoundingClientRect() { return { top: 0, bottom: 100, left: 0, right: 100, width: 100, height: 100 }; },
     focus() {},
+    setSelectionRange() {},
     remove() {},
     scrollIntoView() {}
   };
@@ -115,6 +117,29 @@ assert.doesNotMatch(recentHistoryPrompt, /── 第 1 回：/, '近期全文視
 assert.match(recentHistoryPrompt, /最近 5 回全文/, '近期全文視窗沒有保留 5 回');
 assert.match(recentHistoryPrompt, /── 第 2 回：[\s\S]*── 第 6 回：/, '近期全文視窗未正確包含最後 5 回');
 
+const pinnedPrompt = vm.runInContext(`buildPinnedMemoryBlock([
+  { turn: 2, chapterTitle: '未釘選', prose: '不應出現', memoryPinned: false },
+  { turn: 3, chapterTitle: '關鍵承諾', prose: '他承諾不會背叛玩家。', chosenLabel: '接受盟約', memoryPinned: true }
+])`, frontendContext);
+assert.match(pinnedPrompt, /玩家釘選的重要記憶[\s\S]*關鍵承諾[\s\S]*不會背叛/, '釘選記憶未注入提示詞');
+assert.doesNotMatch(pinnedPrompt, /不應出現/, '未釘選回合錯誤進入重要記憶');
+
+frontendContext.__auditInput = {
+  chapterTitle: '',
+  prose: '短文',
+  statusPanel: { tension: 130, intoxication: -5, favorabilityDelta: 99 },
+  choices: [
+    { id: 'A', label: '甲', risk: 'unknown' },
+    { id: 'A', label: '乙', risk: 'high' }
+  ]
+};
+const audited = vm.runInContext('auditGeneratedChapter(__auditInput, { targetLeadName: "徐令謙" })', frontendContext);
+assert.strictEqual(audited.statusPanel.tension, 100, '生成後檢查未夾制張力值');
+assert.strictEqual(audited.statusPanel.intoxication, 0, '生成後檢查未夾制微醺度');
+assert.strictEqual(audited.statusPanel.favorabilityDelta, 10, '生成後檢查未夾制好感變動');
+assert.strictEqual(new Set(audited.choices.map(c => c.id)).size, audited.choices.length, '生成後檢查未修復重複選項 id');
+assert.ok(audited.qualityWarnings.length >= 2, '生成後檢查未標記短文或選項不足');
+
 const novelContainer = makeFakeElement();
 fakeElements.set('novel-stream-container', novelContainer);
 vm.runInContext(`
@@ -155,6 +180,9 @@ assert.strictEqual(vm.runInContext('Object.keys(getCustomPresets()).length', fro
 assert.match(rootApp, /if \(state\.generationAbortRequested\) throw createGenerationAbortError\(\)/, '生成中止仍可能被備援迴圈吞掉');
 assert.match(rootApp, /signal: controller\.signal/, 'Worker 串流未連接 AbortController');
 assert.match(rootApp, /chapterHistoryList: JSON\.parse\(JSON\.stringify\(state\.chapterHistoryList \|\| \[\]\)\)/, '回合交易快照未包含章節歷史');
+assert.match(rootApp, /stateSnapshot: JSON\.parse\(JSON\.stringify\(state\.saveState \|\| \{\}\)\)/, '新回合未保存可供精確回溯的狀態快照');
+assert.match(rootApp, /createCurrentStoryFork\(\);[\s\S]*state\.saveState = JSON\.parse\(JSON\.stringify\(target\.stateSnapshot\)\)/, '歷史回溯沒有先建立分歧或還原狀態快照');
+assert.match(rootApp, /customActionInput\.dataset\.choiceId[\s\S]*已帶入建議行動/, '選項未改為先帶入自由行動欄');
 assert.match(rootApp, /const previousGameSnapshot = \{/, '新開局中止前未保存舊遊戲狀態');
 assert.match(rootApp, /state\.playerProfile = target\.playerProfile \|\| target\.saveState\?\.meta\?\.playerProfile \|\| null/, '載入命名存檔後仍可能沿用上一局玩家人設');
 assert.match(rootApp, /e\.key === 'Enter' && !e\.shiftKey && !e\.isComposing/, '自由行動欄的 Shift+Enter 仍會誤送出');
