@@ -502,7 +502,7 @@ const DOM_ID_MAP = {
   profileCardName: 'profile-card-name',
   profileCardLead: 'profile-card-lead',
   relationshipsList: 'relationships-list',
-  inventoryList: 'inventory-list',
+  intelLedgerList: 'intel-ledger-list',
   rebaseActBtn: 'rebase-act-btn',
   
   shuraWarningCard: 'shura-warning-card',
@@ -1961,6 +1961,7 @@ function auditGeneratedChapter(input, profile) {
       hint: String(c.hint || '').slice(0, 240)
     };
   });
+  chapter.intelDelta = normalizeIntelDelta(chapter.intelDelta, state.saveState?.turnCount || chapter.turn || 1);
 
   const warnings = [];
   if (chapter.prose.length < 300) warnings.push('正文篇幅明顯偏短');
@@ -2859,6 +2860,110 @@ function buildPinnedMemoryBlock(historyList, saveState = state.saveState) {
   return `【玩家釘選的重要記憶（權威事實，後續不得遺忘或推翻）】\n${entries.join('\n\n')}\n`;
 }
 
+const INTEL_TYPES = ['evidence', 'intel', 'contact', 'access'];
+const INTEL_CONFIDENCE = ['unverified', 'partial', 'verified'];
+const INTEL_STATUSES = ['available', 'exposed', 'delivered', 'invalid'];
+const INTEL_TYPE_LABELS = { evidence: '物證', intel: '情報', contact: '人脈', access: '權限' };
+const INTEL_CONFIDENCE_LABELS = { unverified: '未查證', partial: '部分印證', verified: '已確認' };
+const INTEL_STATUS_LABELS = { available: '可用', exposed: '已曝光', delivered: '已交付', invalid: '已失效' };
+
+function createIntelId(name) {
+  let hash = 2166136261;
+  const text = String(name || '線索');
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `intel_${(hash >>> 0).toString(36)}`;
+}
+
+function normalizeIntelEntry(raw, turn = 1) {
+  const source = typeof raw === 'string' ? { name: raw } : (isPlainObject(raw) ? raw : {});
+  const name = String(source.name || source.label || '').trim().slice(0, 120);
+  if (!name) return null;
+  const rawId = String(source.id || '').trim();
+  const id = /^[a-zA-Z0-9_-]{3,64}$/.test(rawId) ? rawId : createIntelId(name);
+  return {
+    id,
+    name,
+    type: INTEL_TYPES.includes(source.type) ? source.type : 'intel',
+    confidence: INTEL_CONFIDENCE.includes(source.confidence) ? source.confidence : 'unverified',
+    status: INTEL_STATUSES.includes(source.status) ? source.status : 'available',
+    source: String(source.source || '劇情取得').trim().slice(0, 120),
+    effect: String(source.effect || source.desc || '').trim().slice(0, 240),
+    acquiredTurn: Math.max(1, Number(source.acquiredTurn) || turn),
+    updatedTurn: Math.max(1, Number(source.updatedTurn) || turn)
+  };
+}
+
+/** 舊存檔遷移：保留真正物品，排除舊版固定塞入、從未運作的兩個示範占位物。 */
+function ensureIntelLedger(saveState = state.saveState) {
+  if (!saveState || typeof saveState !== 'object') return [];
+  const turn = Math.max(1, Number(saveState.turnCount) || 1);
+  let source = Array.isArray(saveState.intelLedger) ? saveState.intelLedger : [];
+  if (!Array.isArray(saveState.intelLedger) && Array.isArray(saveState.inventory)) {
+    source = saveState.inventory.filter(item => !['item_card', 'item_press'].includes(item && item.id));
+  }
+  const seen = new Set();
+  saveState.intelLedger = source.map(item => normalizeIntelEntry(item, turn)).filter(item => {
+    if (!item || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  }).slice(-60);
+  return saveState.intelLedger;
+}
+
+function normalizeIntelDelta(raw, turn = 1) {
+  const delta = isPlainObject(raw) ? raw : {};
+  const add = (Array.isArray(delta.add) ? delta.add : [])
+    .map(item => normalizeIntelEntry(Object.assign({}, item, { acquiredTurn: turn, updatedTurn: turn }), turn))
+    .filter(Boolean)
+    .slice(0, 8);
+  const update = (Array.isArray(delta.update) ? delta.update : []).map(item => {
+    if (!isPlainObject(item)) return null;
+    const id = String(item.id || '').trim().slice(0, 64);
+    const name = String(item.name || '').trim().slice(0, 120);
+    if (!id && !name) return null;
+    const out = { id, name };
+    if (INTEL_STATUSES.includes(item.status)) out.status = item.status;
+    if (INTEL_CONFIDENCE.includes(item.confidence)) out.confidence = item.confidence;
+    if (item.effect !== undefined) out.effect = String(item.effect || '').trim().slice(0, 240);
+    if (item.source !== undefined) out.source = String(item.source || '').trim().slice(0, 120);
+    return out;
+  }).filter(Boolean).slice(0, 8);
+  return { add, update };
+}
+
+function applyIntelDelta(saveState, rawDelta, turn) {
+  const ledger = ensureIntelLedger(saveState);
+  const delta = normalizeIntelDelta(rawDelta, turn);
+  const changes = { added: [], updated: [] };
+
+  delta.add.forEach(entry => {
+    const existing = ledger.find(item => item.id === entry.id || item.name === entry.name);
+    if (existing) {
+      Object.assign(existing, entry, { id: existing.id, acquiredTurn: existing.acquiredTurn, updatedTurn: turn });
+      changes.updated.push(existing);
+    } else {
+      ledger.push(entry);
+      changes.added.push(entry);
+    }
+  });
+
+  delta.update.forEach(change => {
+    const target = ledger.find(item => (change.id && item.id === change.id) || (change.name && item.name === change.name));
+    if (!target) return;
+    ['status', 'confidence', 'effect', 'source'].forEach(key => {
+      if (change[key] !== undefined) target[key] = change[key];
+    });
+    target.updatedTurn = turn;
+    changes.updated.push(target);
+  });
+
+  saveState.intelLedger = ledger.slice(-60);
+  return changes;
+}
+
 /**
  * 當前數值狀態。先前完全沒有送出 —— makeChoice 會把模型回傳的 statusPanel
  * 解析進 saveState（張力值、微醺度、好感度都存了），卻從來沒有餵回去，
@@ -2891,9 +2996,14 @@ function buildLiveStateBlock(saveState, profile) {
     lines.push('  （好感度是 40 回累積的結果，男主的態度親疏必須與此吻合，不可退回初識的疏離感）');
   }
 
-  const inv = Array.isArray(st.inventory) ? st.inventory : [];
-  if (inv.length) {
-    lines.push(`- 持有道具：${inv.map(it => `${it.name || it}${it.count > 1 ? `×${it.count}` : ''}`).join('、')}`);
+  const usableIntel = ensureIntelLedger(st).filter(item => item.status === 'available');
+  if (usableIntel.length) {
+    lines.push('- 可用線索與談判籌碼（只有下列項目可被玩家使用；引用時必須沿用 ID）：');
+    usableIntel.slice(-12).forEach(item => {
+      lines.push(`  - [${item.id}] ${item.name}｜類型 ${item.type}｜可信度 ${item.confidence}｜來源 ${item.source}${item.effect ? `｜用途 ${item.effect}` : ''}`);
+    });
+  } else {
+    lines.push('- 可用線索與談判籌碼：目前沒有。不得憑空聲稱玩家持有未取得的證據或權限。');
   }
 
   const flags = st.questFlags && typeof st.questFlags === 'object' ? st.questFlags : {};
@@ -3163,6 +3273,7 @@ ${CHARACTER_IDENTITY_FIREWALL}
    - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
    - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，數值必須保持 0！
    - favorabilityDelta（好感度變動 -5~+10）：依據主角言行魅力與交鋒魄力給予增減（初次見面展現膽識給予 +2~+5）。
+   - 【線索與籌碼】：只有正文中真的取得、查證、曝光或交付的資訊才能寫入 intelDelta。新增線索必須說明來源與用途；沒有變動時回傳空陣列，嚴禁憑空塞入通用道具。
 4. 【三層角色設定集】：
 ${characterPromptBlock}
 
@@ -3179,8 +3290,11 @@ ${characterPromptBlock}
     "favorabilityReason": "【原因說明】",
     "outfit": "角色著裝神態（依主角性別與職業原創高級迷人穿搭、香氣與神態）",
     "interaction": "肢體接觸與眼神距離",
-    "inventory": "隨身攜帶之關鍵情報或物品",
     "rumors": "台北政媒黑白兩道最新暗流傳聞"
+  },
+  "intelDelta": {
+    "add": [{ "id": "intel_英文短碼", "name": "具體線索名稱", "type": "evidence|intel|contact|access", "confidence": "unverified|partial|verified", "source": "取得來源", "effect": "可用於何種查證或談判" }],
+    "update": [{ "id": "既有線索ID", "status": "available|exposed|delivered|invalid", "confidence": "unverified|partial|verified", "effect": "狀態改變後的用途" }]
   },
   "prose": "【以 800–1000 個中文字為建議目標、優先完整推進並自然收束場景的小說正文；可依內容需要略多或略少，不截斷、不灌水】",
   "choices": [
@@ -3247,6 +3361,7 @@ ${CHARACTER_IDENTITY_FIREWALL}
    - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
    - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，微醺度保持原值或隨時間代謝衰減 5%！
    - favorabilityDelta（好感度變動 -5~+10）：依據主角此舉是否合乎該男主性格給予增減（精準博弈 +2~+5，重大浪漫/致命共犯 +8~+10，失誤冒犯 -2~-5）。
+   - 【線索與籌碼狀態機】：只能操作【當前數值狀態】列出的可用線索 ID。正文真的取得新線索才放入 intelDelta.add；使用、公開、交付、證偽既有線索時，必須在 intelDelta.update 更新 status 或 confidence。沒有變動時兩個陣列都留空。
 5. 【三層角色設定集】：
 ${characterPromptBlock}
 ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象')}
@@ -3265,8 +3380,11 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     "favorabilityReason": "機鋒應對擊中軟肋",
     "outfit": "角色著裝神態",
     "interaction": "肢體與眼神互動狀態",
-    "inventory": "掌握情報物品",
     "rumors": "政媒暗流傳聞"
+  },
+  "intelDelta": {
+    "add": [{ "id": "intel_英文短碼", "name": "具體線索名稱", "type": "evidence|intel|contact|access", "confidence": "unverified|partial|verified", "source": "取得來源", "effect": "可用於何種查證或談判" }],
+    "update": [{ "id": "既有線索ID", "status": "available|exposed|delivered|invalid", "confidence": "unverified|partial|verified", "effect": "更新後用途" }]
   },
   "choices": [
     { "id": "A", "label": "[A] 【選項A完整行動與對白描述】", "risk": "low", "hint": "提示" },
@@ -3447,10 +3565,8 @@ async function startNewGameWithProfile(profile) {
       hp: 100,
       sanity: 100
     },
-    inventory: [
-      { id: 'item_card', name: '密錄隨身碟 / 調查底牌', count: 1, desc: '記載著政商併購與洗錢暗帳的關鍵隨身碟。' },
-      { id: 'item_press', name: '特許採訪證 / 身分底牌', count: 1, desc: '證明自身出入政商名流場合的身分底牌。' }
-    ],
+    inventory: [], // 舊版相容欄位；新系統一律使用 intelLedger
+    intelLedger: [],
     relationships: rels,
     questFlags: {
       main_quest: isShura ? '暗流初會：在全勢力交鋒中破局' : `初會：與 ${profile.targetLeadName} 的交鋒`
@@ -3525,9 +3641,9 @@ async function startNewGameWithProfile(profile) {
         intoxication: '微醺度 [20%]',
         outfit: `${profile.name}（高級訂製風衣） ｜ ${profile.targetLeadName || '徐令謙'}`,
         interaction: '目光鎖定',
-        inventory: '密錄隨身碟',
         rumors: '台北政媒暗潮湧動'
       },
+      intelDelta: { add: [], update: [] },
       choices: [
         { id: 'A', label: '[A] 掌局談判：迎上視線開出交換條件', risk: 'low', hint: '展現從容底氣' },
         { id: 'B', label: '[B] 機鋒推拉：言語試探對方底線', risk: 'medium', hint: '心理推拉' },
@@ -3543,6 +3659,7 @@ async function startNewGameWithProfile(profile) {
   initialChapter.act = 1;
   initialChapter.turn = 1;
   initialChapter.chosenLabel = '【正式開局】';
+  initialChapter.intelChanges = applyIntelDelta(state.saveState, initialChapter.intelDelta, 1);
 
   state.chapterData = initialChapter;
   initialChapter.stateSnapshot = JSON.parse(JSON.stringify(state.saveState || {}));
@@ -3652,9 +3769,9 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
           intoxication: '微醺度 [30%]',
           outfit: `${profile.name} ｜ ${profile.targetLeadName}`,
           interaction: '近距離推拉',
-          inventory: '掌握情報',
           rumors: '暗流湧動'
         },
+        intelDelta: { add: [], update: [] },
         choices: [
           { id: 'A', label: '[A] 步步逼近：直視其眼眸開出底線條件', risk: 'low', hint: '穩健博弈' },
           { id: 'B', label: '[B] 言語挑釁：機鋒試探拉扯對峙節奏', risk: 'medium', hint: '心理戰術' },
@@ -3666,6 +3783,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     nextChapter = auditGeneratedChapter(nextChapter, profile);
     nextChapter.act = state.saveState.meta.currentAct || 1;
     nextChapter.turn = state.saveState.turnCount;
+    nextChapter.intelChanges = applyIntelDelta(state.saveState, nextChapter.intelDelta, state.saveState.turnCount);
 
     // 💡 真實數值解析與更新
     if (nextChapter.statusPanel) {
@@ -3741,6 +3859,7 @@ function handleCustomActionSubmit() {
   const sourceChoiceId = input.dataset.choiceId || 'CUSTOM';
   input.value = '';
   delete input.dataset.choiceId;
+  delete input.dataset.intelId;
   autoGrowActionInput();
   makeChoice(sourceChoiceId, val, false);
 }
@@ -3782,6 +3901,19 @@ function buildProseHtml(text, extraClass = 'mb-6 indent-6 sm:indent-8') {
     const isDialogue = /^[「『“"]/.test(para);
     return `<p class="${extraClass}${isDialogue ? ' is-dialogue' : ''}">${escapeHtml(para)}</p>`;
   }).join('');
+}
+
+function buildIntelChangesHtml(chapter) {
+  const changes = chapter?.intelChanges || {};
+  const added = Array.isArray(changes.added) ? changes.added : [];
+  const updated = Array.isArray(changes.updated) ? changes.updated : [];
+  if (!added.length && !updated.length) return '';
+  const parts = [];
+  added.forEach(item => parts.push(`<span class="text-emerald-300">＋ ${escapeHtml(item.name)}</span>`));
+  updated.forEach(item => parts.push(
+    `<span class="text-amber-200">↻ ${escapeHtml(item.name)}（${escapeHtml(INTEL_STATUS_LABELS[item.status] || item.status)}）</span>`
+  ));
+  return `<div class="text-slate-300"><strong>線索變動：</strong>${parts.join('<span class="text-slate-600"> ／ </span>')}</div>`;
 }
 
 function splitProseParagraphs(text) {
@@ -3941,7 +4073,7 @@ function renderStoryStream(activeChapter) {
           <div><strong>著裝神態：</strong><span class="text-slate-200">${escapeHtml(activeChapter.statusPanel?.outfit || '-')}</span></div>
         </div>
         <div class="text-slate-300"><strong>互動姿態：</strong><span class="text-slate-300">${escapeHtml(activeChapter.statusPanel?.interaction || '-')}</span></div>
-        ${activeChapter.statusPanel?.inventory ? `<div class="text-slate-300"><strong>關鍵情報：</strong><span class="text-amber-200/90">${escapeHtml(activeChapter.statusPanel.inventory)}</span></div>` : ''}
+        ${buildIntelChangesHtml(activeChapter)}
         ${activeChapter.statusPanel?.rumors ? `<div class="text-slate-400"><strong>政媒傳聞：</strong><span class="italic text-slate-400">${escapeHtml(activeChapter.statusPanel.rumors)}</span></div>` : ''}
       </div>
     </div>
@@ -4140,6 +4272,7 @@ function renderChoices(choices) {
       btn.setAttribute('aria-pressed', 'true');
       dom.customActionInput.value = cleanLabel;
       dom.customActionInput.dataset.choiceId = c.id || `opt_${idx}`;
+      delete dom.customActionInput.dataset.intelId;
       autoGrowActionInput();
       dom.customActionInput.focus();
       dom.customActionInput.setSelectionRange(cleanLabel.length, cleanLabel.length);
@@ -5396,6 +5529,22 @@ function setFormValue(id, val) {
   }
 }
 
+function prepareIntelAction(intelId) {
+  const item = ensureIntelLedger().find(entry => entry.id === intelId);
+  if (!item || item.status !== 'available') return notifyUser('這項線索目前已不可使用。', 'error');
+  const input = dom.customActionInput;
+  if (!input) return;
+  const prefix = `使用線索「${item.name}」[${item.id}]：`;
+  input.value = input.value.trim() ? `${prefix}\n${input.value.trim()}` : prefix;
+  input.dataset.choiceId = 'CUSTOM';
+  input.dataset.intelId = item.id;
+  closeDrawer();
+  autoGrowActionInput();
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+  notifyUser(`已帶入「${item.name}」，補上使用方式後即可送出。`, 'success', 3200);
+}
+
 function renderSaveState() {
   if (!state.saveState) return;
   const p = state.saveState.protagonist || { hp: 100, sanity: 100 };
@@ -5442,17 +5591,39 @@ function renderSaveState() {
     }
   }
 
-  if (dom.inventoryList) {
-    dom.inventoryList.innerHTML = '';
-    const inv = state.saveState.inventory || [];
-    if (inv.length === 0) {
-      dom.inventoryList.innerHTML = '<div class="text-slate-500 text-xs py-1">暫無隨身特殊物品</div>';
+  if (dom.intelLedgerList) {
+    dom.intelLedgerList.innerHTML = '';
+    const ledger = ensureIntelLedger(state.saveState).slice().sort((a, b) => {
+      const availability = (a.status === 'available' ? 0 : 1) - (b.status === 'available' ? 0 : 1);
+      return availability || (b.updatedTurn || 0) - (a.updatedTurn || 0);
+    });
+    if (ledger.length === 0) {
+      dom.intelLedgerList.innerHTML = '<div class="rounded-lg border border-dashed border-brand-border px-3 py-3 text-[11px] leading-relaxed text-slate-500">目前沒有可用線索。只有劇情中實際取得或查證的情報才會出現在這裡。</div>';
     } else {
-      inv.forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'text-[11px] text-slate-300 flex items-center justify-between bg-brand-dark/40 px-2 py-1 rounded border border-brand-border/40';
-        div.innerHTML = `<span>💼 ${escapeHtml(item.name || item)}</span><span class="text-slate-500">x${escapeHtml(item.count || 1)}</span>`;
-        dom.inventoryList.appendChild(div);
+      ledger.slice(0, 16).forEach(item => {
+        const usable = item.status === 'available';
+        const card = document.createElement(usable ? 'button' : 'div');
+        if (usable) card.type = 'button';
+        card.className = `w-full rounded-lg border p-2.5 text-left text-[11px] space-y-1 ${usable
+          ? 'border-amber-500/40 bg-amber-950/20 hover:border-brand-gold hover:bg-amber-950/35 cursor-pointer'
+          : 'border-brand-border/40 bg-brand-dark/35 opacity-65'}`;
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-2">
+            <span class="font-bold ${usable ? 'text-amber-100' : 'text-slate-400'}">${escapeHtml(item.name)}</span>
+            <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] ${usable ? 'bg-emerald-900/60 text-emerald-300' : 'bg-slate-800 text-slate-400'}">${escapeHtml(INTEL_STATUS_LABELS[item.status] || item.status)}</span>
+          </div>
+          <div class="flex flex-wrap gap-1.5 text-[10px] text-slate-400">
+            <span>${escapeHtml(INTEL_TYPE_LABELS[item.type] || item.type)}</span>
+            <span>·</span>
+            <span>${escapeHtml(INTEL_CONFIDENCE_LABELS[item.confidence] || item.confidence)}</span>
+            <span>·</span>
+            <span>第 ${escapeHtml(item.acquiredTurn)} 回取得</span>
+          </div>
+          ${item.effect ? `<div class="leading-relaxed text-slate-400">${escapeHtml(item.effect)}</div>` : ''}
+          ${usable ? '<div class="pt-1 text-[10px] font-bold text-brand-gold">帶入行動 →</div>' : ''}
+        `;
+        if (usable) card.addEventListener('click', () => prepareIntelAction(item.id));
+        dom.intelLedgerList.appendChild(card);
       });
     }
   }
@@ -5465,6 +5636,7 @@ function restoreSavedStateFromStorage() {
     // 章節列表若遺失（配額清除等），仍必須恢復 saveState，否則玩家會誤以為整局進度不見了。
     if (savedState) {
       state.saveState = JSON.parse(savedState);
+      ensureIntelLedger(state.saveState);
       state.playerProfile = state.saveState?.meta?.playerProfile || null;
     }
     if (savedChapters) {

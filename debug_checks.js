@@ -23,7 +23,7 @@ assert.strictEqual(css, deployCss, '根目錄與部署版 style.css 不一致');
 const htmlIds = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 assert.strictEqual(new Set(htmlIds).size, htmlIds.length, 'index.html 存在重複 id');
 ['toast-container', 'reading-speed-select', 'login-form-message', 'register-form-message',
- 'gameplay-memory-btn', 'memory-center-modal', 'memory-center-content'].forEach(id => {
+ 'gameplay-memory-btn', 'memory-center-modal', 'memory-center-content', 'intel-ledger-list'].forEach(id => {
   assert.ok(htmlIds.includes(id), `index.html 缺少 UX 元件 #${id}`);
 });
 
@@ -129,6 +129,34 @@ const pinnedPrompt = vm.runInContext(`buildPinnedMemoryBlock([
 ])`, frontendContext);
 assert.match(pinnedPrompt, /玩家釘選的重要記憶[\s\S]*關鍵承諾[\s\S]*不會背叛/, '釘選記憶未注入提示詞');
 assert.doesNotMatch(pinnedPrompt, /不應出現/, '未釘選回合錯誤進入重要記憶');
+
+frontendContext.__intelSave = {
+  turnCount: 4,
+  inventory: [
+    { id: 'item_card', name: '舊版固定名片' },
+    { id: 'item_press', name: '舊版固定記者證' },
+    { id: 'real_usb', name: '加密隨身碟', desc: '待解密的帳本資料' }
+  ]
+};
+const migratedIntel = JSON.parse(vm.runInContext('JSON.stringify(ensureIntelLedger(__intelSave))', frontendContext));
+assert.deepStrictEqual(migratedIntel.map(item => item.id), ['real_usb'], '舊存檔遷移未排除固定占位物或遺失真實線索');
+vm.runInContext(`applyIntelDelta(__intelSave, {
+  add: [{ id: 'intel_contract', name: '密約影本', type: 'evidence', confidence: 'partial', source: '保險箱', effect: '可逼對方說明金流' }],
+  update: [{ id: 'real_usb', status: 'delivered', confidence: 'verified' }]
+}, 5)`, frontendContext);
+assert.strictEqual(vm.runInContext("__intelSave.intelLedger.find(x => x.id === 'intel_contract').status", frontendContext), 'available');
+assert.strictEqual(vm.runInContext("__intelSave.intelLedger.find(x => x.id === 'real_usb').status", frontendContext), 'delivered');
+const liveIntelPrompt = vm.runInContext("buildLiveStateBlock(__intelSave, { targetLeadName: '徐令謙' })", frontendContext);
+assert.match(liveIntelPrompt, /\[intel_contract\][\s\S]*密約影本/, '可用線索未注入下一回提示詞');
+assert.doesNotMatch(liveIntelPrompt, /加密隨身碟/, '已交付線索仍被注入下一回提示詞');
+const intelInput = makeFakeElement();
+intelInput.value = '';
+frontendContext.__intelInput = intelInput;
+fakeElements.set('custom-action-input', intelInput);
+vm.runInContext("state.saveState = __intelSave; prepareIntelAction('intel_contract')", frontendContext);
+assert.match(intelInput.value, /使用線索「密約影本」\[intel_contract\]：/, '點擊可用線索未帶入自由行動欄');
+assert.strictEqual(intelInput.dataset.intelId, 'intel_contract', '帶入線索時未保存其識別碼');
+assert.match(rootApp, /"intelDelta"\s*:\s*\{/, '前端敘事格式未要求模型回傳線索增修');
 
 frontendContext.__auditInput = {
   chapterTitle: '',
@@ -289,6 +317,9 @@ assert.match(
 );
 assert.match(aiServiceCode, /maxRetries:\s*1/, 'GAS 敘事模型鏈仍會在每個節點內額外重試');
 assert.doesNotMatch(aiServiceCode, /NARRATOR\.FALLBACK_3|NARRATOR\.FALLBACK_4/, 'GAS 敘事鏈仍殘留額外模型');
+const liveGameTestCode = fs.readFileSync('test_10_turn_game.js', 'utf8');
+assert.match(liveGameTestCode, /const MIN_REQUEST_INTERVAL_MS = 16_000;/, '10 回合 live 測試未遵守 16 秒安全間隔');
+assert.match(liveGameTestCode, /MODEL_ATTEMPT_PLAN = \[[\s\S]*MODEL,[\s\S]*MODEL,[\s\S]*'mistral-large-3',[\s\S]*'cognitivecomputations\/dolphin-mistral-24b-venice-edition'/, '10 回合 live 測試未使用正式四段備援順序');
 
 // 拒絕偵測：短拒絕語要抓到、正常長篇正文不可誤判
 const refusalCases = [
@@ -502,12 +533,18 @@ vm.runInContext(`
   };
   MemoryPipeline.applyTurnUpdate({
     saveState: testSave,
-    turnOutput: { prose: '本回完整正文', stateDelta: { relationshipChanges: { npc: 10 } } },
+    turnOutput: {
+      prose: '本回完整正文',
+      intelDelta: { add: [{ id: 'intel_receipt', name: '匯款收據', type: 'evidence', confidence: 'verified' }] },
+      stateDelta: { relationshipChanges: { npc: 10 } }
+    },
     choiceSelected: 'A'
   });
 `, memoryContext);
 assert.strictEqual(vm.runInContext('testSave.relationships.npc', memoryContext), 100);
 assert.strictEqual(vm.runInContext('testSave.turnHistory[0].prose', memoryContext), '本回完整正文');
+assert.strictEqual(vm.runInContext("testSave.intelLedger[0].id", memoryContext), 'intel_receipt', 'GAS 記憶管線未永久套用 intelDelta');
+assert.match(memoryPipelineCode, /【可用線索與談判籌碼】/, 'GAS 提示詞未注入目前可用線索');
 
 vm.runInContext(`
   novelResetContent = '';

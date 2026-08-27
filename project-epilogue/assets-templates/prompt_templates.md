@@ -37,6 +37,10 @@ ${tieredLore.tier3GlobalIndex}
     { "id": "option_b", "label": "具備深遠影響的行動抉擇 B", "risk": "low/medium/high", "hint": "簡短決策提示" },
     { "id": "option_c", "label": "具備深遠影響的行動抉擇 C", "risk": "low/medium/high", "hint": "簡短決策提示" }
   ],
+  "intelDelta": {
+    "add": [{ "id": "intel_英文短碼", "name": "具體線索名稱", "type": "evidence|intel|contact|access", "confidence": "unverified|partial|verified", "source": "取得來源", "effect": "查證或談判用途" }],
+    "update": [{ "id": "既有線索ID", "status": "available|exposed|delivered|invalid", "confidence": "unverified|partial|verified", "effect": "更新後用途" }]
+  },
   "stateDelta": {
     "hpChange": 0,
     "sanityChange": 0,

@@ -131,6 +131,70 @@ var MemoryPipeline = (function() {
    * saveState.turnHistory / protagonist.hp / meta.currentAct，任何欄位缺漏
    * 都會讓整個 doPost 以 500 收場。
    */
+  function normalizeIntelLedger(saveState) {
+    var source = Array.isArray(saveState.intelLedger) ? saveState.intelLedger : [];
+    if (!Array.isArray(saveState.intelLedger) && Array.isArray(saveState.inventory)) {
+      source = saveState.inventory.filter(function(item) {
+        return !item || (item.id !== 'item_card' && item.id !== 'item_press');
+      });
+    }
+    var seen = {};
+    saveState.intelLedger = source.map(function(raw, index) {
+      var item = typeof raw === 'string' ? { name: raw } : (raw || {});
+      var name = String(item.name || item.label || '').trim().substring(0, 120);
+      if (!name) return null;
+      var id = /^[a-zA-Z0-9_-]{3,64}$/.test(String(item.id || ''))
+        ? String(item.id)
+        : 'intel_legacy_' + index;
+      if (seen[id]) return null;
+      seen[id] = true;
+      return {
+        id: id,
+        name: name,
+        type: ['evidence', 'intel', 'contact', 'access'].indexOf(item.type) >= 0 ? item.type : 'intel',
+        confidence: ['unverified', 'partial', 'verified'].indexOf(item.confidence) >= 0 ? item.confidence : 'unverified',
+        status: ['available', 'exposed', 'delivered', 'invalid'].indexOf(item.status) >= 0 ? item.status : 'available',
+        source: String(item.source || '劇情取得').substring(0, 120),
+        effect: String(item.effect || item.desc || '').substring(0, 240),
+        acquiredTurn: Number(item.acquiredTurn) || saveState.turnCount || 1,
+        updatedTurn: Number(item.updatedTurn) || saveState.turnCount || 1
+      };
+    }).filter(function(item) { return !!item; }).slice(-60);
+    return saveState.intelLedger;
+  }
+
+  function applyIntelDelta(saveState, delta) {
+    var ledger = normalizeIntelLedger(saveState);
+    var turn = saveState.turnCount || 1;
+    delta = delta && typeof delta === 'object' ? delta : {};
+    (Array.isArray(delta.add) ? delta.add : []).slice(0, 8).forEach(function(raw) {
+      if (!raw || !raw.name) return;
+      var id = /^[a-zA-Z0-9_-]{3,64}$/.test(String(raw.id || '')) ? String(raw.id) : 'intel_turn_' + turn + '_' + ledger.length;
+      var existing = ledger.filter(function(item) { return item.id === id || item.name === String(raw.name); })[0];
+      var target = existing || { id: id, acquiredTurn: turn };
+      target.name = String(raw.name).substring(0, 120);
+      target.type = ['evidence', 'intel', 'contact', 'access'].indexOf(raw.type) >= 0 ? raw.type : 'intel';
+      target.confidence = ['unverified', 'partial', 'verified'].indexOf(raw.confidence) >= 0 ? raw.confidence : 'unverified';
+      target.status = 'available';
+      target.source = String(raw.source || '劇情取得').substring(0, 120);
+      target.effect = String(raw.effect || '').substring(0, 240);
+      target.updatedTurn = turn;
+      if (!existing) ledger.push(target);
+    });
+    (Array.isArray(delta.update) ? delta.update : []).slice(0, 8).forEach(function(change) {
+      if (!change) return;
+      var target = ledger.filter(function(item) {
+        return (change.id && item.id === change.id) || (change.name && item.name === change.name);
+      })[0];
+      if (!target) return;
+      if (['available', 'exposed', 'delivered', 'invalid'].indexOf(change.status) >= 0) target.status = change.status;
+      if (['unverified', 'partial', 'verified'].indexOf(change.confidence) >= 0) target.confidence = change.confidence;
+      if (change.effect !== undefined) target.effect = String(change.effect || '').substring(0, 240);
+      target.updatedTurn = turn;
+    });
+    saveState.intelLedger = ledger.slice(-60);
+  }
+
   function normalizeSaveState(saveState) {
     var s = saveState || {};
     s.meta = s.meta || {};
@@ -141,6 +205,7 @@ var MemoryPipeline = (function() {
     if (typeof s.protagonist.hp !== 'number') s.protagonist.hp = 100;
     if (typeof s.protagonist.sanity !== 'number') s.protagonist.sanity = 100;
     if (!Array.isArray(s.inventory)) s.inventory = [];
+    normalizeIntelLedger(s);
     if (!Array.isArray(s.turnHistory)) s.turnHistory = [];
     if (!Array.isArray(s.actDossiers)) s.actDossiers = [];
     if (!Array.isArray(s.auditLog)) s.auditLog = [];
@@ -162,6 +227,18 @@ var MemoryPipeline = (function() {
 
     var playerActionStr = customInput || choiceId;
     var tieredLore = buildTieredLorebook(saveState, recentTurnsText, playerActionStr);
+    var activeIntel = saveState.intelLedger.filter(function(item) {
+      return item.status === 'available';
+    }).map(function(item) {
+      return {
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        confidence: item.confidence,
+        source: item.source,
+        effect: item.effect
+      };
+    });
 
     // 系統提示詞 (System Prompt) 整合 System_Directives.md 與 Romance_Aesthetics.md
     var systemPrompt = [
@@ -190,9 +267,12 @@ var MemoryPipeline = (function() {
       '    "intoxication": "微醺度 [X%]",',
       '    "interaction": "關係狀態 ｜ 雙方物理距離與肢體姿態",',
       '    "outfit": "玩家著裝與神態 ｜ 男主姓名、著裝細節、眼神與肢體小動作",',
-      '    "inventory": "特殊道具、關鍵情報清單",',
       '    "rumors": "政媒圈或黑白兩道對當前局勢的最新議論",',
       '    "pageCode": "P.001 遞增標碼"',
+      '  },',
+      '  "intelDelta": {',
+      '    "add": [{ "id": "intel_英文短碼", "name": "具體線索名稱", "type": "evidence|intel|contact|access", "confidence": "unverified|partial|verified", "source": "取得來源", "effect": "查證或談判用途" }],',
+      '    "update": [{ "id": "既有線索ID", "status": "available|exposed|delivered|invalid", "confidence": "unverified|partial|verified", "effect": "更新後用途" }]',
       '  },',
       '  "choices": [',
       '    { "id": "option_a", "label": "[A] 順應節奏／溫和／理智應對", "risk": "low", "hint": "順勢探查底牌" },',
@@ -234,6 +314,12 @@ var MemoryPipeline = (function() {
       '人際關係: ' + JSON.stringify(saveState.relationships),
       '當前任務: ' + JSON.stringify(saveState.questFlags),
       '',
+      '【可用線索與談判籌碼】：',
+      activeIntel.length > 0
+        ? JSON.stringify(activeIntel)
+        : '（目前沒有可用線索；不得憑空創造玩家已持有的證據、情報、人脈或通行權。）',
+      '只有實際取得的新線索才可寫入 intelDelta.add；使用、交付、曝光或證偽既有線索時，必須用其 ID 寫入 intelDelta.update。',
+      '',
       '【近期故事回顧】：',
       JSON.stringify(recentTurns),
       '',
@@ -261,6 +347,9 @@ var MemoryPipeline = (function() {
 
     saveState.turnCount += 1;
     saveState.meta.updatedAt = new Date().toISOString();
+
+    // 線索與談判籌碼是跨回合持久狀態；先套用本回模型回傳的增修。
+    applyIntelDelta(saveState, turnOutput.intelDelta);
 
     // 套用狀態變更 (stateDelta)
     if (turnOutput.stateDelta) {

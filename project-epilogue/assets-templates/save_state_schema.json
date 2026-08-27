@@ -3,7 +3,7 @@
   "title": "ProjectEpilogueSaveState",
   "description": "Project Epilogue 玩家存檔狀態結構 (save_slot.json)",
   "type": "object",
-  "required": ["meta", "turnCount", "protagonist", "inventory", "summaryPool"],
+  "required": ["meta", "turnCount", "protagonist", "inventory", "intelLedger", "summaryPool"],
   "properties": {
     "meta": {
       "type": "object",
@@ -45,6 +45,26 @@
           "desc": { "type": "string" }
         },
         "required": ["id", "name"]
+      }
+    },
+    "intelLedger": {
+      "type": "array",
+      "description": "跨回合保存的線索、證據、人脈與通行權；只有 available 狀態可供下一回合使用",
+      "maxItems": 60,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "type": { "enum": ["evidence", "intel", "contact", "access"] },
+          "confidence": { "enum": ["unverified", "partial", "verified"] },
+          "status": { "enum": ["available", "exposed", "delivered", "invalid"] },
+          "source": { "type": "string" },
+          "effect": { "type": "string" },
+          "acquiredTurn": { "type": "integer", "minimum": 1 },
+          "updatedTurn": { "type": "integer", "minimum": 1 }
+        },
+        "required": ["id", "name", "type", "confidence", "status"]
       }
     },
     "relationships": {

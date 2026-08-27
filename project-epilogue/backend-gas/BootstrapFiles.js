@@ -33,6 +33,16 @@ function bootstrapAllDriveFiles() {
     var rulesFolder = DriveApp.getFolderById(CONFIG.DRIVE.RULES_FOLDER_ID);
     for (var ruleName in BOOTSTRAP_DATA.rules) {
       var content = BOOTSTRAP_DATA.rules[ruleName];
+      // 舊版嵌入內容的情報欄是一次性文字；上傳前轉為與目前持久線索帳本相同的規則。
+      if (ruleName === 'System_Directives.md') {
+        content = content.replace(
+          '**情報與道具消耗**：玩家聲明使用隨身物品或情報時（例：「使用情報：某某案」），系統須即時計算該底牌對局勢、籌碼或好感度的影響。',
+          '**線索與談判籌碼帳本**：只有玩家在劇情中實際取得的證據、情報、人脈或通行權，才能加入持久帳本。每筆須保留 ID、來源、可信度與用途；使用、交付、曝光或證偽後，須把狀態更新為已曝光、已交付或已失效，不得在後續回合繼續當成可用底牌。玩家使用線索時，系統須即時計算它對局勢、籌碼或好感度的影響。'
+        ).replace(
+          '> * **🎒 掌握**：[特殊道具、關鍵情報清單]',
+          '> * **🗂 線索異動**：[本回新取得、查證、使用、交付、曝光或失效的項目；沒有異動則略過]'
+        );
+      }
       var existingFiles = rulesFolder.getFilesByName(ruleName);
       if (existingFiles.hasNext()) {
         existingFiles.next().setContent(content);

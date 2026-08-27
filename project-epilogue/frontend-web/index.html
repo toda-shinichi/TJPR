@@ -42,7 +42,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./style.css?v=a5d5ab7615">
+  <link rel="stylesheet" href="./style.css?v=9c8da07046">
 </head>
 <body class="bg-brand-dark text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-white">
 
@@ -848,11 +848,12 @@
       </div>
     </div>
 
-    <!-- 隨身行囊 -->
+    <!-- 線索與談判籌碼 -->
     <div class="bg-brand-card p-3.5 rounded-xl border border-brand-border space-y-2">
-      <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">隨身背包與關鍵情報</h3>
-      <div id="inventory-list" class="space-y-1 text-xs text-slate-300">
-        <!-- JS 動態渲染道具 -->
+      <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">線索與談判籌碼</h3>
+      <p class="text-[11px] leading-relaxed text-slate-400">點擊「帶入行動」即可引用仍可使用的證據、情報、人脈或權限；曝光、交付與失效會永久記錄。</p>
+      <div id="intel-ledger-list" class="space-y-2 text-xs text-slate-300">
+        <!-- JS 動態渲染持久化線索 ledger -->
       </div>
     </div>
 
@@ -1124,6 +1125,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=a5d5ab7615" defer></script>
+    <script src="app.js?v=9c8da07046" defer></script>
 </body>
 </html>

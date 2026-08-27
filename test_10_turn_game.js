@@ -4,6 +4,12 @@ const fs = require('node:fs');
 const LIVE_URL = process.env.TJPR_LIVE_URL || 'https://tjpr-llm-proxy.todashinchi.workers.dev/';
 const ORIGIN = 'http://localhost:8731';
 const MODEL = process.env.TJPR_TEST_MODEL || 'gemini-3.7-flash';
+const MODEL_ATTEMPT_PLAN = [
+  MODEL,
+  MODEL,
+  'mistral-large-3',
+  'cognitivecomputations/dolphin-mistral-24b-venice-edition'
+];
 const TURN_COUNT = 10;
 // 專案上游限制為 5 RPM；採 16 秒間隔降至約 3.75 RPM，避開共享額度與滾動窗口邊界。
 const MIN_REQUEST_INTERVAL_MS = 16_000;
@@ -233,7 +239,7 @@ function updateMemory(memory, turn, chapter, action) {
   return `${memory}\n${fact}`.slice(-2600);
 }
 
-async function requestTurn(messages) {
+async function requestTurn(messages, model = MODEL) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const startedAt = Date.now();
@@ -242,7 +248,7 @@ async function requestTurn(messages) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: ORIGIN },
       // 與正式遊戲生成設定一致，避免測試本身截斷狀態面板或選項。
-      body: JSON.stringify({ model: MODEL, messages, temperature: 0.65, max_tokens: 4096, stream: true }),
+      body: JSON.stringify({ model, messages, temperature: 0.65, max_tokens: 4096, stream: true }),
       signal: controller.signal
     });
     if (!response.ok) {
@@ -263,6 +269,7 @@ async function requestTurn(messages) {
     return {
       chapter: parsed.chapter,
       parseMode: parsed.parseMode,
+      model,
       raw: streamed.full,
       latencyMs: Date.now() - startedAt,
       sawDone: streamed.sawDone
@@ -283,23 +290,42 @@ async function main() {
   console.log(`開始 ${TURN_COUNT} 回 live 遊戲測試：${MODEL}，請求起點間隔至少 ${MIN_REQUEST_INTERVAL_MS / 1000} 秒。`);
 
   for (let turn = 1; turn <= TURN_COUNT; turn++) {
-    const waitMs = Math.max(0, nextAllowedAt - Date.now());
-    if (waitMs > 0) {
-      console.log(`第 ${turn} 回等待 ${Math.ceil(waitMs / 1000)} 秒，以符合速率限制……`);
-      await sleep(waitMs);
-    }
-
     const previous = history[history.length - 1];
     const selectedChoice = previous?.chapter?.choices?.[(turn - 2) % 3];
     const action = turn === 1
       ? seedAction
       : selectedChoice?.label || '先整理現有線索，向徐令謙確認上一回事件的關鍵細節。';
-    const requestStartedAt = Date.now();
-    requestStarts.push(requestStartedAt);
-    nextAllowedAt = requestStartedAt + MIN_REQUEST_INTERVAL_MS;
-
-    const result = await requestTurn(buildMessages(turn, history, action, memory));
-    const validationError = getValidationError(result.chapter, turn);
+    const messages = buildMessages(turn, history, action, memory);
+    let result = null;
+    let validationError = '';
+    const attempts = [];
+    for (let attempt = 0; attempt < MODEL_ATTEMPT_PLAN.length; attempt++) {
+      const model = MODEL_ATTEMPT_PLAN[attempt];
+      const waitMs = Math.max(0, nextAllowedAt - Date.now());
+      if (waitMs > 0) {
+        console.log(`第 ${turn} 回等待 ${Math.ceil(waitMs / 1000)} 秒，以符合速率限制……`);
+        await sleep(waitMs);
+      }
+      const requestStartedAt = Date.now();
+      requestStarts.push(requestStartedAt);
+      nextAllowedAt = requestStartedAt + MIN_REQUEST_INTERVAL_MS;
+      try {
+        const candidate = await requestTurn(messages, model);
+        validationError = getValidationError(candidate.chapter, turn);
+        attempts.push({ model, outcome: validationError || candidate.parseMode });
+        if (!validationError) {
+          result = candidate;
+          break;
+        }
+        console.warn(`第 ${turn} 回 ${model} 品質檢查未過：${validationError}`);
+      } catch (error) {
+        attempts.push({ model, outcome: error.message.slice(0, 180) });
+        console.warn(`第 ${turn} 回 ${model} 回應不可用，依正式備援順序繼續。`);
+      }
+    }
+    if (!result) {
+      throw new Error(`第 ${turn} 回四段備援均未產生合格章節：${JSON.stringify(attempts)}`);
+    }
     const warnings = continuityWarnings(result.chapter, previous?.chapter);
     if (validationError) warnings.unshift(validationError);
     if (validationError || result.parseMode !== 'json') {
@@ -309,14 +335,16 @@ async function main() {
       turn,
       action,
       chapter: result.chapter,
+      model: result.model,
       latencyMs: result.latencyMs,
       warnings,
       sawDone: result.sawDone,
       parseMode: result.parseMode,
-      validationPassed: !validationError
+      validationPassed: !validationError,
+      attempts
     });
     memory = updateMemory(memory, turn, result.chapter, action);
-    console.log(`第 ${turn}/10 回完成｜嚴格驗證 ${validationError ? '失敗' : '通過'}｜${result.latencyMs}ms｜正文 ${result.chapter.prose.length} 字｜${result.parseMode}｜警告 ${warnings.length}`);
+    console.log(`第 ${turn}/10 回完成｜嚴格驗證通過｜${result.model}｜${result.latencyMs}ms｜正文 ${result.chapter.prose.length} 字｜${result.parseMode}｜警告 ${warnings.length}`);
   }
 
   const intervals = requestStarts.slice(1).map((value, index) => value - requestStarts[index]);
@@ -327,6 +355,7 @@ async function main() {
     finishedAt: new Date().toISOString(),
     liveUrl: LIVE_URL,
     model: MODEL,
+    modelAttemptPlan: MODEL_ATTEMPT_PLAN,
     turnsRequested: TURN_COUNT,
     turnsCompleted: history.length,
     turnsPassed: history.filter(item => item.validationPassed).length,
@@ -346,10 +375,12 @@ async function main() {
       favorabilityDelta: item.chapter.statusPanel.favorabilityDelta,
       proseChars: item.chapter.prose.length,
       latencyMs: item.latencyMs,
+      model: item.model,
       sawDone: item.sawDone,
       parseMode: item.parseMode,
       validationPassed: item.validationPassed,
-      warnings: item.warnings
+      warnings: item.warnings,
+      attempts: item.attempts
     }))
   };
   fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2));
