@@ -14,6 +14,7 @@ const xuLingqianLore = fs.readFileSync('characters/01_徐令謙.md', 'utf8');
 const characterSeed = fs.readFileSync('project-epilogue/backend-gas/CharacterDataSeed.js', 'utf8');
 const characterManager = fs.readFileSync('project-epilogue/backend-gas/CharacterManager.js', 'utf8');
 const memoryPipelineCode = fs.readFileSync('project-epilogue/backend-gas/MemoryPipeline.js', 'utf8');
+const aiServiceCode = fs.readFileSync('project-epilogue/backend-gas/AIService.js', 'utf8');
 
 assert.strictEqual(rootApp, deployApp, '根目錄與部署版 app.js 不一致');
 assert.strictEqual(html, deployHtml, '根目錄與部署版 index.html 不一致');
@@ -96,6 +97,11 @@ assert.strictEqual(
 frontendContext.testRawJson = '```json\n{"prose":"第一行\n第二行\t縮排","choices":[],}\n```';
 const repairedJson = vm.runInContext('parseJsonSafely(testRawJson)', frontendContext);
 assert.strictEqual(repairedJson.prose, '第一行\n第二行\t縮排', '髒 JSON 的控制字元或尾逗號修復失敗');
+
+frontendContext.testRestartedJson = '{"chapterTitle":"殘片","prose":"未完成{' +
+  '"chapterTitle":"完整章節","prose":"這是重新輸出的完整正文內容。","statusPanel":{},"choices":[]}';
+const restartedJson = vm.runInContext('parseJsonSafely(testRestartedJson)', frontendContext);
+assert.strictEqual(restartedJson.chapterTitle, '完整章節', '未取出模型重啟後的最後一份完整 JSON');
 
 frontendContext.testBrokenLlm = '{"chapterTitle":"\\u7ae0\\u7bc0","prose":"您好\\t世界\\uFF0C這是一段足夠長的掃描器測試文字。","broken": nope}';
 const extractedLlm = vm.runInContext('extractGameData(testBrokenLlm)', frontendContext);
@@ -227,14 +233,14 @@ assert.match(gasConfig, /PRIMARY: 'gemini-3\.7-flash'/, 'GAS 主要敘事模型�
 assert.doesNotMatch(rootApp, /deepseek/i, '前端仍殘留已停用的 DeepSeek 模型參照');
 
 // ── 情慾章節的拒絕偵測與模型輪替機制 ──
-// 3 次主模型 + 2 個未審查備援 = 5 次請求，剛好等於上游每分鐘的額度上限。
-// 調高會讓主模型連拒時把額度用光、備援只拿到 429。
-assert.match(rootApp, /PRIMARY_MAX_ATTEMPTS: 3/, '主模型重試次數不是 3 次');
+// 固定四段：Gemini × 2 → Mistral → Dolphin；Worker 與 GAS 不得各自漂移。
+assert.match(rootApp, /PRIMARY_MAX_ATTEMPTS: 2/, '主模型重試次數不是 2 次');
 assert.match(
   rootApp,
-  /UNCENSORED_FALLBACK_MODELS: \[\s*'cognitivecomputations\/dolphin-mistral-24b-venice-edition',\s*'mistral-large-3'\s*\]/,
-  '未審查備援模型清單不是 dolphin-mistral-24b 與 mistral-large-3'
+  /UNCENSORED_FALLBACK_MODELS: \[\s*'mistral-large-3',\s*'cognitivecomputations\/dolphin-mistral-24b-venice-edition'\s*\]/,
+  '備援模型順序不是 mistral-large-3 → dolphin-mistral-24b'
 );
+assert.match(rootApp, /const MIN_REQUEST_GAP_MS = 16000;/, '前端共享 RPM 安全間隔不是 16 秒');
 assert.match(rootApp, /CENSORING_MODELS: \['gemini-3\.6-flash', 'gemini-3\.7-flash'\]/, 'gemini-3.7-flash 未被標記為會自我審查');
 assert.ok(
   rootApp.includes('function detectRefusal(') && rootApp.includes('function buildAttemptPlan('),
@@ -260,15 +266,29 @@ const gasFnBody = rootApp.slice(rootApp.indexOf('async function generateStoryFro
   ['isModelUnavailableResponse', 'GAS 路徑未判別模型不可用']
 ].forEach(([needle, msg]) => assert.ok(gasFnBody.includes(needle + '('), msg));
 
-// 嘗試計畫：主模型 5 次 + 兩個未審查模型
+// 嘗試計畫必須保留重複 Gemini，不能被 Array 去重。
 const plan = vm.runInContext('buildAttemptPlan()', frontendContext);
-assert.strictEqual(plan.filter(m => m === 'gemini-3.7-flash').length, 3, '嘗試計畫未包含 3 次主模型');
-assert.strictEqual(plan.length, 5, '嘗試計畫總次數超出上游每分鐘 5 次的額度');
-assert.ok(
-  plan.includes('cognitivecomputations/dolphin-mistral-24b-venice-edition') && plan.includes('mistral-large-3'),
-  '嘗試計畫缺少未審查備援模型'
+assert.deepStrictEqual(
+  Array.from(plan),
+  [
+    'gemini-3.7-flash',
+    'gemini-3.7-flash',
+    'mistral-large-3',
+    'cognitivecomputations/dolphin-mistral-24b-venice-edition'
+  ],
+  'Worker/GAS 共用嘗試計畫順序錯誤'
 );
-assert.strictEqual(plan[0], 'gemini-3.7-flash', '嘗試計畫的第一個不是主模型');
+assert.match(gasFnBody, /const models = buildAttemptPlan\(\);/, 'GAS 路徑沒有直接沿用完整嘗試計畫');
+assert.ok((rootApp.match(/await waitForRpmCooldown\(\);/g) || []).length >= 2, 'Worker/GAS 每次請求前未共同套用限速');
+assert.match(gasConfig, /MIN_REQUEST_INTERVAL_MS:\s*16000/, 'GAS 全域限速不是 16 秒');
+assert.match(gasConfig, /PRIMARY_ATTEMPTS:\s*2/, 'GAS 主模型嘗試次數不是 2 次');
+assert.match(
+  gasConfig,
+  /PRIMARY:\s*'gemini-3\.7-flash',[\s\S]*?FALLBACK:\s*'mistral-large-3',[\s\S]*?FALLBACK_2:\s*'cognitivecomputations\/dolphin-mistral-24b-venice-edition'/,
+  'GAS 模型設定未依指定順序排列'
+);
+assert.match(aiServiceCode, /maxRetries:\s*1/, 'GAS 敘事模型鏈仍會在每個節點內額外重試');
+assert.doesNotMatch(aiServiceCode, /NARRATOR\.FALLBACK_3|NARRATOR\.FALLBACK_4/, 'GAS 敘事鏈仍殘留額外模型');
 
 // 拒絕偵測：短拒絕語要抓到、正常長篇正文不可誤判
 const refusalCases = [
@@ -291,6 +311,19 @@ assert.strictEqual(
   false,
   '長篇正文中的角色台詞被誤判為模型拒絕'
 );
+frontendContext.__validChapter = {
+  prose: '雨'.repeat(300),
+  statusPanel: { timeLocation: '週五深夜，士林咖啡館' },
+  choices: [{ id: 'A' }, { id: 'B' }, { id: 'C' }]
+};
+assert.strictEqual(vm.runInContext('getNarrativeValidationError(__validChapter)', frontendContext), '', '完整章節被品質閘門誤擋');
+frontendContext.__invalidChapter = { prose: '雨'.repeat(300), statusPanel: {}, choices: [] };
+assert.match(
+  vm.runInContext('getNarrativeValidationError(__invalidChapter)', frontendContext),
+  /缺少時空狀態|選項數量錯誤/,
+  '殘缺章節未觸發模型備援'
+);
+assert.match(rootApp, /if \(e && e\.isRateLimited\) throw e;/, 'Worker 429 仍會錯誤轉送 GAS 重打共享上游');
 assert.match(rootApp, /if \(storedToken\.startsWith\('tok_local_'\)\) \{[\s\S]*?updateUserBadgeUI\('offline'\);[\s\S]*?return;/, '本機離線工作階段在重新整理後仍會被送往雲端並誤登出');
 assert.match(rootApp, /p\.profession \|\| p\.occupation \|\| '政經分析師'/, '進行中存檔卡未顯示目前人設的職業欄位');
 assert.match(rootApp, /function getOfficialLeadKeys\(\) \{[\s\S]*?key !== '14_楊慕璃'/, '攻略對象選單仍可能把官方主角列為男主');
@@ -406,7 +439,7 @@ const aiContext = {
   }
 };
 vm.createContext(aiContext);
-vm.runInContext(fs.readFileSync('project-epilogue/backend-gas/AIService.js', 'utf8'), aiContext);
+vm.runInContext(aiServiceCode, aiContext);
 vm.runInContext("AIService.callAPI('model', [{ role: 'user', content: 'x' }], {})", aiContext);
 assert.strictEqual(aiLockReleased, 1, 'Apps Script API 限流鎖成功取得後未釋放');
 

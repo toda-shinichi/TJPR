@@ -9,12 +9,10 @@
 
 var AIService = (function() {
 
-  /**
-   * 嚴格執行 RPM=5 頻率控制（兩次 API 呼叫之間至少間隔 12.5 秒，徹底防止 429 錯誤）
-   */
+  /** 嚴格執行共享額度頻率控制（正式設定採 16 秒安全間隔） */
   function enforceRateLimitRPM5() {
     var lock = LockService.getScriptLock();
-    var minInterval = CONFIG.API.MIN_REQUEST_INTERVAL_MS || 12500;
+    var minInterval = CONFIG.API.MIN_REQUEST_INTERVAL_MS || 16000;
     var waitTime = 0;
     var acquired = false;
 
@@ -69,7 +67,7 @@ var AIService = (function() {
 
     var targetModel = model || CONFIG.MODELS.NARRATOR.PRIMARY;
     var fallbackModel = options.fallbackModel || CONFIG.MODELS.NARRATOR.FALLBACK;
-    var maxRetries = CONFIG.API.MAX_RETRIES;
+    var maxRetries = Math.max(1, options.maxRetries || CONFIG.API.MAX_RETRIES || 1);
     var delayMs = CONFIG.API.RETRY_DELAY_MS;
 
     var payload = {
@@ -185,6 +183,24 @@ var AIService = (function() {
       }
     }
 
+    // 模型偶爾先輸出半份 JSON，再從 chapterTitle 重啟一份完整物件。
+    // 從最後一個重啟點倒序嘗試，與前端解析策略保持一致。
+    var restartPoints = [];
+    var restartPattern = /\{\s*"chapterTitle"/g;
+    var restartMatch;
+    while ((restartMatch = restartPattern.exec(trimmed)) !== null) {
+      restartPoints.push(restartMatch.index);
+    }
+    var finalBrace = trimmed.lastIndexOf('}');
+    for (var restartIdx = restartPoints.length - 1; restartIdx >= 0; restartIdx--) {
+      if (restartPoints[restartIdx] === 0 || finalBrace <= restartPoints[restartIdx]) continue;
+      try {
+        return JSON.parse(trimmed.substring(restartPoints[restartIdx], finalBrace + 1));
+      } catch (restartErr) {
+        // 繼續嘗試更前面的候選物件
+      }
+    }
+
     // 3. 搜尋最外層 { ... }
     var firstOpenBrace = trimmed.indexOf('{');
     var lastCloseBrace = trimmed.lastIndexOf('}');
@@ -200,10 +216,21 @@ var AIService = (function() {
     throw new Error('模型回傳內容中未包含合法的 JSON 結構。');
   }
 
+  /** 敘事章節必須具備可繼續遊戲的正文與三個選項，否則切換下一模型。 */
+  function validateNarrativeOutput(output) {
+    if (!output || typeof output !== 'object') return '回應不是章節物件';
+    var prose = String(output.prose || '').trim();
+    if (prose.length < 220) return '正文過短（' + prose.length + ' 字）';
+    if (!Array.isArray(output.choices) || output.choices.length !== 3) {
+      return '選項數量錯誤（' + (Array.isArray(output.choices) ? output.choices.length : 0) + '/3）';
+    }
+    return '';
+  }
+
   /**
    * 主要敘事模型 (Narrator: gemini-3.7-flash)：
    * 生成 1,200~1,500 字的精緻章節內文、3 個互動選項以及存檔狀態更新（Delta）。
-   * 順位：gemini-3.7-flash -> dolphin-mistral(未審查) -> mistral-large-3 -> gpt-5.6-luna -> aion-3.0
+   * 順位：gemini-3.7-flash -> gemini-3.7-flash -> mistral-large-3 -> dolphin-mistral(未審查)
    * @param {Object} promptContext - 包含 System Prompt, 角色 Markdown, 摘要池與近期對話歷史
    * @returns {Object} 章節物件 { chapterTitle, prose, choices, stateDelta, narrativeSummaryDelta }
    */
@@ -213,15 +240,15 @@ var AIService = (function() {
       { role: 'user', content: promptContext.userPrompt }
     ];
 
-    // 依 Config.js 實際定義的鍵名逐一列出（先前誤用 FALLBACK_2/FALLBACK_3，
-    // 導致 FALLBACK_4 的 aion-3.0 永遠不會被嘗試，與錯誤訊息所述不符）。
-    var narratorModels = [
-      CONFIG.MODELS.NARRATOR.PRIMARY,
-      CONFIG.MODELS.NARRATOR.FALLBACK,
-      CONFIG.MODELS.NARRATOR.FALLBACK_2,
-      CONFIG.MODELS.NARRATOR.FALLBACK_3,
-      CONFIG.MODELS.NARRATOR.FALLBACK_4
-    ].filter(function(m, idx, arr) { return m && arr.indexOf(m) === idx; });
+    // 保留第二次 Gemini，不做去重；順序必須和前端 Worker/GAS 路徑完全一致。
+    var narratorModels = [];
+    var primaryAttempts = Math.max(1, CONFIG.MODELS.NARRATOR.PRIMARY_ATTEMPTS || 2);
+    for (var primaryNo = 0; primaryNo < primaryAttempts; primaryNo++) {
+      narratorModels.push(CONFIG.MODELS.NARRATOR.PRIMARY);
+    }
+    narratorModels.push(CONFIG.MODELS.NARRATOR.FALLBACK);
+    narratorModels.push(CONFIG.MODELS.NARRATOR.FALLBACK_2);
+    narratorModels = narratorModels.filter(function(model) { return !!model; });
 
     var lastError = null;
     for (var i = 0; i < narratorModels.length; i++) {
@@ -231,11 +258,14 @@ var AIService = (function() {
           temperature: CONFIG.MODELS.NARRATOR.TEMPERATURE,
           max_tokens: CONFIG.MODELS.NARRATOR.MAX_TOKENS,
           top_p: CONFIG.MODELS.NARRATOR.TOP_P,
-          // 這一層已自行輪替全部備援模型，關閉 callAPI 內建的模型切換，
+          // 這一層已自行依序嘗試全部備援模型，關閉 callAPI 內建的模型切換，
           // 避免同一個備援模型被重複嘗試、把請求時間預算耗盡。
-          fallbackModel: currentModel
+          fallbackModel: currentModel,
+          maxRetries: 1
         });
         var parsedOutput = extractJsonFromResponse(response.content);
+        var validationError = validateNarrativeOutput(parsedOutput);
+        if (validationError) throw new Error('模型章節結構不完整：' + validationError);
         return {
           success: true,
           data: parsedOutput,
@@ -248,7 +278,7 @@ var AIService = (function() {
       }
     }
 
-    throw new Error('所有敘事模型（含 aion-3.0 備援）均無法完成生成: ' + (lastError ? lastError.message : '未知'));
+    throw new Error('四段敘事模型備援鏈均無法完成生成: ' + (lastError ? lastError.message : '未知'));
   }
 
   /**

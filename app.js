@@ -1781,23 +1781,21 @@ const LLM_CONFIG = {
   API_KEY: '', // 安全起見，已轉移至 GAS Proxy
   PRIMARY_MODEL: 'gemini-3.7-flash',
   // 備援必須也是不會自我審查的模型 —— 情慾描寫是本作核心。
-  FALLBACK_MODEL: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+  FALLBACK_MODEL: 'mistral-large-3',
   // gemini 系列會自我審查、擋掉情慾內容。主模型用 gemini-3.7-flash 是為了
   // 速度與成本，代價是它在情慾章節極可能拒絕或淡化 —— 因此需要
-  // 「重試後輪替到未審查模型」機制（見 buildAttemptPlan）。
+  // 「重試後依序切換未審查模型」機制（見 buildAttemptPlan）。
   CENSORING_MODELS: ['gemini-3.6-flash', 'gemini-3.7-flash'],
   // 主模型最多嘗試幾次（拒絕與硬失敗都計入）才改用未審查模型。
   // 溫度 0.88 下同一個提示詞未必每次都被拒，所以重試是有意義的。
   //
-  // 為什麼是 3 而不是更多：上游的速率限制是【每分鐘 5 次、且跨模型共用】。
-  // 3 次主模型 + 2 個未審查備援 = 剛好 5 次請求，一回之內不會撞上 429。
-  // 若設成 5，主模型連拒就會把整分鐘額度用光，後面的備援只會拿到 429，
-  // 整回生成因此失敗 —— 額度留給真正寫得出來的模型更有價值。
-  PRIMARY_MAX_ATTEMPTS: 3,
-  // 主模型連續失敗後改用的未審查模型，逐章輪替。
+  // 固定兩次：符合指定的 Gemini → Gemini → Mistral → Dolphin 四段鏈，
+  // 並比舊版五次嘗試少耗一格共享 RPM 額度。
+  PRIMARY_MAX_ATTEMPTS: 2,
+  // 主模型連續失敗後依固定順序嘗試；不再逐章輪替，確保 Worker/GAS 完全一致。
   UNCENSORED_FALLBACK_MODELS: [
-    'cognitivecomputations/dolphin-mistral-24b-venice-edition',
-    'mistral-large-3'
+    'mistral-large-3',
+    'cognitivecomputations/dolphin-mistral-24b-venice-edition'
   ],
   MODELS: NARRATIVE_MODELS,
   TEMPERATURE: 0.88
@@ -1992,7 +1990,26 @@ function parseJsonSafely(rawText) {
     return JSON.parse(clean);
   } catch (e) {
     // 大模型常見的兩種格式瑕疵：字串內夾帶未轉義的實體換行、以及結尾多餘逗號。
-    return JSON.parse(stripTrailingCommas(escapeRawControlCharsInJsonStrings(clean)));
+    try {
+      return JSON.parse(stripTrailingCommas(escapeRawControlCharsInJsonStrings(clean)));
+    } catch (repairError) {
+      // Gemini 偶爾會先吐半份物件，再從 chapterTitle 重新開始完整 JSON。
+      // 從最後一個候選起點倒序解析，避免第一份殘片遮住後面的可用結果。
+      const starts = [...clean.matchAll(/\{\s*"chapterTitle"/g)].map(match => match.index).reverse();
+      const lastBrace = clean.lastIndexOf('}');
+      for (const start of starts) {
+        if (start === 0 || lastBrace <= start) continue;
+        const candidate = clean.slice(start, lastBrace + 1);
+        try {
+          return JSON.parse(candidate);
+        } catch (candidateError) {
+          try {
+            return JSON.parse(stripTrailingCommas(escapeRawControlCharsInJsonStrings(candidate)));
+          } catch (ignored) { /* 繼續找更前一個候選 */ }
+        }
+      }
+      throw repairError;
+    }
   }
 }
 
@@ -2041,7 +2058,8 @@ function stripTrailingCommas(text) {
 }
 
 let lastRequestTimestamp = 0;
-const MIN_REQUEST_GAP_MS = 12000; // 5 RPM: 60s / 5 = 12s
+// 上游限制是跨模型共享 5 RPM；16 秒約為 3.75 RPM，避開滾動窗口與共享流量邊界。
+const MIN_REQUEST_GAP_MS = 16000;
 
 /**
  * ⚡ 伺服器頻率守衛（Rate Limit Cooldown Protector）
@@ -2070,7 +2088,7 @@ async function waitForRpmCooldown() {
  */
 
 async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt, onStreamUpdate) {
-  // 主模型重試 PRIMARY_MAX_ATTEMPTS 次後輪替到未審查模型（見 buildAttemptPlan）
+  // 主模型重試 PRIMARY_MAX_ATTEMPTS 次後依序切換未審查模型（見 buildAttemptPlan）
   const modelsToTry = buildAttemptPlan();
   const primaryModel = LLM_CONFIG.PRIMARY_MODEL;
   const unavailableModels = new Set();
@@ -2083,6 +2101,9 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
     let timeoutId = null;
     try {
       throwIfGenerationAborted();
+      await waitForRpmCooldown();
+      // 以請求起點計算間隔；在 fetch 前寫入，失敗請求也必須占用速率額度。
+      lastRequestTimestamp = Date.now();
       const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       state.currentAbortController = controller;
       // 逾時改為「停滯偵測」：先前是 50 秒的總時長硬上限，會把一個正常
@@ -2197,6 +2218,8 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
           // 會審查的模型是回 200 加拒絕語，不是回錯誤 —— 必須主動判定
           const verdict = detectRefusal(finalParsed);
           if (verdict.refused) throw createRefusalError(model, verdict.reason);
+          const validationError = getNarrativeValidationError(finalParsed);
+          if (validationError) throw new Error(`模型章節結構不完整：${validationError}`);
           console.log(`[Worker] ${model} 成功（第 ${attemptNo} 次嘗試），正文 ${finalParsed.prose.length} 字、選項 ${(finalParsed.choices||[]).length} 個`);
           if (model !== primaryModel) noteUncensoredFallbackUsed(model, attemptNo);
           warnIfCensoringModel(model);
@@ -2212,9 +2235,7 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
             const salvage = { prose: displayProse, statusPanel: {}, choices: [], chapterTitle: '命運推演' };
             const salvageVerdict = detectRefusal(salvage);
             if (salvageVerdict.refused) throw createRefusalError(model, salvageVerdict.reason);
-            if (model !== primaryModel) noteUncensoredFallbackUsed(model, attemptNo);
-            console.log('[Worker] JSON parse failed, using streamed prose, length:', displayProse.length);
-            return { prose: displayProse, statusPanel: {}, choices: [], chapterTitle: '命運推演' };
+            console.warn('[Worker] JSON parse failed；保留串流預覽但不接受缺少狀態與選項的殘片，改試下一模型。');
           }
         }
       }
@@ -2271,8 +2292,8 @@ function isModelUnavailableResponse(text) {
  * 實測時連續打了幾個不同模型就收到
  * 「您已达到请求数限制：1分钟内最多请求5次」，證實額度不是分模型計算的。
  *
- * 這對重試策略是硬約束：主模型連拒 5 次就會把整分鐘的額度用完，
- * 後面的未審查備援只會拿到 429 —— 整回生成因此失敗。
+ * 這對重試策略是硬約束：每次嘗試都必須經過 16 秒安全間隔，
+ * 收到 429 後也不能再切換模型空轉。
  * 收到 429 時必須停止往下試，並明確告知玩家要等待，而不是繼續空轉。
  */
 const RATE_LIMIT_PATTERNS = [
@@ -2308,13 +2329,12 @@ function createRefusalError(model, reason) {
 }
 
 /**
- * 真的用到未審查備援時：記錄、推進輪替、並告知玩家。
+ * 真的用到未審查備援時：記錄並告知玩家。
  * 玩家需要知道這一章是換了模型寫的 —— 文風會有差異。
  */
 function noteUncensoredFallbackUsed(model, attemptNo) {
   const short = String(model).split('/').pop();
   console.log(`[Fallback] 主模型連續失敗，本回改由 ${short} 生成（第 ${attemptNo} 次嘗試）。`);
-  advanceUncensoredRotation();
   notifyUser(`主模型連續拒絕，本回改由 ${short} 生成。`, 'info', 6000);
 }
 
@@ -2378,13 +2398,21 @@ function detectRefusal(chapter) {
   return { refused: false };
 }
 
+/** 回應必須足以讓遊戲繼續；缺選項或狀態時應切換下一模型，而不是接受殘片。 */
+function getNarrativeValidationError(chapter) {
+  if (!chapter || typeof chapter !== 'object') return '回應不是章節物件';
+  const prose = String(chapter.prose || '').trim();
+  if (prose.length < 220) return `正文過短（${prose.length} 字）`;
+  if (!chapter.statusPanel || !String(chapter.statusPanel.timeLocation || '').trim()) return '缺少時空狀態';
+  if (!Array.isArray(chapter.choices) || chapter.choices.length !== 3) {
+    return `選項數量錯誤（${Array.isArray(chapter.choices) ? chapter.choices.length : 0}/3）`;
+  }
+  return '';
+}
+
 /**
  * 建立這一回的模型嘗試計畫：
- *   主模型 × PRIMARY_MAX_ATTEMPTS 次，之後改用未審查模型（逐章輪替起點）。
- *
- * 為什麼要輪替起點：連續幾個情慾章節如果每次都從同一個備援模型開始，
- * 文風會變得單一。逐章交替 dolphin 與 mistral-large-3 可以維持變化，
- * 也分散單一模型的失敗風險。
+ *   Gemini × 2 → Mistral → Dolphin。Worker 與 GAS 共用這一份固定計畫。
  */
 function buildAttemptPlan() {
   const primary = LLM_CONFIG.PRIMARY_MODEL;
@@ -2392,32 +2420,8 @@ function buildAttemptPlan() {
   const plan = new Array(maxPrimary).fill(primary);
 
   const pool = (LLM_CONFIG.UNCENSORED_FALLBACK_MODELS || []).filter(Boolean);
-  if (pool.length) {
-    const start = getUncensoredRotationIndex();
-    for (let i = 0; i < pool.length; i++) {
-      plan.push(pool[(start + i) % pool.length]);
-    }
-  }
-  // 最後保留原本的 FALLBACK_MODEL 與其他備援，避免上面全掛時無路可走
-  if (LLM_CONFIG.FALLBACK_MODEL && !plan.includes(LLM_CONFIG.FALLBACK_MODEL)) {
-    plan.push(LLM_CONFIG.FALLBACK_MODEL);
-  }
+  plan.push(...pool);
   return plan;
-}
-
-const UNCENSORED_ROTATION_KEY = 'undercurrent_uncensored_rotation';
-
-function getUncensoredRotationIndex() {
-  const raw = parseInt(localStorage.getItem(UNCENSORED_ROTATION_KEY) || '0', 10);
-  return isFinite(raw) ? Math.abs(raw) : 0;
-}
-
-/** 每次真的用到未審查備援時往前推一格，讓下一章從另一個模型開始 */
-function advanceUncensoredRotation() {
-  const pool = (LLM_CONFIG.UNCENSORED_FALLBACK_MODELS || []).filter(Boolean);
-  if (pool.length < 2) return;
-  const next = (getUncensoredRotationIndex() + 1) % pool.length;
-  safeLocalStorageSet(UNCENSORED_ROTATION_KEY, String(next));
 }
 
 /**
@@ -2447,20 +2451,13 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
       if (res) return res;
     } catch(e) {
       if (isGenerationAbortError(e)) throw createGenerationAbortError();
+      // Worker 與 GAS 共用同一個上游額度；429 時切 GAS 只會再次被限流。
+      if (e && e.isRateLimited) throw e;
       console.warn('Worker error, fallback to GAS', e);
     }
   }
-  // GAS 路徑套用與 Worker 相同的嘗試計畫（主模型重試後輪替到未審查模型）。
-  // 註：mistral-large-3 在這條路徑上需要約 67 秒才寫完，
-  // 而 Apps Script 的 UrlFetchApp 約 60 秒就會斷，在這條路徑上永遠不可能成功，
-  // 擺在前面只是白等 50 秒。mistral 由 Worker 路徑負責。
-  // gemini-3.6-flash 放最後 —— 它會自我審查、擋掉情慾內容。
-  const models = [
-    ...buildAttemptPlan(),
-    'aion-3.0',
-    'gpt-5.6-luna'
-  ].filter((m, i, arr) => m && arr.indexOf(m) === i);
-  await waitForRpmCooldown();
+  // GAS 路徑保留重複的第二次 Gemini，順序與 Worker 完全一致。
+  const models = buildAttemptPlan();
   const unavailableModelsGas = new Set();
   for (let mIdx = 0; mIdx < models.length; mIdx++) {
     const model = models[mIdx];
@@ -2468,6 +2465,8 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
     let timeoutId = null;
     try {
       throwIfGenerationAborted();
+      await waitForRpmCooldown();
+      lastRequestTimestamp = Date.now();
       const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       state.currentAbortController = controller;
       timeoutId = setTimeout(() => {
@@ -2496,7 +2495,6 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
         fetchOptions.signal = controller.signal;
       }
       const response = await fetch(state.gasApiUrl, fetchOptions);
-      lastRequestTimestamp = Date.now();
       if (!response.ok) {
         const errText = await response.text();
         if (isRateLimitedResponse(errText)) {
@@ -2524,6 +2522,12 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
         if (verdict.refused) {
           console.warn(`[Pure AI] ${model} 被判定為拒絕／審查（${verdict.reason}），改試下一個。`);
           reportGenerationProgress(model, mIdx + 1, models.length, '被拒絕，改試下一個');
+          continue;
+        }
+        const validationError = getNarrativeValidationError(parsed);
+        if (validationError) {
+          console.warn(`[Pure AI] ${model} 章節結構不完整（${validationError}），改試下一個。`);
+          reportGenerationProgress(model, mIdx + 1, models.length, '結構不完整，改試下一個');
           continue;
         }
         console.log(`[Pure AI] Successfully generated with model: ${model} via proxy (${parsed.prose.length} chars)`);

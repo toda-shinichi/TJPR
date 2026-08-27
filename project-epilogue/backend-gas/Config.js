@@ -16,7 +16,7 @@ const CONFIG = {
     BASE_URL: 'https://api.banana2556.com/v1/chat/completions',
     API_KEY: '', // 已安全轉移至 GAS 環境變數
     RPM_LIMIT: 5,                   // 每分鐘最多 5 次請求 (Rate Limit: 5 RPM)
-    MIN_REQUEST_INTERVAL_MS: 12500, // 兩次請求間隔至少 12.5 秒 (60s/5 + 0.5s 緩衝)
+    MIN_REQUEST_INTERVAL_MS: 16000, // 約 3.75 RPM，保留共享額度與滾動窗口緩衝
     TIMEOUT_MS: 55000,              // Apps Script UrlFetchApp 55 秒逾時保護
     MAX_RETRIES: 3,                 // 最大重試次數
     RETRY_DELAY_MS: 3000            // 重試基礎延遲
@@ -26,15 +26,14 @@ const CONFIG = {
   MODELS: {
     // 主要敘事模型：gemini-3.7-flash 首選（快、便宜），但它會自我審查、
     // 在情慾章節極可能拒絕。因此備援一律排未審查模型，
-    // 且前端會偵測拒絕並自動輪替（見 app.js 的 buildAttemptPlan）。
+    // 且前端會偵測拒絕並依固定順序切換（見 app.js 的 buildAttemptPlan）。
     NARRATOR: {
       PRIMARY: 'gemini-3.7-flash',
-      FALLBACK: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
-      FALLBACK_2: 'mistral-large-3',
-      FALLBACK_3: 'gpt-5.6-luna',
-      FALLBACK_4: 'aion-3.0',
+      PRIMARY_ATTEMPTS: 2,
+      FALLBACK: 'mistral-large-3',
+      FALLBACK_2: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
       TEMPERATURE: 0.88,
-      MAX_TOKENS: 3500,
+      MAX_TOKENS: 4096,
       TOP_P: 0.95
     },
     // 快速稽核模型 (Fast Auditor: aion-3.0-mini 首選，mistral-nemo 備援)
