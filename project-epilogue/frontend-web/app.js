@@ -1419,6 +1419,7 @@ async function checkAuthAndInitUser() {
   const storedToken = localStorage.getItem('undercurrent_auth_token');
   
   if (!storedUser || !storedToken) {
+    updateUserBadgeUI('logged-out');
     openAuthModal();
     return;
   }
@@ -1809,6 +1810,11 @@ if (typeof window !== 'undefined') {
 }
 
 function updateUserBadgeUI(status = 'active') {
+  const authenticated = Boolean(state.username && state.token) && status !== 'logged-out';
+  if (dom.userBadge) dom.userBadge.style.display = authenticated ? '' : 'none';
+  const cloudBadge = document.getElementById('cloud-sync-status-badge');
+  if (cloudBadge) cloudBadge.style.display = authenticated ? '' : 'none';
+
   const name = state.username || '未登入';
   let displayText = name;
   let colorClass = 'text-brand-gold';
