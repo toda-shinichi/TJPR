@@ -40,7 +40,10 @@ const ALLOWED_MODELS = [
   // 評測方式見 tools/probe-model-latitude.js
   'qwen/qwen3-vl-235b-a22b-instruct',
   'minimaxai/minimax-m3',
-  'minimax/minimax-m2.7'
+  'minimax/minimax-m2.7',
+  'devstral-2',
+  'gemini-3.1-pro',
+  'glm-5.2-thinking'
 ];
 
 const MAX_TOKENS_CEILING = 4096;
