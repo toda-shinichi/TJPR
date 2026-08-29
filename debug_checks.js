@@ -333,6 +333,39 @@ refusalCases.forEach(([prose, expected]) => {
   const got = vm.runInContext('detectRefusal(__probe).refused', frontendContext);
   assert.strictEqual(got, expected, `拒絕偵測誤判：${JSON.stringify(prose).slice(0, 40)}`);
 });
+// 簡體拒絕語：中國廠商的模型（GLM、Qwen、MiniMax）多以簡體回覆，
+// 而原本的樣式全是繁體字，「无法」對不上「無法」，一個字都不會命中。
+[
+  ['很抱歉，我无法协助生成这类内容。', '簡體拒絕未被偵測'],
+  ['根据平台内容安全规范，我无法提供露骨的性爱场景描写。', '簡體平台規範拒絕未被偵測']
+].forEach(([prose, msg]) => {
+  frontendContext.__probe = { prose };
+  assert.strictEqual(vm.runInContext('detectRefusal(__probe).refused', frontendContext), true, msg);
+});
+
+// 供應商錯誤訊息會被包成「助理的回覆」送來，長度超過短文門檻又不含拒絕語，
+// 沒有這道防線就會被當成小說正文寫進章節。以下兩則為實測抓到的真實案例。
+[
+  ['⚠️ Upstream Gemini returned an empty response. If this Worker runs on Cloudflare/serverless, '
+    + 'Google may be blocking the egress IP (works locally but empty in production); '
+    + 'also verify GEMINI_BL is current. Run `wrangler tail` to see the upstream status.',
+    'gemini 供應商錯誤訊息未被攔下'],
+  ['system disk overloaded (current: 93.2%, threshold: 90%)', 'minimax 基礎設施錯誤未被攔下']
+].forEach(([prose, msg]) => {
+  frontendContext.__probe = { prose };
+  assert.strictEqual(vm.runInContext('detectRefusal(__probe).refused', frontendContext), true, msg);
+});
+
+// 正文裡出現「規範」等字眼但屬劇情內容時不可誤判
+frontendContext.__probe = {
+  prose: '徐令謙翻開卷宗，上面寫著港區作業規範的修訂條文。' + '雨'.repeat(900)
+};
+assert.strictEqual(
+  vm.runInContext('detectRefusal(__probe).refused', frontendContext),
+  false,
+  '劇情中提及規範被誤判為拒絕'
+);
+
 // 長篇正文即使角色台詞裡有「我不能」也不可判為拒絕
 frontendContext.__probe = {
   prose: '雨'.repeat(500) + '「我不能讓妳就這樣走出這扇門。」他低聲說。' + '雨'.repeat(400)

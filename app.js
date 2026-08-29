@@ -2355,6 +2355,27 @@ function reportGenerationProgress(model, attemptNo, total, note) {
  * 「有沒有 prose」，那種回應會被當成成功接受 —— 也就是說「重試五次失敗」
  * 在審查情境下根本不會被觸發。必須先能認出拒絕，重試與輪替才有意義。
  */
+/**
+ * 供應商回傳的錯誤訊息會被包成「助理的回覆」送過來，而不是 HTTP 錯誤。
+ * 實測 gemini-3.1-pro 曾回傳：
+ *   「⚠️ Upstream Gemini returned an empty response. If this Worker runs on
+ *     Cloudflare/serverless, Google may be blocking the egress IP...」
+ * 這種內容長度超過短文門檻、又不含拒絕語，會直接被當成小說正文寫進章節。
+ */
+const PROVIDER_ERROR_PATTERNS = [
+  /upstream\s+\w+\s+returned/i,
+  /blocking the egress ip/i,
+  /wrangler tail/i,
+  /^\s*⚠️/,
+  /system disk overloaded/i,
+  /\brequest id:\s*\d{8,}/i,
+  /无效的令牌|無效的令牌/
+];
+
+function looksLikeProviderError(text) {
+  return PROVIDER_ERROR_PATTERNS.some(re => re.test(String(text || '')));
+}
+
 const REFUSAL_PATTERNS = [
   // 中文常見拒絕語
   /(很抱歉|抱歉|對不起)[，,。\s]*(我|本人|作為)?(無法|不能|不便|沒有辦法)/,
@@ -2363,6 +2384,14 @@ const REFUSAL_PATTERNS = [
   /我(是一個|只是一個)?(AI|人工智慧|語言模型)/,
   /(改為|建議)(描寫|撰寫)(較為)?(含蓄|委婉|保守)/,
   /無法(生成|產生|創作)(這類|此類|該類)(內容|情節|描寫)/,
+  // 簡體中文拒絕語。中國廠商的模型（GLM、Qwen、MiniMax 等）多以簡體回覆，
+  // 而上面那組全是繁體字樣式 —— 「无法」不會被「無法」命中，一個字都對不上。
+  /(很抱歉|抱歉|对不起)[，,。\s]*(我|本人|作为)?(无法|不能|不便|没有办法)/,
+  /我(无法|不能|不便)(协助|提供|继续|完成|生成|撰写|描写)/,
+  /(不符合|违反|超出)(我的)?(使用|内容|安全)?(政策|规范|准则|原则|限制)/,
+  /(根据|依据)[^。]{0,12}(内容|安全|平台)[^。]{0,6}(规范|政策|准则)/,
+  /我(是一个|只是一个)?(AI|人工智能|语言模型)/,
+  /(改为|建议)(描写|撰写)(较为)?(含蓄|委婉|保守)/,
   // 英文常見拒絕語
   /\bI\s+(can(?:'|’)?t|cannot|am\s+unable\s+to)\s+(help|assist|provide|continue|generate|write|create)/i,
   /\b(against|violates?)\s+(my|the)\s+(guidelines|policy|policies|content\s+policy)/i,
@@ -2380,6 +2409,11 @@ const REFUSAL_MAX_PROSE_CHARS = 220;
 function detectRefusal(chapter) {
   const prose = String((chapter && chapter.prose) || '');
   if (!prose) return { refused: true, reason: '沒有正文' };
+
+  // 供應商錯誤訊息不論長度都要攔下 —— 否則會被當成小說正文寫進章節
+  if (looksLikeProviderError(prose)) {
+    return { refused: true, reason: '供應商錯誤訊息被當成正文回傳' };
+  }
 
   // 只在正文很短時才用關鍵字判定：正常章節裡角色本來就可能說出
   // 「我不能」這類台詞，長文命中關鍵字不代表模型拒絕。
