@@ -1,0 +1,14 @@
+{
+  "name": "tjpr-undercurrent",
+  "private": true,
+  "scripts": {
+    "build:css": "BROWSERSLIST_IGNORE_OLD_DATA=1 tailwindcss -i ./tailwind-input.css -o ./tailwind.generated.css --minify",
+    "assets": "npm run build:css && node tools/stamp-assets.js",
+    "test": "node debug_checks.js && node test_worker.js && node tools/stamp-assets.js --check"
+  },
+  "devDependencies": {
+    "caniuse-lite": "^1.0.30001810",
+    "tailwindcss": "3.4.17",
+    "wrangler": "^4.127.1"
+  }
+}

@@ -32,6 +32,11 @@ function doPost(e) {
     }
 
     // Public / Unauthenticated Actions
+    var publicActions = ['auth/login', 'auth/register', 'health', 'telemetry/log-error', 'telemetry/submit-feedback'];
+    if (publicActions.indexOf(action) !== -1) {
+      var publicLimit = enforcePublicActionRateLimit(action, payload);
+      if (!publicLimit.allowed) return createErrorResponse('Too many requests. Please retry later.', 429);
+    }
     if (action === 'auth/login') {
       return handleLogin(payload);
     } else if (action === 'auth/register') {
@@ -218,6 +223,60 @@ function generateSaltedHash(rawString, salt) {
   }).join('');
 }
 
+/** 新帳號使用具版本與迭代次數的慢速雜湊；舊 SHA-256 在首次成功登入後自動升級。 */
+function generatePasswordHash(password, salt) {
+  var iterations = Math.max(1000, Number(CONFIG.AUTH.PASSWORD_HASH_ITERATIONS) || 5000);
+  var value = String(password) + ':' + String(salt);
+  for (var i = 0; i < iterations; i++) value = generateSaltedHash(value, salt + ':' + i);
+  return 'v2$' + iterations + '$' + value;
+}
+
+function verifyPasswordHash(password, salt, storedHash) {
+  var stored = String(storedHash || '');
+  if (stored.indexOf('v2$') === 0) {
+    var parts = stored.split('$');
+    var iterations = Math.max(1000, Math.min(20000, Number(parts[1]) || 0));
+    var value = String(password) + ':' + String(salt);
+    for (var i = 0; i < iterations; i++) value = generateSaltedHash(value, salt + ':' + i);
+    return value === parts[2];
+  }
+  return generateSaltedHash(password, salt) === stored;
+}
+
+function publicRateKeyPart(value) {
+  return generateSaltedHash(String(value || 'anonymous').slice(0, 300), 'public-rate').slice(0, 24);
+}
+
+function enforcePublicActionRateLimit(action, payload) {
+  if (action === 'health') return { allowed: true };
+  var cache = CacheService.getScriptCache();
+  var minute = Math.floor(new Date().getTime() / 60000);
+  var identity = payload.email || payload.contact || payload.userId || 'anonymous';
+  var globalKey = 'pub_global_' + action + '_' + minute;
+  var idKey = 'pub_id_' + action + '_' + publicRateKeyPart(identity) + '_' + minute;
+  var globalLimit = Math.max(5, Number(CONFIG.AUTH.PUBLIC_ACTION_LIMIT_PER_MINUTE) || 30);
+  var idLimit = action === 'auth/login'
+    ? Math.max(3, Number(CONFIG.AUTH.LOGIN_LIMIT_PER_ID_PER_MINUTE) || 8)
+    : 10;
+  var lock = LockService.getScriptLock();
+  var locked = false;
+  try {
+    lock.waitLock(5000);
+    locked = true;
+    var globalCount = parseInt(cache.get(globalKey) || '0', 10);
+    var idCount = parseInt(cache.get(idKey) || '0', 10);
+    if (globalCount >= globalLimit || idCount >= idLimit) return { allowed: false };
+    cache.put(globalKey, String(globalCount + 1), 120);
+    cache.put(idKey, String(idCount + 1), 120);
+    return { allowed: true };
+  } catch (error) {
+    console.warn('公開端點節流失敗，採 fail-closed: ' + error.message);
+    return { allowed: false };
+  } finally {
+    if (locked) try { lock.releaseLock(); } catch (ignore) {}
+  }
+}
+
 /**
  * Generates a secure random session token
  * @param {string} userId - User identifier
@@ -292,9 +351,12 @@ function handleLogin(payload) {
     return createErrorResponse('Invalid email or password.', 401);
   }
 
-  var calculatedHash = generateSaltedHash(password, userRecord.salt);
-  if (calculatedHash !== userRecord.passwordHash) {
+  if (!verifyPasswordHash(password, userRecord.salt, userRecord.passwordHash)) {
     return createErrorResponse('Invalid email or password.', 401);
+  }
+  if (String(userRecord.passwordHash || '').indexOf('v2$') !== 0) {
+    try { StorageService.updateUserPasswordHash(userRecord.userId, generatePasswordHash(password, userRecord.salt)); }
+    catch (upgradeErr) { console.warn('舊密碼雜湊升級失敗: ' + upgradeErr.message); }
   }
 
   var newToken = generateSessionToken(userRecord.userId);
@@ -350,7 +412,7 @@ function handleRegister(payload) {
 
     userId = 'usr_' + Utilities.getUuid().substring(0, 8);
     var salt = Utilities.getUuid().substring(0, 16);
-    var passwordHash = generateSaltedHash(password, salt);
+    var passwordHash = generatePasswordHash(password, salt);
     token = generateSessionToken(userId);
     userFolderId = StorageService.getOrCreateUserDriveFolder(userId);
 
@@ -704,9 +766,30 @@ function adminPopulateEverything() {
  */
 function handleLLMProxy(userSession, payload) {
   try {
-    var result = AIService.callAPI(payload.model, payload.messages, {
-      temperature: payload.temperature,
-      max_tokens: payload.max_tokens
+    var allowedModels = CONFIG.MODELS.ALLOWED_MODELS || [];
+    if (allowedModels.indexOf(payload.model) === -1) {
+      return createErrorResponse('Model not allowed.', 400);
+    }
+    if (!Array.isArray(payload.messages) || payload.messages.length < 1 || payload.messages.length > 32) {
+      return createErrorResponse('messages must contain 1 to 32 entries.', 400);
+    }
+    var roles = ['system', 'user', 'assistant'];
+    var safeMessages = [];
+    for (var i = 0; i < payload.messages.length; i++) {
+      var message = payload.messages[i];
+      if (!message || roles.indexOf(message.role) === -1 || typeof message.content !== 'string' || message.content.length > 100000) {
+        return createErrorResponse('Invalid message entry.', 400);
+      }
+      safeMessages.push({ role: message.role, content: message.content });
+    }
+    var requestedTokens = Number(payload.max_tokens);
+    var safeTokens = isFinite(requestedTokens)
+      ? Math.max(1, Math.min(Math.floor(requestedTokens), CONFIG.MODELS.NARRATOR.MAX_TOKENS))
+      : CONFIG.MODELS.NARRATOR.MAX_TOKENS;
+    var temperature = Number(payload.temperature);
+    var result = AIService.callAPI(payload.model, safeMessages, {
+      temperature: isFinite(temperature) ? Math.max(0, Math.min(2, temperature)) : CONFIG.MODELS.NARRATOR.TEMPERATURE,
+      max_tokens: safeTokens
     });
     return createSuccessResponse(result);
   } catch (e) {

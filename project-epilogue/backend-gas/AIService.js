@@ -327,7 +327,11 @@ var AIService = (function() {
           top_p: CONFIG.MODELS.AUDITOR.TOP_P,
           fallbackModel: currentModel
         });
-        return response.content.trim();
+        var summary = response.content.trim();
+        if (summary.length > CONFIG.PIPELINE.SUMMARY_POOL_MAX_CHARS) {
+          summary = summary.substring(0, CONFIG.PIPELINE.SUMMARY_POOL_MAX_CHARS - 1) + '…';
+        }
+        return summary;
       } catch (err) {
         lastError = err;
         console.warn('Auditor 模型 [' + currentModel + '] 失敗，嘗試下一順位備援: ' + err.message);
@@ -422,7 +426,9 @@ var AIService = (function() {
       fallbackModel: CONFIG.MODELS.AUDITOR.PRIMARY
     });
 
-    return response.content.trim();
+    var dossier = response.content.trim();
+    var maxChars = Math.max(1000, (CONFIG.PIPELINE.ACT_DOSSIER_MAX_WORDS || 800) * 2);
+    return dossier.length > maxChars ? dossier.substring(0, maxChars - 1) + '…' : dossier;
   }
 
   return {

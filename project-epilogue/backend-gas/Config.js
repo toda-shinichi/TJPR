@@ -24,6 +24,13 @@ const CONFIG = {
 
   // 雙模型配置
   MODELS: {
+    ALLOWED_MODELS: [
+      'aion-3.0',
+      'qwen/qwen3-vl-235b-a22b-instruct',
+      'mistral-large-3',
+      'aion-3.0-mini',
+      'mistral-nemo'
+    ],
     // 主要敘事模型：aion-3.0（文學性與設定遵循最強），備援 qwen3-vl-235b（快近三倍）。
     // 兩者實測皆不會自我審查。gemini 系列已全數移出 —— 實測會擋掉情慾內容，
     // 且 3.7-flash 有 60% 機率被靜默降級為 3.5 Flash-Lite。
@@ -90,7 +97,11 @@ const CONFIG = {
     AUDIT_CADENCE: 10,           // 每 10 回合觸發邏輯一致性稽核
     SUMMARY_POOL_MAX_CHARS: 2000,// 滾動摘要池上限 2,000 字元
     ACT_DOSSIER_MAX_WORDS: 800,  // 幕篇重整（Act Rebase）壓縮至約 800 字
-    RECENT_TURNS_CONTEXT_LIMIT: 5// 提示詞中保留的最新對話回合數
+    RECENT_TURNS_CONTEXT_LIMIT: 5,// 提示詞中保留的最新對話回合數
+    TURN_HISTORY_MAX: 30,
+    AUDIT_LOG_MAX: 20,
+    ACT_DOSSIER_MAX: 6,
+    ACT_DOSSIERS_IN_PROMPT: 2
   },
 
   // 存檔與快取設定
@@ -103,7 +114,10 @@ const CONFIG = {
   // 權杖安全設定
   AUTH: {
     TOKEN_VALIDITY_DAYS: 30,
-    SALT_BYTE_SIZE: 16
+    SALT_BYTE_SIZE: 16,
+    PASSWORD_HASH_ITERATIONS: 5000,
+    PUBLIC_ACTION_LIMIT_PER_MINUTE: 30,
+    LOGIN_LIMIT_PER_ID_PER_MINUTE: 8
   }
 };
 

@@ -24,8 +24,8 @@ const crypto = require('crypto');
 const ROOT = path.resolve(__dirname, '..');
 const DEPLOY_DIR = path.join(ROOT, 'project-epilogue', 'frontend-web');
 const HTML = path.join(ROOT, 'index.html');
-const ASSETS = ['app.js', 'style.css'];
-const SYNCED = ['app.js', 'index.html', 'style.css'];
+const ASSETS = ['app.js', 'style.css', 'tailwind.generated.css'];
+const SYNCED = ['app.js', 'index.html', 'style.css', 'tailwind.generated.css'];
 
 const checkOnly = process.argv.includes('--check');
 
@@ -40,12 +40,12 @@ function computeVersion() {
 
 function stampHtml(version) {
   const original = fs.readFileSync(HTML, 'utf8');
-  // 只改 app.js / style.css 的查詢字串，不動其他 URL
+  // 只改正式靜態資產的查詢字串，不動其他 URL
   const stamped = original.replace(
-    /(["'](?:\.\/)?(?:app\.js|style\.css))\?v=[^"']*(["'])/g,
+    /(["'](?:\.\/)?(?:app\.js|style\.css|tailwind\.generated\.css))\?v=[^"']*(["'])/g,
     `$1?v=${version}$2`
   );
-  const refs = (original.match(/(?:app\.js|style\.css)\?v=/g) || []).length;
+  const refs = (original.match(/(?:app\.js|style\.css|tailwind\.generated\.css)\?v=/g) || []).length;
   if (refs === 0) {
     throw new Error('index.html 找不到帶 ?v= 的 app.js / style.css 引用，請確認引用格式。');
   }

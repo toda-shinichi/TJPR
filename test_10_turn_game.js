@@ -4,11 +4,11 @@ const fs = require('node:fs');
 const LIVE_URL = process.env.TJPR_LIVE_URL || 'https://tjpr-llm-proxy.todashinchi.workers.dev/';
 const ORIGIN = 'http://localhost:8731';
 const MODEL = process.env.TJPR_TEST_MODEL || 'aion-3.0';
+const LIVE_TOKEN = process.env.TJPR_LIVE_TOKEN || '';
 const MODEL_ATTEMPT_PLAN = [
   MODEL,
   MODEL,
-  'qwen/qwen3-vl-235b-a22b-instruct',
-  'mistral-large-3'
+  'qwen/qwen3-vl-235b-a22b-instruct'
 ];
 const TURN_COUNT = 10;
 // 專案上游限制為 5 RPM；採 16 秒間隔降至約 3.75 RPM，避開共享額度與滾動窗口邊界。
@@ -246,7 +246,7 @@ async function requestTurn(messages, model = MODEL) {
   try {
     const response = await fetch(LIVE_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Origin: ORIGIN },
+      headers: { 'Content-Type': 'application/json', Origin: ORIGIN, 'X-Undercurrent-Token': LIVE_TOKEN },
       // 與正式遊戲生成設定一致，避免測試本身截斷狀態面板或選項。
       body: JSON.stringify({ model, messages, temperature: 0.65, max_tokens: 6144, stream: true }),
       signal: controller.signal
@@ -280,6 +280,7 @@ async function requestTurn(messages, model = MODEL) {
 }
 
 async function main() {
+  assert.ok(LIVE_TOKEN, '10 回合正式測試需要設定 TJPR_LIVE_TOKEN（有效登入權杖）');
   const startedAt = new Date().toISOString();
   const history = [];
   const requestStarts = [];
@@ -324,7 +325,7 @@ async function main() {
       }
     }
     if (!result) {
-      throw new Error(`第 ${turn} 回四段備援均未產生合格章節：${JSON.stringify(attempts)}`);
+      throw new Error(`第 ${turn} 回三段備援均未產生合格章節：${JSON.stringify(attempts)}`);
     }
     const warnings = continuityWarnings(result.chapter, previous?.chapter);
     if (validationError) warnings.unshift(validationError);

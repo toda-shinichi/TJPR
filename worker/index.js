@@ -49,12 +49,13 @@ const ALLOWED_MODELS = [
 
 const MAX_TOKENS_CEILING = 6144;
 const MAX_BODY_BYTES = 128 * 1024;
+const AUTH_CACHE_TTL_SECONDS = 300;
 
 function corsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': origin || ALLOWED_ORIGINS[0],
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Undercurrent-Token, X-Undercurrent-Key, X-Queue-Ticket',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin'
   };
@@ -68,9 +69,7 @@ function json(body, status, origin) {
 }
 
 /**
- * 來源檢查。curl 可以偽造 Origin，所以這【不是】真正的認證，
- * 只是把「路過看到 repo 就能直接用」的成本提高。
- * 真正的認證需要驗證 GAS session token（見 README 的後續規劃）。
+ * 來源檢查只是第一層瀏覽器邊界；真正授權會在後續驗證 GAS session token。
  *
  * 沒有 Origin 標頭的一律拒絕：瀏覽器對跨來源 POST 必定送出 Origin，
  * 所以「缺 Origin」代表這不是從網頁來的請求（curl、腳本），正是要擋的情況。
@@ -87,6 +86,101 @@ function resolveOrigin(request, env) {
     return { ok: false, origin: ALLOWED_ORIGINS[0], reason: 'missing-origin' };
   }
   return { ok: ALLOWED_ORIGINS.includes(origin), origin, reason: 'origin-not-allowed' };
+}
+
+async function sha256Hex(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * 瀏覽器不能只靠 Origin 當認證。登入權杖由 GAS 驗證，成功結果短暫快取於 KV；
+ * 使用共享密鑰的伺服器請求則由 resolveOrigin() 直接授權。
+ */
+async function authenticateRequest(request, env, viaSharedKey) {
+  if (viaSharedKey) return { ok: true, viaSharedKey: true };
+  const token = request.headers.get('X-Undercurrent-Token') || '';
+  if (!/^epi_[A-Za-z0-9_-]{20,2048}$/.test(token)) {
+    return { ok: false, reason: 'missing-or-invalid-token' };
+  }
+  if (!env.AUTH_VERIFY_URL) {
+    return { ok: false, reason: 'auth-not-configured', serverError: true };
+  }
+
+  const cacheKey = 'auth:' + await sha256Hex(token);
+  if (env.RATE_LIMIT_KV) {
+    try {
+      if (await env.RATE_LIMIT_KV.get(cacheKey)) return { ok: true, cached: true };
+    } catch (err) {
+      console.warn('認證快取讀取失敗: ' + err.message);
+    }
+  }
+
+  try {
+    const response = await fetch(env.AUTH_VERIFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'auth/verify', token })
+    });
+    const result = await response.json();
+    if (!result || result.success !== true || !result.data || result.data.valid !== true) {
+      return { ok: false, reason: 'invalid-token' };
+    }
+    if (env.RATE_LIMIT_KV) {
+      try {
+        await env.RATE_LIMIT_KV.put(cacheKey, '1', { expirationTtl: AUTH_CACHE_TTL_SECONDS });
+      } catch (err) {
+        console.warn('認證快取寫入失敗: ' + err.message);
+      }
+    }
+    return { ok: true, userId: result.data.userId || '' };
+  } catch (err) {
+    console.warn('登入權杖驗證失敗: ' + err.message);
+    return { ok: false, reason: 'auth-service-unavailable', serverError: true };
+  }
+}
+
+function validateAndNormalizeBody(raw) {
+  if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
+    return { error: 'Request body too large.', status: 413 };
+  }
+  let input;
+  try {
+    input = JSON.parse(raw);
+  } catch (error) {
+    return { error: 'Invalid JSON body.', status: 400 };
+  }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return { error: 'JSON body must be an object.', status: 400 };
+  }
+  if (!input.model || !ALLOWED_MODELS.includes(input.model)) {
+    return { error: 'Model not allowed: ' + (input.model || '(empty)'), status: 400 };
+  }
+  if (!Array.isArray(input.messages) || input.messages.length < 1 || input.messages.length > 32) {
+    return { error: 'messages must contain 1 to 32 entries.', status: 400 };
+  }
+  const allowedRoles = new Set(['system', 'user', 'assistant']);
+  if (input.messages.some(message => !message || !allowedRoles.has(message.role)
+    || typeof message.content !== 'string' || message.content.length > 100000)) {
+    return { error: 'Each message must have an allowed role and string content.', status: 400 };
+  }
+
+  const requestedMaxTokens = Number(input.max_tokens);
+  const temperature = Number(input.temperature);
+  const topP = Number(input.top_p);
+  return {
+    body: {
+      model: input.model,
+      messages: input.messages.map(message => ({ role: message.role, content: message.content })),
+      temperature: Number.isFinite(temperature) ? Math.max(0, Math.min(2, temperature)) : 0.88,
+      top_p: Number.isFinite(topP) ? Math.max(0, Math.min(1, topP)) : 0.95,
+      max_tokens: Number.isFinite(requestedMaxTokens)
+        ? Math.max(1, Math.min(Math.floor(requestedMaxTokens), MAX_TOKENS_CEILING))
+        : MAX_TOKENS_CEILING,
+      stream: true
+    }
+  };
 }
 
 /**
@@ -124,28 +218,44 @@ async function checkRateLimit(env, request) {
  * 同一個「下一個空檔」並都認為輪到自己。DO 單執行緒、天然序列化，是唯一
  * 能正確發號的選擇。
  *
- * 設計取捨：等待中的請求【不預先佔用】時段，只回報還要等多久，由前端睡完再問。
- * 這樣不會因為玩家關掉分頁而留下無人認領的空檔（不需要逾期回收機制）。
- * 代價是多個等待者可能同時醒來搶同一格 —— DO 會序列化，只有一個拿到，
- * 其餘拿到新的短等待。三人規模下這個取捨是划算的。
+ * 等待者取得一次性預約票券，輪詢不會重新排到隊尾；過期預約會自動回收。
  */
 export class RpmQueue {
   constructor(state) {
     this.state = state;
     this.nextSlotTs = 0;
+    this.reservations = [];
     // 從儲存還原，避免 DO 被回收後重置導致瞬間放行過多請求
     this.state.blockConcurrencyWhile(async () => {
-      this.nextSlotTs = (await this.state.storage.get('nextSlotTs')) || 0;
+      const stored = await this.state.storage.get(['nextSlotTs', 'reservations']);
+      this.nextSlotTs = stored.get('nextSlotTs') || 0;
+      this.reservations = stored.get('reservations') || [];
     });
   }
 
   async fetch(request) {
     const url = new URL(request.url);
     const now = Date.now();
+    this.reservations = this.reservations.filter(item => item.readyAt > now - 60000);
+
+    const presentedTicket = request.headers.get('X-Queue-Ticket');
+    if (presentedTicket) {
+      const reservation = this.reservations.find(item => item.ticket === presentedTicket);
+      if (!reservation) return Response.json({ rejected: true, invalidTicket: true, waitMs: 0 });
+      const waitMs = Math.max(0, reservation.readyAt - now);
+      if (waitMs > 0) {
+        return Response.json({ proceed: false, ticket: presentedTicket, waitMs,
+          etaSeconds: Math.ceil(waitMs / 1000), position: Math.max(1, Math.ceil(waitMs / QUEUE_MIN_INTERVAL_MS)) });
+      }
+      this.reservations = this.reservations.filter(item => item.ticket !== presentedTicket);
+      await this.state.storage.put('reservations', this.reservations);
+      return Response.json({ proceed: true });
+    }
+
     const slot = Math.max(now, this.nextSlotTs);
     const waitMs = slot - now;
 
-    // 只是詢問還要等多久，不佔用時段
+    // 管理與診斷用途：只詢問還要等多久，不佔用時段
     if (url.pathname === '/peek') {
       return Response.json({
         waitMs,
@@ -159,10 +269,15 @@ export class RpmQueue {
       return Response.json({ rejected: true, waitMs, etaSeconds: Math.ceil(waitMs / 1000) });
     }
 
-    // 還沒輪到：回報等待時間，但不佔用時段
+    // 還沒輪到：預約時段並回傳一次性票號，避免所有等待者同時醒來搶同一格。
     if (waitMs > 0) {
+      const ticket = crypto.randomUUID();
+      this.reservations.push({ ticket, readyAt: slot });
+      this.nextSlotTs = slot + QUEUE_MIN_INTERVAL_MS;
+      await this.state.storage.put({ nextSlotTs: this.nextSlotTs, reservations: this.reservations });
       return Response.json({
         proceed: false,
+        ticket,
         waitMs,
         etaSeconds: Math.ceil(waitMs / 1000),
         position: Math.ceil(waitMs / QUEUE_MIN_INTERVAL_MS)
@@ -185,22 +300,25 @@ const QUEUE_MAX_WAIT_MS = 180000;
  * 向排隊器要一個時段。
  * 未綁定 RPM_QUEUE 時直接放行（沿用舊行為），不因為缺少綁定就讓服務整個掛掉。
  */
-async function acquireQueueSlot(env) {
-  if (!env.RPM_QUEUE) return { proceed: true, skipped: true };
+async function acquireQueueSlot(env, ticket) {
+  if (!env.RPM_QUEUE) return { proceed: false, unavailable: true };
   try {
     const id = env.RPM_QUEUE.idFromName('global');
     const stub = env.RPM_QUEUE.get(id);
-    const res = await stub.fetch('https://queue/acquire');
+    const headers = ticket
+      ? { 'X-Queue-Ticket': ticket }
+      : undefined;
+    const res = await stub.fetch('https://queue/acquire', headers ? { headers } : undefined);
     return await res.json();
   } catch (err) {
-    console.warn('排隊器異常，放行以免整體不可用: ' + err.message);
-    return { proceed: true, error: err.message };
+    console.warn('排隊器異常，為保護上游 RPM 暫停放行: ' + err.message);
+    return { proceed: false, unavailable: true, error: err.message };
   }
 }
 
 export default {
   async fetch(request, env) {
-    const { ok: originOk, origin, reason } = resolveOrigin(request, env);
+    const { ok: originOk, origin, reason, viaSharedKey } = resolveOrigin(request, env);
 
     if (request.method === 'OPTIONS') {
       if (!originOk) {
@@ -225,27 +343,44 @@ export default {
       return json({ error: { message: 'Worker 未設定 API_KEY secret。' } }, 500, origin);
     }
 
-    const rate = await checkRateLimit(env, request);
-    if (!rate.allowed) {
-      return new Response(
-        JSON.stringify({ error: { message: '請求過於頻繁，請稍後再試。' } }),
-        {
-          status: 429,
-          headers: Object.assign(
-            { 'Content-Type': 'application/json', 'Retry-After': String(RATE_LIMIT.windowSeconds) },
-            corsHeaders(origin)
-          )
-        }
-      );
+    const contentLength = Number(request.headers.get('Content-Length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+      return json({ error: { message: 'Request body too large.' } }, 413, origin);
+    }
+
+    let raw;
+    try {
+      raw = await request.text();
+    } catch (error) {
+      return json({ error: { message: 'Unable to read request body.' } }, 400, origin);
+    }
+    const normalized = validateAndNormalizeBody(raw);
+    if (normalized.error) return json({ error: { message: normalized.error } }, normalized.status, origin);
+    const body = normalized.body;
+
+    const auth = await authenticateRequest(request, env, viaSharedKey);
+    if (!auth.ok) {
+      return json({ error: { message: auth.serverError
+        ? 'Authentication service is unavailable.'
+        : 'Valid login token required.' } }, auth.serverError ? 503 : 401, origin);
     }
 
     // 全域排隊：上游額度是所有玩家共用的，這是唯一的匯流點
-    const slot = await acquireQueueSlot(env);
+    const slot = await acquireQueueSlot(env, request.headers.get('X-Queue-Ticket'));
+    if (slot.unavailable) {
+      return new Response(JSON.stringify({
+        error: { message: '排隊服務暫時無法使用，請稍後重試。', queueUnavailable: true }
+      }), {
+        status: 503,
+        headers: Object.assign({ 'Content-Type': 'application/json', 'Retry-After': '16' }, corsHeaders(origin))
+      });
+    }
     if (slot.rejected) {
       return new Response(JSON.stringify({
         error: {
           message: `目前排隊人數過多（約需等待 ${slot.etaSeconds} 秒），請稍後再試。`,
           queueFull: true,
+          invalidTicket: !!slot.invalidTicket,
           etaSeconds: slot.etaSeconds
         }
       }), {
@@ -263,6 +398,7 @@ export default {
       // 現有的「模型不可用／限流」判別會全部失效。
       return new Response(JSON.stringify({
         queued: true,
+        ticket: slot.ticket,
         waitMs: slot.waitMs,
         etaSeconds: slot.etaSeconds,
         position: slot.position
@@ -275,37 +411,20 @@ export default {
       });
     }
 
+
+    // 只有真正取得上游時段的合法請求才計入 IP 限速；排隊輪詢不消耗額度。
+    const rate = await checkRateLimit(env, request);
+    if (!rate.allowed) {
+      return new Response(JSON.stringify({ error: { message: '請求過於頻繁，請稍後再試。' } }), {
+        status: 429,
+        headers: Object.assign(
+          { 'Content-Type': 'application/json', 'Retry-After': String(RATE_LIMIT.windowSeconds) },
+          corsHeaders(origin)
+        )
+      });
+    }
+
     try {
-      const raw = await request.text();
-      if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
-        return json({ error: { message: 'Request body too large.' } }, 413, origin);
-      }
-
-      let body;
-      try {
-        body = JSON.parse(raw);
-      } catch (parseErr) {
-        return json({ error: { message: 'Invalid JSON body.' } }, 400, origin);
-      }
-
-      if (!body.model || !ALLOWED_MODELS.includes(body.model)) {
-        return json(
-          { error: { message: 'Model not allowed: ' + (body.model || '(empty)') } },
-          400,
-          origin
-        );
-      }
-      if (!Array.isArray(body.messages) || body.messages.length === 0) {
-        return json({ error: { message: 'messages must be a non-empty array.' } }, 400, origin);
-      }
-
-      // 夾制輸出上限，避免有人指定極大的 max_tokens 燒額度
-      const requestedMaxTokens = Number(body.max_tokens);
-      body.max_tokens = Number.isFinite(requestedMaxTokens)
-        ? Math.max(1, Math.min(Math.floor(requestedMaxTokens), MAX_TOKENS_CEILING))
-        : MAX_TOKENS_CEILING;
-      body.stream = true;
-
       const upstream = await fetch(UPSTREAM, {
         method: 'POST',
         headers: {

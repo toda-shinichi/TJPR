@@ -1104,6 +1104,8 @@ function setupEventListeners() {
       handleCharacterCreationSubmit(e);
     });
     on('profile-presets-select', 'change', (e) => loadProfilePresetIntoForm(e.target.value));
+    on('randomize-profile-btn', 'click', randomizeProfileForm);
+    on('creator-advanced-toggle', 'click', toggleCreatorAdvancedFields);
     on('save-current-profile-btn', 'click', saveCurrentFormAsPreset);
     on('open-profile-manager-btn', 'click', () => { closeCharacterCreationModal(); openProfileManagerModal(); });
 
@@ -1966,6 +1968,7 @@ function auditGeneratedChapter(input, profile) {
     };
   });
   chapter.intelDelta = normalizeIntelDelta(chapter.intelDelta, state.saveState?.turnCount || chapter.turn || 1);
+  chapter.stateDelta = normalizeStateDelta(chapter.stateDelta);
 
   const warnings = [];
   if (chapter.prose.length < 300) warnings.push('正文篇幅明顯偏短');
@@ -2101,6 +2104,7 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
   // 排隊相關：排隊不是失敗，不計入模型嘗試次數
   let queuedTotalMs = 0;
   let retryCurrentModel = false;
+  let queueTicket = '';
 
   for (let planIdx = 0; planIdx < modelsToTry.length; planIdx++) {
     const model = modelsToTry[planIdx];
@@ -2141,9 +2145,14 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         }, LLM_CONFIG.STALL_TIMEOUT_MS);
       };
       armStallTimer();
+      const workerHeaders = {
+        'Content-Type': 'application/json',
+        'X-Undercurrent-Token': state.token || ''
+      };
+      if (queueTicket) workerHeaders['X-Queue-Ticket'] = queueTicket;
       const response = await fetch(workerUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: workerHeaders,
         body: JSON.stringify({
           model: model,
           messages: [
@@ -2163,11 +2172,16 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
 
         // 排隊中：還沒輪到，不是失敗。睡完該等的時間後重試同一個模型。
         const queueInfo = parseQueueResponse(errBody);
+        if (queueInfo && queueInfo.queueUnavailable) {
+          notifyUser('排隊服務暫時無法使用；為避免超出共用額度，本回尚未送出。請稍後重試。', 'error', 9000);
+          throw createQueueUnavailableError('queue service unavailable');
+        }
         if (queueInfo && queueInfo.queueFull) {
           notifyUser(`目前同時遊玩人數較多（約需 ${queueInfo.etaSeconds} 秒），請稍後再試這一回。`, 'error', 9000);
-          throw new Error('排隊人數過多，請稍後再試。');
+          throw createQueueUnavailableError('queue full');
         }
         if (queueInfo && queueInfo.queued) {
+          queueTicket = queueInfo.ticket || queueTicket;
           if (queuedTotalMs + queueInfo.waitMs > QUEUE_MAX_TOTAL_WAIT_MS) {
             notifyUser('排隊等待已超過 3 分鐘，請稍後再試這一回。', 'error', 9000);
             throw new Error('排隊等待逾時，請稍後再試。');
@@ -2186,6 +2200,7 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
       }
 
       const reader = response.body.getReader();
+      queueTicket = '';
       const decoder = new TextDecoder("utf-8");
       let fullContent = "";
       let buffer = "";
@@ -2287,6 +2302,7 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         notifyUser('已達上游每分鐘請求上限，請稍候約一分鐘再重試本回。', 'error', 9000);
         throw err;
       }
+      if (err && err.isQueueUnavailable) throw err;
       if (err && err.isQueueRetry) {
         continue;   // 排隊等待已完成，下一輪重試同一個模型
       }
@@ -2360,8 +2376,8 @@ const QUEUE_MAX_TOTAL_WAIT_MS = 180000;
 
 /**
  * 解析 Worker 的排隊回應。
- * @returns {{queued:true,waitMs:number,etaSeconds:number,position:number}
- *          |{queueFull:true,etaSeconds:number}|null}
+ * @returns {{queued:true,ticket:string,waitMs:number,etaSeconds:number,position:number}
+ *          |{queueFull:true,etaSeconds:number}|{queueUnavailable:true}|null}
  */
 function parseQueueResponse(bodyText) {
   try {
@@ -2369,6 +2385,7 @@ function parseQueueResponse(bodyText) {
     if (data && data.queued) {
       return {
         queued: true,
+        ticket: typeof data.ticket === 'string' ? data.ticket : '',
         waitMs: Math.max(1000, Number(data.waitMs) || 1000),
         etaSeconds: Number(data.etaSeconds) || 1,
         position: Number(data.position) || 1
@@ -2377,6 +2394,7 @@ function parseQueueResponse(bodyText) {
     if (data && data.error && data.error.queueFull) {
       return { queueFull: true, etaSeconds: Number(data.error.etaSeconds) || 0 };
     }
+    if (data && data.error && data.error.queueUnavailable) return { queueUnavailable: true };
   } catch (e) { /* 不是排隊回應，交給後續的錯誤判別 */ }
   return null;
 }
@@ -2384,18 +2402,28 @@ function parseQueueResponse(bodyText) {
 /** 排隊期間把等待狀況寫進 loading，讓玩家知道系統沒當掉而是在排隊 */
 function reportQueueStatus(position, etaSeconds, waitedMs) {
   const waited = Math.round(waitedMs / 1000);
-  if (dom.loadingText) dom.loadingText.textContent = '前方尚有其他玩家，排隊中……';
+  const statusText = document.getElementById('server-status-text');
+  const cooldownText = document.getElementById('server-cooldown-text');
+  if (dom.loadingText) dom.loadingText.textContent = '正在等待故事生成順位……';
   if (dom.loadingSubtext) {
     dom.loadingSubtext.textContent =
       `目前排在第 ${position} 位，預計還需 ${etaSeconds} 秒`
-      + (waited > 0 ? `（已等待 ${waited} 秒）。` : '。');
+      + (waited > 0 ? `（已等待 ${waited} 秒）。順位已保留，可安心等待或取消。` : '。順位已為你保留。');
   }
+  if (statusText) statusText.textContent = `前方有其他玩家，已保留第 ${position} 位`;
+  if (cooldownText) cooldownText.textContent = `約 ${etaSeconds} 秒`;
 }
 
 /** 排隊重試不是失敗，只是「還沒輪到」，必須與真正的錯誤區分 */
 function createQueueRetryError(model) {
   const err = new Error(`Model ${model} queued`);
   err.isQueueRetry = true;
+  return err;
+}
+
+function createQueueUnavailableError(detail) {
+  const err = new Error(`Queue unavailable: ${detail}`);
+  err.isQueueUnavailable = true;
   return err;
 }
 
@@ -2579,7 +2607,7 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
     } catch(e) {
       if (isGenerationAbortError(e)) throw createGenerationAbortError();
       // Worker 與 GAS 共用同一個上游額度；429 時切 GAS 只會再次被限流。
-      if (e && e.isRateLimited) throw e;
+      if (e && (e.isRateLimited || e.isQueueUnavailable)) throw e;
       console.warn('Worker error, fallback to GAS', e);
     }
   }
@@ -2823,7 +2851,7 @@ function getLoreMarkdown(id) {
 async function handleReloadLore() {
   const profile = getActivePlayerProfile();
   if (!state.token || state.token.startsWith('tok_local_')) {
-    notifyUser('本機模式無法調閱 Drive 角色卡，將沿用內建人設。', 'error', 5000);
+    notifyUser('本機模式無法更新雲端角色設定，將沿用內建人設。', 'error', 5000);
     return;
   }
   const removed = clearLoreCache();
@@ -2948,8 +2976,11 @@ function buildActDossierBlock(saveState) {
  * 近期劇情：最近 N 回的完整正文，並附上當時提供給玩家的三個選項
  * —— 讓模型知道玩家是在什麼選項組合裡做出該抉擇的。
  */
-function buildRecentHistoryBlock(historyList) {
-  const list = Array.isArray(historyList) ? historyList : [];
+function buildRecentHistoryBlock(historyList, saveState = state.saveState) {
+  const resetTurn = Math.max(0, Number(saveState?.meta?.contextResetTurn) || 0);
+  const list = (Array.isArray(historyList) ? historyList : []).filter(item =>
+    !resetTurn || Number(item?.turn || 0) >= resetTurn
+  );
   if (list.length === 0) return '【近期劇情】\n（本局剛開始，正處於交鋒對峙中）\n';
 
   const recent = list.slice(-CONTEXT_BUDGET.recentTurns);
@@ -3090,6 +3121,102 @@ function applyIntelDelta(saveState, rawDelta, turn) {
 
   saveState.intelLedger = ledger.slice(-60);
   return changes;
+}
+
+function normalizeStateDelta(raw) {
+  const delta = isPlainObject(raw) ? raw : {};
+  const clampChange = value => {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(-100, Math.min(100, Math.round(n))) : 0;
+  };
+  const normalizeItem = item => {
+    if (!isPlainObject(item)) return null;
+    const name = String(item.name || '').trim().slice(0, 120);
+    if (!name) return null;
+    return {
+      id: String(item.id || createIntelId(name)).trim().slice(0, 64),
+      name,
+      count: Math.max(1, Math.min(99, Number(item.count) || 1)),
+      desc: String(item.desc || '').trim().slice(0, 240)
+    };
+  };
+  const relationshipChanges = {};
+  if (isPlainObject(delta.relationshipChanges)) {
+    Object.keys(delta.relationshipChanges).slice(0, 20).forEach(name => {
+      const value = clampChange(delta.relationshipChanges[name]);
+      if (value) relationshipChanges[String(name).slice(0, 80)] = value;
+    });
+  }
+  return {
+    hpChange: clampChange(delta.hpChange),
+    sanityChange: clampChange(delta.sanityChange),
+    itemsAdded: (Array.isArray(delta.itemsAdded) ? delta.itemsAdded : []).map(normalizeItem).filter(Boolean).slice(0, 8),
+    itemsRemoved: (Array.isArray(delta.itemsRemoved) ? delta.itemsRemoved : []).map(item =>
+      String(isPlainObject(item) ? (item.id || item.name || '') : item || '').slice(0, 120)
+    ).filter(Boolean).slice(0, 8),
+    relationshipChanges,
+    questProgress: String(delta.questProgress || '').trim().slice(0, 500)
+  };
+}
+
+function applyStateDelta(saveState, rawDelta) {
+  const st = saveState || {};
+  const delta = normalizeStateDelta(rawDelta);
+  st.protagonist = isPlainObject(st.protagonist) ? st.protagonist : {};
+  const currentHp = Number(st.protagonist.hp);
+  const currentSanity = Number(st.protagonist.sanity);
+  st.protagonist.hp = Math.max(0, Math.min(100, (Number.isFinite(currentHp) ? currentHp : 100) + delta.hpChange));
+  st.protagonist.sanity = Math.max(0, Math.min(100, (Number.isFinite(currentSanity) ? currentSanity : 100) + delta.sanityChange));
+  st.inventory = Array.isArray(st.inventory) ? st.inventory : [];
+  delta.itemsAdded.forEach(item => {
+    const existing = st.inventory.find(current => current && (current.id === item.id || current.name === item.name));
+    if (existing) existing.count = Math.min(99, (Number(existing.count) || 1) + item.count);
+    else st.inventory.push(item);
+  });
+  if (delta.itemsRemoved.length) {
+    st.inventory = st.inventory.filter(item => item && !delta.itemsRemoved.includes(item.id) && !delta.itemsRemoved.includes(item.name));
+  }
+  st.inventory = st.inventory.slice(-60);
+  st.relationships = isPlainObject(st.relationships) ? st.relationships : {};
+  Object.keys(delta.relationshipChanges).forEach(name => {
+    const current = Number(st.relationships[name]);
+    st.relationships[name] = Math.max(0, Math.min(100, (Number.isFinite(current) ? current : 0) + delta.relationshipChanges[name]));
+  });
+  st.questFlags = isPlainObject(st.questFlags) ? st.questFlags : {};
+  if (delta.questProgress) st.questFlags.latest_update = delta.questProgress;
+  return delta;
+}
+
+function applyChapterStateChanges(chapter, profile, turn) {
+  state.saveState = state.saveState || {};
+  const normalizedDelta = normalizeStateDelta(chapter.stateDelta);
+  chapter.stateDelta = normalizedDelta;
+  chapter.intelChanges = applyIntelDelta(state.saveState, chapter.intelDelta, turn);
+  applyStateDelta(state.saveState, normalizedDelta);
+
+  const sp = chapter.statusPanel || {};
+  state.saveState.status = isPlainObject(state.saveState.status) ? state.saveState.status : {};
+  const readPercent = value => {
+    if (typeof value === 'number') return value;
+    const parsed = parseInt(String(value || '').replace(/[^0-9-]/g, ''), 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const tension = readPercent(sp.tension);
+  const intoxication = readPercent(sp.intoxication);
+  if (tension !== null) state.saveState.status.tension = Math.max(0, Math.min(100, Math.round(tension)));
+  if (intoxication !== null) state.saveState.status.tipsy = Math.max(0, Math.min(100, Math.round(intoxication)));
+
+  const leadName = profile?.targetLeadName || profile?.targetLead || '徐令謙';
+  if (normalizedDelta.relationshipChanges[leadName] === undefined) {
+    const favDelta = Number(sp.favorabilityDelta);
+    if (Number.isFinite(favDelta)) {
+      state.saveState.relationships = isPlainObject(state.saveState.relationships) ? state.saveState.relationships : {};
+      const current = Number(state.saveState.relationships[leadName]);
+      state.saveState.relationships[leadName] = Math.max(0, Math.min(100,
+        (Number.isFinite(current) ? current : 25) + Math.max(-5, Math.min(10, Math.round(favDelta)))));
+    }
+  }
+  return chapter;
 }
 
 /**
@@ -3424,6 +3551,14 @@ ${characterPromptBlock}
     "add": [{ "id": "intel_英文短碼", "name": "具體線索名稱", "type": "evidence|intel|contact|access", "confidence": "unverified|partial|verified", "source": "取得來源", "effect": "可用於何種查證或談判" }],
     "update": [{ "id": "既有線索ID", "status": "available|exposed|delivered|invalid", "confidence": "unverified|partial|verified", "effect": "狀態改變後的用途" }]
   },
+  "stateDelta": {
+    "hpChange": 0,
+    "sanityChange": 0,
+    "itemsAdded": [],
+    "itemsRemoved": [],
+    "relationshipChanges": { "${profile.targetLeadName || '主要對象'}": 0 },
+    "questProgress": "本回實際推進的任務狀態；沒有則留空字串"
+  },
   "prose": "【以 800–1000 個中文字為建議目標、優先完整推進並自然收束場景的小說正文；可依內容需要略多或略少，不截斷、不灌水】",
   "choices": [
     { "id": "A", "label": "[A] 【選項A完整行動與對白描述】", "risk": "low", "hint": "策略提示" },
@@ -3467,7 +3602,7 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
   // 2. 上下文信封各區塊（見 CONTEXT_BUDGET 的說明）
   const playerBlock = buildPlayerProfileBlock(profile);
   const dossierBlock = buildActDossierBlock(saveState);
-  const recentHistory = buildRecentHistoryBlock(historyList);
+  const recentHistory = buildRecentHistoryBlock(historyList, saveState);
   const pinnedMemoryBlock = buildPinnedMemoryBlock(historyList, saveState);
   const liveStateBlock = buildLiveStateBlock(saveState, profile);
   const summaryBlock = summaryPool ? `【長期劇情摘要池（中期劇情的濃縮事實）】\n${summaryPool}\n` : '';
@@ -3513,6 +3648,14 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
   "intelDelta": {
     "add": [{ "id": "intel_英文短碼", "name": "具體線索名稱", "type": "evidence|intel|contact|access", "confidence": "unverified|partial|verified", "source": "取得來源", "effect": "可用於何種查證或談判" }],
     "update": [{ "id": "既有線索ID", "status": "available|exposed|delivered|invalid", "confidence": "unverified|partial|verified", "effect": "更新後用途" }]
+  },
+  "stateDelta": {
+    "hpChange": 0,
+    "sanityChange": 0,
+    "itemsAdded": [],
+    "itemsRemoved": [],
+    "relationshipChanges": { "${profile.targetLeadName || '主要對象'}": 0 },
+    "questProgress": "本回實際推進的任務狀態；沒有則留空字串"
   },
   "choices": [
     { "id": "A", "label": "[A] 【選項A完整行動與對白描述】", "risk": "low", "hint": "提示" },
@@ -3684,7 +3827,16 @@ async function startNewGameWithProfile(profile) {
       userId: state.userId || 'usr_local',
       createdAt: new Date().toISOString(),
       currentAct: 1,
-      playerProfile: profile
+      playerProfile: profile,
+      initialStateBaseline: {
+        protagonist: { hp: 100, sanity: 100 },
+        relationships: JSON.parse(JSON.stringify(rels)),
+        inventory: [],
+        intelLedger: [],
+        questFlags: {
+          main_quest: isShura ? '暗流初會：在全勢力交鋒中破局' : `初會：與 ${profile.targetLeadName} 的交鋒`
+        }
+      }
     },
     turnCount: 1,
     protagonist: {
@@ -3787,7 +3939,7 @@ async function startNewGameWithProfile(profile) {
   initialChapter.act = 1;
   initialChapter.turn = 1;
   initialChapter.chosenLabel = '【正式開局】';
-  initialChapter.intelChanges = applyIntelDelta(state.saveState, initialChapter.intelDelta, 1);
+  applyChapterStateChanges(initialChapter, profile, 1);
 
   state.chapterData = initialChapter;
   initialChapter.stateSnapshot = JSON.parse(JSON.stringify(state.saveState || {}));
@@ -3827,7 +3979,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
   const transactionSnapshot = {
     saveState: JSON.parse(JSON.stringify(state.saveState || {})),
     chapterData: JSON.parse(JSON.stringify(state.chapterData || {})),
-    chapterHistoryList: JSON.parse(JSON.stringify(state.chapterHistoryList || []))
+    chapterHistoryLength: (state.chapterHistoryList || []).length
   };
 
   try {
@@ -3911,36 +4063,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     nextChapter = auditGeneratedChapter(nextChapter, profile);
     nextChapter.act = state.saveState.meta.currentAct || 1;
     nextChapter.turn = state.saveState.turnCount;
-    nextChapter.intelChanges = applyIntelDelta(state.saveState, nextChapter.intelDelta, state.saveState.turnCount);
-
-    // 💡 真實數值解析與更新
-    if (nextChapter.statusPanel) {
-      const sp = nextChapter.statusPanel;
-      state.saveState.status = state.saveState.status || {};
-      
-      // 張力值解析
-      if (typeof sp.tension === 'number') {
-        state.saveState.status.tension = Math.max(0, Math.min(100, Math.round(sp.tension)));
-      } else if (typeof sp.tension === 'string') {
-        const num = parseInt(sp.tension.replace(/[^0-9]/g, ''), 10);
-        if (!isNaN(num)) state.saveState.status.tension = Math.max(0, Math.min(100, num));
-      }
-      
-      // 微醺度解析
-      if (typeof sp.intoxication === 'number') {
-        state.saveState.status.tipsy = Math.max(0, Math.min(100, Math.round(sp.intoxication)));
-      } else if (typeof sp.intoxication === 'string') {
-        const num = parseInt(sp.intoxication.replace(/[^0-9]/g, ''), 10);
-        if (!isNaN(num)) state.saveState.status.tipsy = Math.max(0, Math.min(100, num));
-      }
-      
-      // 好感度增減解析
-      const leadKey = profile.targetLeadName || profile.targetLead || '徐令謙';
-      state.saveState.relationships = state.saveState.relationships || {};
-      const curFav = state.saveState.relationships[leadKey] || 25;
-      const delta = typeof sp.favorabilityDelta === 'number' ? sp.favorabilityDelta : 3;
-      state.saveState.relationships[leadKey] = Math.max(0, Math.min(100, curFav + delta));
-    }
+    applyChapterStateChanges(nextChapter, profile, state.saveState.turnCount);
 
     nextChapter.chosenLabel = choiceLabel;
     dismissError();
@@ -3963,7 +4086,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     // 本回合未成功推進，把預先遞增的回合數還原，避免回合編號憑空跳號。
     state.saveState = transactionSnapshot.saveState;
     state.chapterData = transactionSnapshot.chapterData;
-    state.chapterHistoryList = transactionSnapshot.chapterHistoryList;
+    state.chapterHistoryList = (state.chapterHistoryList || []).slice(0, transactionSnapshot.chapterHistoryLength);
     safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
     persistChapterHistory(state.chapterHistoryList);
     if (isGenerationAbortError(err)) {
@@ -3988,6 +4111,8 @@ function handleCustomActionSubmit() {
   input.value = '';
   delete input.dataset.choiceId;
   delete input.dataset.intelId;
+  const selectedSummary = document.getElementById('selected-action-summary');
+  if (selectedSummary) { selectedSummary.classList.add('hidden'); selectedSummary.textContent = ''; }
   autoGrowActionInput();
   makeChoice(sourceChoiceId, val, false);
 }
@@ -4000,6 +4125,7 @@ function appendChapterToHistory(chapter, chosenLabel) {
     stateSnapshot: JSON.parse(JSON.stringify(state.saveState || {}))
   });
   state.chapterHistoryList.push(record);
+  state.chapterHistoryList = compactChaptersForMemory(state.chapterHistoryList);
   persistChapterHistory(state.chapterHistoryList);
 }
 
@@ -4064,21 +4190,13 @@ function renderStoryStream(activeChapter) {
     || (activeChapter && chapters[count - 1]?.turn === activeChapter.turn));
   const pastCount = activeInHistory ? count - 1 : count;
 
-  // C3: 先前每回都 innerHTML='' 再重建全部歷史章節 —— 50 回時每次推進都要重新
-  // 解析數萬字 HTML，手機上明顯卡頓，且捲動位置會被打掉。現在只補上缺少的段落，
-  // 已渲染過的舊章節留在 DOM 裡不動。
-  const renderedSections = Array.from(dom.novelStreamContainer.children)
-    .filter(el => el.dataset && el.dataset.pastTurnIndex !== undefined);
-  const activeCardEl = document.getElementById('active-chapter-card');
-  if (activeCardEl) activeCardEl.remove();
+  // DOM 永遠只保留最近視窗；切換存檔時也必定清空，避免混入上一條時間線。
+  // 每次最多重建 12 張卡片，成本固定，不再隨 50／100 回線性成長。
+  const DOM_CHAPTER_WINDOW_SIZE = 12;
+  const renderStart = Math.max(0, pastCount - DOM_CHAPTER_WINDOW_SIZE);
+  dom.novelStreamContainer.innerHTML = '';
 
-  // 章節數變少（悔棋／載入其他存檔）就整份重建，避免殘留別局的章節
-  if (renderedSections.length > pastCount) {
-    dom.novelStreamContainer.innerHTML = '';
-  }
-  const alreadyRendered = Array.from(dom.novelStreamContainer.children).length;
-
-  for (let i = alreadyRendered; i < pastCount; i++) {
+  for (let i = renderStart; i < pastCount; i++) {
     const past = chapters[i];
     if (!past) continue;
 
@@ -4145,17 +4263,14 @@ function renderStoryStream(activeChapter) {
         </h1>
       </div>
 
-      <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0 max-w-[58%] sm:max-w-none">
-        <button id="stream-regenerate-btn" class="game-action-control text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-brand-gold px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1 cursor-pointer" title="重新生成本回演繹">
-          <span>重新生成</span>
-        </button>
-        <button id="stream-edit-last-btn" class="game-action-control text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-sky-500 px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1 cursor-pointer" title="修改上一個玩家行動再重新演繹">
-          <span>改寫行動</span>
-        </button>
-        <button id="stream-rewind-btn" class="game-action-control text-xs bg-brand-card hover:bg-brand-border text-slate-300 hover:text-amber-300 px-2.5 py-1.5 rounded-lg border border-brand-border transition flex items-center gap-1 cursor-pointer" title="回退到上一回合（可重新選擇）">
-          <span>回退</span>
-        </button>
-      </div>
+      <details class="chapter-actions-menu relative shrink-0">
+        <summary class="list-none px-3 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs font-bold text-slate-700 cursor-pointer">章節操作 ⋯</summary>
+        <div class="absolute right-0 top-full z-20 mt-1 min-w-40 rounded-xl border border-brand-border bg-brand-surface p-1.5 shadow-xl flex flex-col gap-1">
+          <button id="stream-regenerate-btn" class="game-action-control text-left text-xs hover:bg-brand-card text-slate-700 px-3 py-2 rounded-lg transition cursor-pointer" title="重新生成本回演繹">重新生成本回</button>
+          <button id="stream-edit-last-btn" class="game-action-control text-left text-xs hover:bg-brand-card text-slate-700 px-3 py-2 rounded-lg transition cursor-pointer" title="修改上一個玩家行動再重新演繹">改寫上一個行動</button>
+          <button id="stream-rewind-btn" class="game-action-control text-left text-xs hover:bg-brand-card text-slate-700 px-3 py-2 rounded-lg transition cursor-pointer" title="回退到上一回合（可重新選擇）">回退上一回</button>
+        </div>
+      </details>
     </div>
 
     ${activeActionPill}
@@ -4404,6 +4519,11 @@ function renderChoices(choices) {
       autoGrowActionInput();
       dom.customActionInput.focus();
       dom.customActionInput.setSelectionRange(cleanLabel.length, cleanLabel.length);
+      const selectedSummary = document.getElementById('selected-action-summary');
+      if (selectedSummary) {
+        selectedSummary.textContent = `已選擇：${cleanLabel}。可以直接執行，或在下方修改內容。`;
+        selectedSummary.classList.remove('hidden');
+      }
       notifyUser('已帶入建議行動；可直接執行，或先改寫成更符合你的做法。', 'info', 2600);
     });
 
@@ -4535,6 +4655,23 @@ function updateCloudSyncBadge(status, detail = '') {
   badge.title = status === 'local'
     ? '本機模式：進度只存在這台裝置，登入雲端帳號後才會備份'
     : '雲端同步狀態（點擊立即同步）';
+  updateSaveTrustStatus(status, detail);
+}
+
+function updateSaveTrustStatus(status, detail = '') {
+  const el = document.getElementById('save-trust-status');
+  if (!el) return;
+  const labels = {
+    syncing: '正在備份進度…',
+    synced: `雲端已保存${detail ? ` · ${detail}` : ''}`,
+    failed: '本機已保存 · 雲端待重試',
+    local: '進度只保存在這台裝置',
+    idle: '進度已保存在本機'
+  };
+  el.textContent = labels[status] || labels.idle;
+  el.className = status === 'failed'
+    ? 'text-[11px] font-bold text-rose-700'
+    : 'text-[11px] text-slate-600';
 }
 
 /** B2: 首頁「繼續當前冒險」卡片顯示真實進度，無進度時停用 */
@@ -4542,6 +4679,8 @@ function updateHomeContinueCard() {
   const desc = document.getElementById('home-continue-desc');
   const meta = document.getElementById('home-continue-meta');
   const card = document.getElementById('home-continue-game-btn');
+  const newGameCard = document.getElementById('home-new-game-btn');
+  const cta = document.getElementById('home-continue-cta');
   if (!desc || !card) return;
 
   const hasProgress = !!(state.chapterData && state.chapterHistoryList?.length);
@@ -4563,6 +4702,9 @@ function updateHomeContinueCard() {
     }
     card.classList.remove('opacity-50', 'pointer-events-none');
     card.removeAttribute('aria-disabled');
+    card.classList.add('home-action-primary');
+    newGameCard?.classList.remove('home-action-primary');
+    if (cta) cta.textContent = `繼續第 ${turn} 回 →`;
   } else {
     desc.textContent = hasSaves
       ? '目前無進行中的章節，可從存檔庫挑選存檔載入。'
@@ -4573,6 +4715,9 @@ function updateHomeContinueCard() {
     card.classList.toggle('pointer-events-none', shouldDisable);
     if (shouldDisable) card.setAttribute('aria-disabled', 'true');
     else card.removeAttribute('aria-disabled');
+    card.classList.remove('home-action-primary');
+    newGameCard?.classList.add('home-action-primary');
+    if (cta) cta.textContent = hasSaves ? '選擇存檔 →' : '尚無進度';
   }
 }
 
@@ -4597,7 +4742,7 @@ function updateRebaseSuggestion() {
   }
   if (textEl) {
     textEl.textContent = `第 ${act} 幕已累積 ${turnsInAct} 回，上下文已相當長。`
-      + '建議執行卷末換窗，把本幕濃縮為長期記憶檔案以維持劇情連貫度（數值與道具全部保留）。';
+      + '建議整理故事記憶，把本幕濃縮成重要情節以維持連貫度（數值與道具全部保留）。';
   }
   banner.style.display = 'flex';
 }
@@ -4905,6 +5050,8 @@ const ARCHIVED_PROSE_EXCERPT = 240;
 
 /** 本機保留完整正文的回合數；更舊的只留摘錄（完整版在雲端 Full_Novel.md） */
 const LOCAL_FULL_PROSE_TURNS = 30;
+const MAX_IN_MEMORY_CHAPTERS = 60;
+const FULL_STATE_SNAPSHOT_TURNS = 12;
 
 /** 取出最近的章節視窗 */
 function chapterWindow(list, size = CHAPTER_WINDOW_SIZE) {
@@ -4930,6 +5077,18 @@ function compactChaptersForStorage(list) {
       proseArchived: true
     });
   });
+}
+
+function compactChaptersForMemory(list) {
+  let compacted = compactChaptersForStorage(list);
+  const snapshotCutoff = Math.max(0, compacted.length - FULL_STATE_SNAPSHOT_TURNS);
+  compacted = compacted.map((chapter, index) => {
+    if (!chapter || index >= snapshotCutoff || chapter.stateSnapshot === undefined) return chapter;
+    const copy = Object.assign({}, chapter);
+    delete copy.stateSnapshot;
+    return copy;
+  });
+  return compacted.slice(-MAX_IN_MEMORY_CHAPTERS);
 }
 
 /** 統一的章節列表持久化入口，所有寫入都應該經過這裡 */
@@ -4991,9 +5150,11 @@ function getNamedSavesList() {
 }
 
 function persistNamedSavesList(saves) {
-  safeLocalStorageSet('undercurrent_named_saves', JSON.stringify(saves));
+  const ok = safeLocalStorageSet('undercurrent_named_saves', JSON.stringify(saves.slice(0, 100)));
+  if (!ok) return false;
   renderSaveArchivesList();
   renderHomeRecentSaves();
+  return true;
 }
 
 function openSaveArchiveModal() {
@@ -5170,9 +5331,13 @@ function createNamedSave(saveName, metadata = {}) {
   };
 
   saves.unshift(newSaveEntry);
-  persistNamedSavesList(saves);
+  if (!persistNamedSavesList(saves)) {
+    notifyUser('本機儲存空間不足，這筆存檔尚未建立；請先匯出或刪除舊存檔。', 'error', 8000);
+    return false;
+  }
   notifyUser(`存檔「${name}」已儲存。`, 'success');
   syncStateToGoogleDriveCloud(state.saveState, state.chapterData);
+  return true;
 }
 
 async function renameNamedSave(saveId) {
@@ -5183,8 +5348,8 @@ async function renameNamedSave(saveId) {
   const newName = await promptDialog('請輸入新的存檔名稱：', target.name, { title: '重新命名存檔' });
   if (newName && newName.trim()) {
     target.name = newName.trim();
-    persistNamedSavesList(saves);
-    notifyUser('存檔已重新命名。', 'success');
+    if (persistNamedSavesList(saves)) notifyUser('存檔已重新命名。', 'success');
+    else notifyUser('本機儲存空間不足，重新命名未保存。', 'error');
   }
 }
 
@@ -5195,8 +5360,8 @@ async function deleteNamedSave(saveId) {
 
   if (await confirmDangerDialog(`確定要刪除存檔「${target.name}」嗎？此操作無法復原。`, { title: '刪除存檔', confirmText: '刪除' })) {
     const remaining = saves.filter(s => s.id !== saveId);
-    persistNamedSavesList(remaining);
-    notifyUser('已刪除該筆存檔。', 'success');
+    if (persistNamedSavesList(remaining)) notifyUser('已刪除該筆存檔。', 'success');
+    else notifyUser('無法更新本機存檔索引。', 'error');
   }
 }
 
@@ -5207,7 +5372,7 @@ function loadNamedSave(saveId) {
 
   state.saveState = target.saveState;
   state.chapterData = target.chapterData;
-  state.chapterHistoryList = target.chapterHistoryList || [];
+  state.chapterHistoryList = compactChaptersForMemory(target.chapterHistoryList || []);
   state.playerProfile = target.playerProfile || target.saveState?.meta?.playerProfile || null;
   state.previousStateSnapshot = null;
   state.lastChoicePayload = null;
@@ -5634,6 +5799,25 @@ function openCharacterCreationModal() {
   }
 }
 
+function toggleCreatorAdvancedFields() {
+  const form = document.getElementById('char-creation-form');
+  const button = document.getElementById('creator-advanced-toggle');
+  const icon = document.getElementById('creator-advanced-toggle-icon');
+  if (!form || !button) return;
+  const opening = form.classList.contains('creator-advanced-fields-collapsed');
+  form.classList.toggle('creator-advanced-fields-collapsed', !opening);
+  button.setAttribute('aria-expanded', String(opening));
+  if (icon) icon.textContent = opening ? '收合 ▴' : '展開 ▾';
+}
+
+function randomizeProfileForm() {
+  const keys = Object.keys(DEFAULT_PRESETS).filter(key => key !== 'preset_custom');
+  const key = keys[Math.floor(Math.random() * keys.length)] || 'preset_yang';
+  loadProfilePresetIntoForm(key);
+  setFormValue('form-player-appearance', '隨機');
+  notifyUser('已產生一組完整人設；仍可自由修改後再開始。', 'success', 3200);
+}
+
 function closeCharacterCreationModal() {
   closeOverlay('character-creation-modal');
 }
@@ -5770,8 +5954,8 @@ function restoreSavedStateFromStorage() {
     if (savedChapters) {
       const parsedChapters = JSON.parse(savedChapters);
       if (Array.isArray(parsedChapters) && parsedChapters.length > 0) {
-        state.chapterHistoryList = parsedChapters;
-        state.chapterData = parsedChapters[parsedChapters.length - 1];
+        state.chapterHistoryList = compactChaptersForMemory(parsedChapters);
+        state.chapterData = state.chapterHistoryList[state.chapterHistoryList.length - 1];
       }
     }
   } catch (e) {
@@ -5822,6 +6006,16 @@ async function handleRegenerateTurn() {
       regeneratedChapter.act = 1;
       regeneratedChapter.turn = 1;
       regeneratedChapter.chosenLabel = '【正式開局】';
+      const baseline = state.saveState?.meta?.initialStateBaseline;
+      if (baseline) {
+        state.saveState.protagonist = Object.assign({}, state.saveState.protagonist || {}, baseline.protagonist || {});
+        state.saveState.relationships = JSON.parse(JSON.stringify(baseline.relationships || {}));
+        state.saveState.inventory = JSON.parse(JSON.stringify(baseline.inventory || []));
+        state.saveState.intelLedger = JSON.parse(JSON.stringify(baseline.intelLedger || []));
+        state.saveState.questFlags = JSON.parse(JSON.stringify(baseline.questFlags || {}));
+        state.saveState.status = {};
+      }
+      applyChapterStateChanges(regeneratedChapter, profile, 1);
       regeneratedChapter.stateSnapshot = JSON.parse(JSON.stringify(state.saveState || {}));
       state.chapterData = regeneratedChapter;
       state.chapterHistoryList = [regeneratedChapter];
@@ -5936,23 +6130,35 @@ function handleAbortGeneration() {
 }
 
 async function handleActRebase() {
-  if (state.isGenerating) return notifyUser('目前有劇情正在生成，請完成後再重整幕篇。');
+  if (state.isGenerating) return notifyUser('目前有劇情正在生成，請完成後再整理故事記憶。');
   const rebaseOk = await confirmDialog(
-    '將把本幕所有章節濃縮為一份約 800 字的幕篇檔案，並重置上下文視窗。\n數值、好感度與道具全部保留，原始正文會另存備份。',
-    { title: '卷末換窗 (Act Rebase)', confirmText: '執行換窗' }
+    '系統會整理本幕的重要情節，讓下一幕維持連貫。\n數值、好感度、道具與原始正文都會保留。',
+    { title: '整理故事記憶', confirmText: '開始整理' }
   );
   if (!rebaseOk) return;
   if (!state.saveState) return notifyUser('目前尚無可重整的遊戲進度。', 'error');
 
   if (!state.token || state.token.startsWith('tok_local_')) {
-    state.saveState.meta.currentAct = (state.saveState.meta.currentAct || 1) + 1;
+    const actNumber = state.saveState.meta.currentAct || 1;
+    const recent = (state.chapterHistoryList || []).slice(-8);
+    const localDossier = [
+      `# 第 ${actNumber} 幕幕篇檔案（本機濃縮）`,
+      clampBlock(state.saveState.summaryPool || '尚無長期摘要。', 1200),
+      '## 幕末銜接',
+      recent.map(ch => `- 第 ${ch.turn || '?'} 回 ${ch.chapterTitle || ''}：${String(ch.prose || '').slice(0, 160)}`).join('\n')
+    ].join('\n\n');
+    state.saveState.actDossiers = (Array.isArray(state.saveState.actDossiers) ? state.saveState.actDossiers : [])
+      .concat(localDossier).slice(-6);
+    state.saveState.meta.currentAct = actNumber + 1;
+    state.saveState.meta.contextResetTurn = Math.max(1, Number(state.saveState.turnCount) || 1);
+    state.saveState.summaryPool = `【第 ${actNumber} 幕已完結並重整】${clampBlock(state.saveState.summaryPool, 1700)}`;
     safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
     updateGameplayBreadcrumb();
-    notifyUser('已切換至第 ' + state.saveState.meta.currentAct + ' 幕。本機模式不執行 AI 幕篇濃縮。', 'info', 5000);
+    notifyUser('故事記憶整理完成，已進入第 ' + state.saveState.meta.currentAct + ' 幕。', 'success', 5000);
     return;
   }
 
-  showLoading('卷末換窗中……', '正在將本幕濃縮為長期記憶檔案……');
+  showLoading('正在整理故事記憶……', '系統會保留人物關係、數值、物品與重要情節。');
   setGenerationBusy(true);
   try {
     const response = await fetch(state.gasApiUrl, {
@@ -5974,10 +6180,10 @@ async function handleActRebase() {
     safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
     updateGameplayBreadcrumb();
     renderSaveState();
-    notifyUser('卷末換窗完成，已晉升至第 ' + state.saveState.meta.currentAct + ' 幕。', 'success', 5000);
+    notifyUser('故事記憶整理完成，已進入第 ' + state.saveState.meta.currentAct + ' 幕。', 'success', 5000);
   } catch (err) {
     console.error('[Act Rebase] Failed:', err);
-    notifyUser('卷末換窗失敗：' + err.message, 'error', 6000);
+    notifyUser('故事記憶整理失敗：' + err.message, 'error', 6000);
   } finally {
     hideLoading();
     setGenerationBusy(false);
@@ -5994,11 +6200,11 @@ function startServerCooldown(seconds) {
   const paint = () => {
     if (statusText) {
       statusText.textContent = remaining > 0
-        ? '筆觸沉澱中 · 防限流保護'
-        : 'AI 主筆作家在線 · 動態演繹就緒';
+        ? '正在等待下一個生成時段'
+        : '故事引擎已就緒';
     }
     cooldownEls.forEach(el => {
-      el.textContent = remaining > 0 ? `冷卻 ${remaining} 秒` : '可立即操作';
+      el.textContent = remaining > 0 ? `約 ${remaining} 秒` : '可立即操作';
       el.className = remaining > 0
         ? 'text-[11px] font-mono text-amber-400'
         : 'text-[11px] font-mono text-slate-500';

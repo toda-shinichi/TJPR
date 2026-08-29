@@ -212,6 +212,10 @@ var MemoryPipeline = (function() {
     if (!s.relationships || typeof s.relationships !== 'object') s.relationships = {};
     if (!s.questFlags || typeof s.questFlags !== 'object') s.questFlags = {};
     if (typeof s.summaryPool !== 'string') s.summaryPool = '';
+    s.summaryPool = s.summaryPool.substring(0, CONFIG.PIPELINE.SUMMARY_POOL_MAX_CHARS || 2000);
+    s.turnHistory = s.turnHistory.slice(-(CONFIG.PIPELINE.TURN_HISTORY_MAX || 30));
+    s.actDossiers = s.actDossiers.slice(-(CONFIG.PIPELINE.ACT_DOSSIER_MAX || 6));
+    s.auditLog = s.auditLog.slice(-(CONFIG.PIPELINE.AUDIT_LOG_MAX || 20));
     return s;
   }
 
@@ -303,7 +307,11 @@ var MemoryPipeline = (function() {
       '【當前回合】：第 ' + saveState.turnCount + ' 回合',
       '',
       '【歷史幕篇重整檔案 (Act Dossier)】：',
-      saveState.actDossiers && saveState.actDossiers.length > 0 ? saveState.actDossiers.join('\n\n') : '（第 1 幕初始）',
+      saveState.actDossiers && saveState.actDossiers.length > 0
+        ? saveState.actDossiers.slice(-(CONFIG.PIPELINE.ACT_DOSSIERS_IN_PROMPT || 2)).map(function(item) {
+            return String(item || '').substring(0, 1600);
+          }).join('\n\n')
+        : '（第 1 幕初始）',
       '',
       '【滾動高密度記憶摘要池 (Summary Pool)】：',
       saveState.summaryPool || '（暫無）',
@@ -397,6 +405,7 @@ var MemoryPipeline = (function() {
       summaryDelta: turnOutput.narrativeSummaryDelta || ''
     };
     saveState.turnHistory.push(turnRecord);
+    saveState.turnHistory = saveState.turnHistory.slice(-(CONFIG.PIPELINE.TURN_HISTORY_MAX || 30));
 
     // 每 5 回合觸發：Fast Model 摘要池更新
     if (saveState.turnCount % CONFIG.PIPELINE.SUMMARY_UPDATE_CADENCE === 0) {
@@ -423,6 +432,7 @@ var MemoryPipeline = (function() {
           timestamp: new Date().toISOString(),
           report: auditReport
         });
+        saveState.auditLog = saveState.auditLog.slice(-(CONFIG.PIPELINE.AUDIT_LOG_MAX || 20));
       } catch (auditErr) {
         console.error('執行一致性稽核失敗: ' + auditErr.message);
       }
@@ -469,6 +479,7 @@ var MemoryPipeline = (function() {
     // 封存並更新存檔狀態
     saveState.actDossiers = saveState.actDossiers || [];
     saveState.actDossiers.push(actDossier);
+    saveState.actDossiers = saveState.actDossiers.slice(-(CONFIG.PIPELINE.ACT_DOSSIER_MAX || 6));
 
     // 備份當前幕小說紀錄為 Full_Novel_Act_X.md
     var actNumber = saveState.meta.currentAct || 1;
@@ -477,6 +488,7 @@ var MemoryPipeline = (function() {
 
     // 重置即時視窗
     saveState.meta.currentAct = actNumber + 1;
+    saveState.meta.contextResetTurn = saveState.turnCount || 1;
     saveState.turnHistory = []; // 上下文視窗歸零
     saveState.summaryPool = '【第 ' + actNumber + ' 幕已完結並重整】請根據幕篇檔案承接下一幕情節。';
 

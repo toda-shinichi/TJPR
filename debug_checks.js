@@ -8,6 +8,8 @@ const html = fs.readFileSync('index.html', 'utf8');
 const deployHtml = fs.readFileSync('project-epilogue/frontend-web/index.html', 'utf8');
 const css = fs.readFileSync('style.css', 'utf8');
 const deployCss = fs.readFileSync('project-epilogue/frontend-web/style.css', 'utf8');
+const generatedCss = fs.readFileSync('tailwind.generated.css', 'utf8');
+const deployGeneratedCss = fs.readFileSync('project-epilogue/frontend-web/tailwind.generated.css', 'utf8');
 const workerCode = fs.readFileSync('worker/index.js', 'utf8');
 const gasConfig = fs.readFileSync('project-epilogue/backend-gas/Config.js', 'utf8');
 const xuLingqianLore = fs.readFileSync('characters/01_徐令謙.md', 'utf8');
@@ -19,6 +21,9 @@ const aiServiceCode = fs.readFileSync('project-epilogue/backend-gas/AIService.js
 assert.strictEqual(rootApp, deployApp, '根目錄與部署版 app.js 不一致');
 assert.strictEqual(html, deployHtml, '根目錄與部署版 index.html 不一致');
 assert.strictEqual(css, deployCss, '根目錄與部署版 style.css 不一致');
+assert.strictEqual(generatedCss, deployGeneratedCss, '根目錄與部署版 Tailwind CSS 不一致');
+assert.doesNotMatch(html, /cdn\.tailwindcss\.com/, '正式頁面仍使用 Tailwind 開發版 CDN');
+assert.match(html, /rel="icon"/, '頁面缺少 favicon，瀏覽器會持續請求不存在的圖示');
 
 const htmlIds = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 assert.strictEqual(new Set(htmlIds).size, htmlIds.length, 'index.html 存在重複 id');
@@ -158,6 +163,36 @@ assert.match(intelInput.value, /使用線索「密約影本」\[intel_contract\]
 assert.strictEqual(intelInput.dataset.intelId, 'intel_contract', '帶入線索時未保存其識別碼');
 assert.match(rootApp, /"intelDelta"\s*:\s*\{/, '前端敘事格式未要求模型回傳線索增修');
 
+frontendContext.__stateDeltaSave = {
+  protagonist: { hp: 0, sanity: 92 },
+  inventory: [{ id: 'old_key', name: '舊鑰匙', count: 1 }],
+  relationships: { '徐令謙': 96 },
+  questFlags: {}
+};
+vm.runInContext(`applyStateDelta(__stateDeltaSave, {
+  hpChange: -10,
+  sanityChange: -7,
+  itemsAdded: [{ id: 'new_usb', name: '加密隨身碟', count: 1 }],
+  itemsRemoved: ['old_key'],
+  relationshipChanges: { '徐令謙': 10 },
+  questProgress: '取得金流證據'
+})`, frontendContext);
+assert.strictEqual(vm.runInContext('__stateDeltaSave.protagonist.hp', frontendContext), 0, 'HP 已為 0 時被錯誤重設為 100');
+assert.strictEqual(vm.runInContext('__stateDeltaSave.protagonist.sanity', frontendContext), 85, '理智值變動未套用');
+assert.strictEqual(vm.runInContext('__stateDeltaSave.relationships["徐令謙"]', frontendContext), 100, '好感值未夾制到 0–100');
+assert.strictEqual(vm.runInContext('__stateDeltaSave.inventory[0].id', frontendContext), 'new_usb', '物品增減未正確套用');
+assert.strictEqual(vm.runInContext('__stateDeltaSave.questFlags.latest_update', frontendContext), '取得金流證據', '任務進度未持久化');
+
+frontendContext.__longHistory = Array.from({ length: 75 }, (_, index) => ({
+  turn: index + 1,
+  prose: '長篇正文'.repeat(100),
+  stateSnapshot: { turnCount: index + 1 }
+}));
+const compactedHistory = JSON.parse(vm.runInContext('JSON.stringify(compactChaptersForMemory(__longHistory))', frontendContext));
+assert.strictEqual(compactedHistory.length, 60, '長篇章節記憶未限制在 60 回');
+assert.strictEqual(compactedHistory.filter(chapter => chapter.stateSnapshot).length, 12, '完整狀態快照未限制在最近 12 回');
+assert.ok(compactedHistory.some(chapter => chapter.proseArchived), '較舊正文未轉為精簡摘錄');
+
 frontendContext.__auditInput = {
   chapterTitle: '',
   prose: '短文',
@@ -213,7 +248,7 @@ assert.strictEqual(vm.runInContext('Object.keys(getCustomPresets()).length', fro
 
 assert.match(rootApp, /if \(state\.generationAbortRequested\) throw createGenerationAbortError\(\)/, '生成中止仍可能被備援迴圈吞掉');
 assert.match(rootApp, /signal: controller\.signal/, 'Worker 串流未連接 AbortController');
-assert.match(rootApp, /chapterHistoryList: JSON\.parse\(JSON\.stringify\(state\.chapterHistoryList \|\| \[\]\)\)/, '回合交易快照未包含章節歷史');
+assert.match(rootApp, /chapterHistoryLength: \(state\.chapterHistoryList \|\| \[\]\)\.length/, '回合交易快照未以輕量長度保存章節歷史');
 assert.match(rootApp, /stateSnapshot: JSON\.parse\(JSON\.stringify\(state\.saveState \|\| \{\}\)\)/, '新回合未保存可供精確回溯的狀態快照');
 assert.match(rootApp, /createCurrentStoryFork\(\);[\s\S]*state\.saveState = JSON\.parse\(JSON\.stringify\(target\.stateSnapshot\)\)/, '歷史回溯沒有先建立分歧或還原狀態快照');
 assert.match(rootApp, /customActionInput\.dataset\.choiceId[\s\S]*已帶入建議行動/, '選項未改為先帶入自由行動欄');
@@ -341,8 +376,10 @@ assert.match(workerCode, /MAX_TOKENS_CEILING = 6144/, 'Worker 的 max_tokens 夾
 assert.match(workerCode, /export class RpmQueue/, 'Worker 缺少 Durable Object 排隊器');
 assert.match(workerCode, /QUEUE_MIN_INTERVAL_MS = 16000/, '排隊間隔不是 16 秒');
 assert.match(workerCode, /QUEUE_MAX_WAIT_MS = 180000/, '排隊上限不是 180 秒');
-assert.match(workerCode, /acquireQueueSlot\(env\)/, 'Worker 未在轉發前取得排隊時段');
-assert.match(workerCode, /if \(!env\.RPM_QUEUE\) return \{ proceed: true/, '未綁定排隊器時應直接放行而非整體失效');
+assert.match(workerCode, /acquireQueueSlot\(env, request\.headers\.get\('X-Queue-Ticket'\)\)/, 'Worker 未在轉發前以預約票券取得排隊時段');
+assert.match(workerCode, /X-Queue-Ticket/, 'Worker 排隊未使用不可插隊的預約票券');
+assert.match(workerCode, /if \(!env\.RPM_QUEUE\) return \{ proceed: false, unavailable: true/, '未綁定排隊器時仍會放行並突破共用 RPM');
+assert.match(workerCode, /queueUnavailable: true/, '排隊服務故障時沒有明確回傳安全暫停狀態');
 const wranglerToml = fs.readFileSync('worker/wrangler.toml', 'utf8');
 assert.match(wranglerToml, /class_name = "RpmQueue"/, 'wrangler.toml 缺少 RpmQueue 的 Durable Object 綁定');
 assert.match(wranglerToml, /new_sqlite_classes = \["RpmQueue"\]/, 'wrangler.toml 缺少 RpmQueue 的 migration');
@@ -360,6 +397,7 @@ const workerStreamBody = rootApp.slice(
 assert.match(workerStreamBody, /retryCurrentModel = true;/, '排隊後未安排重試同一個模型');
 assert.match(workerStreamBody, /planIdx--;/, '排隊重試會誤跳到下一個模型');
 assert.match(workerStreamBody, /err\.isQueueRetry/, '排隊重試未與真正的失敗區分');
+assert.match(workerStreamBody, /err\.isQueueUnavailable/, '排隊器故障時仍可能改走 GAS 繞過共用額度');
 assert.match(
   gasConfig,
   /PRIMARY:\s*'aion-3\.0',[\s\S]*?FALLBACK:\s*'qwen\/qwen3-vl-235b-a22b-instruct',[\s\S]*?FALLBACK_2:\s*'mistral-large-3'/,
@@ -369,7 +407,9 @@ assert.match(aiServiceCode, /maxRetries:\s*1/, 'GAS 敘事模型鏈仍會在每�
 assert.doesNotMatch(aiServiceCode, /NARRATOR\.FALLBACK_3|NARRATOR\.FALLBACK_4/, 'GAS 敘事鏈仍殘留額外模型');
 const liveGameTestCode = fs.readFileSync('test_10_turn_game.js', 'utf8');
 assert.match(liveGameTestCode, /const MIN_REQUEST_INTERVAL_MS = 16_000;/, '10 回合 live 測試未遵守 16 秒安全間隔');
-assert.match(liveGameTestCode, /MODEL_ATTEMPT_PLAN = \[[\s\S]*MODEL,[\s\S]*MODEL,[\s\S]*'qwen\/qwen3-vl-235b-a22b-instruct',[\s\S]*'mistral-large-3'/, '10 回合 live 測試未使用正式備援順序');
+assert.match(liveGameTestCode, /MODEL_ATTEMPT_PLAN = \[[\s\S]*MODEL,[\s\S]*MODEL,[\s\S]*'qwen\/qwen3-vl-235b-a22b-instruct'[\s\S]*\];/, '10 回合 live 測試未使用正式備援順序');
+assert.doesNotMatch(liveGameTestCode.slice(0, liveGameTestCode.indexOf('const TURN_COUNT')), /mistral-large-3/, '10 回合 live 測試仍多打一個已移除的備援模型');
+assert.match(liveGameTestCode, /X-Undercurrent-Token': LIVE_TOKEN/, '10 回合 live 測試未攜帶登入權杖');
 assert.match(liveGameTestCode, /TJPR_TEST_MODEL \|\| 'aion-3\.0'/, '10 回合 live 測試的預設模型不是 aion-3.0');
 
 // 拒絕偵測：短拒絕語要抓到、正常長篇正文不可誤判
@@ -438,7 +478,7 @@ assert.match(
   /缺少時空狀態|選項數量錯誤/,
   '殘缺章節未觸發模型備援'
 );
-assert.match(rootApp, /if \(e && e\.isRateLimited\) throw e;/, 'Worker 429 仍會錯誤轉送 GAS 重打共享上游');
+assert.match(rootApp, /if \(e && \(e\.isRateLimited \|\| e\.isQueueUnavailable\)\) throw e;/, 'Worker 限流或排隊故障仍會錯誤轉送 GAS 重打共享上游');
 assert.match(rootApp, /if \(storedToken\.startsWith\('tok_local_'\)\) \{[\s\S]*?updateUserBadgeUI\('offline'\);[\s\S]*?return;/, '本機離線工作階段在重新整理後仍會被送往雲端並誤登出');
 assert.match(rootApp, /p\.profession \|\| p\.occupation \|\| '政經分析師'/, '進行中存檔卡未顯示目前人設的職業欄位');
 assert.match(rootApp, /function getOfficialLeadKeys\(\) \{[\s\S]*?key !== '14_楊慕璃'/, '攻略對象選單仍可能把官方主角列為男主');
@@ -475,9 +515,19 @@ assert.strictEqual(vm.runInContext('state.isGenerating', frontendContext), false
 const backendContext = {
   console,
   getSecrets() { return { MASTER_ADMIN_KEY: '' }; },
-  StorageService: { findUserByToken() { return null; } },
+  StorageService: { findUserByToken() { return null; }, updateUserPasswordHash() {} },
   CacheService: {
-    getScriptCache() { return { get() { return null; }, put() {} }; }
+    getScriptCache() { return { get() { return null; }, put() {}, remove() {} }; }
+  },
+  LockService: {
+    getScriptLock() { return { waitLock() {}, releaseLock() {} }; }
+  },
+  Utilities: {
+    newBlob(value) { return { getBytes() { return Array.from(Buffer.from(String(value))); } }; },
+    computeDigest(_algorithm, bytes) { return Array.from(require('node:crypto').createHash('sha256').update(Buffer.from(bytes)).digest()); },
+    DigestAlgorithm: { SHA_256: 'SHA_256' },
+    getUuid() { return '00000000-0000-4000-8000-000000000000'; },
+    base64EncodeWebSafe(value) { return Buffer.from(String(value)).toString('base64url'); }
   },
   ContentService: {
     MimeType: { JSON: 'json' },
@@ -488,7 +538,12 @@ const backendContext = {
     VERSION: 'test',
     APP_NAME: 'test',
     ENV: 'test',
-    MODELS: { NARRATOR: { PRIMARY: 'test' }, AUDITOR: { PRIMARY: 'test' } }
+    AUTH: { PASSWORD_HASH_ITERATIONS: 1000, PUBLIC_ACTION_LIMIT_PER_MINUTE: 30, LOGIN_LIMIT_PER_ID_PER_MINUTE: 8 },
+    MODELS: {
+      ALLOWED_MODELS: ['test'],
+      NARRATOR: { PRIMARY: 'test', MAX_TOKENS: 6144, TEMPERATURE: 0.8 },
+      AUDITOR: { PRIMARY: 'test' }
+    }
   }
 };
 
@@ -504,6 +559,11 @@ const invalidRegistration = vm.runInContext(
   backendContext
 );
 assert.strictEqual(JSON.parse(invalidRegistration).error.code, 400, '註冊 Email 可注入試算表公式');
+const invalidProxyModel = vm.runInContext(
+  "handleLLMProxy({}, { model: 'arbitrary-expensive-model', messages: [{ role: 'user', content: 'x' }] }).text",
+  backendContext
+);
+assert.strictEqual(JSON.parse(invalidProxyModel).error.code, 400, 'GAS LLM 代理仍可呼叫任意模型');
 
 let removedOldToken = null;
 backendContext.StorageService.findUserByEmail = function() {

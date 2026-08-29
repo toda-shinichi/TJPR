@@ -129,6 +129,20 @@ var StorageService = (function() {
     }
   }
 
+  function updateUserPasswordHash(userId, passwordHash) {
+    var sheet = getOrCreateSheet(CONFIG.SHEET.USERS_SHEET_NAME, [
+      'User_ID', 'Email', 'Password_Hash', 'Salt', 'API_Token', 'Drive_Folder_ID', 'Created_At', 'Last_Active'
+    ]);
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === userId) {
+        sheet.getRange(i + 1, 3).setValue(passwordHash);
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * 永久刪除 / 註銷使用者帳號與資料夾
    */
@@ -470,6 +484,7 @@ var StorageService = (function() {
     findUserByEmail: findUserByEmail,
     registerNewUser: registerNewUser,
     updateUserToken: updateUserToken,
+    updateUserPasswordHash: updateUserPasswordHash,
     deleteUserAccount: deleteUserAccount,
     populateGlobalConfigsSheet: populateGlobalConfigsSheet,
     getOrCreateUserDriveFolder: getOrCreateUserDriveFolder,

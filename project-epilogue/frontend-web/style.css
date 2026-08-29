@@ -417,7 +417,7 @@ select option { color: var(--text-main); background: #fffdfa; }
   line-height: 1.95 !important;
 }
 
-#home-view > .grid > div,
+.home-action-card,
 #home-open-guide-btn,
 #home-view > div:last-child {
   background: rgba(255, 253, 250, 0.82) !important;
@@ -425,12 +425,12 @@ select option { color: var(--text-main); background: #fffdfa; }
   box-shadow: 0 12px 36px rgba(80, 58, 67, 0.065) !important;
 }
 
-#home-view > .grid > div {
+.home-action-card {
   min-height: 10.5rem;
   padding: 1.5rem !important;
 }
 
-#home-view > .grid > div:hover,
+.home-action-card:hover,
 #home-open-guide-btn:hover {
   transform: translateY(-2px);
   border-color: rgba(152, 95, 114, 0.42) !important;
@@ -441,8 +441,26 @@ select option { color: var(--text-main); background: #fffdfa; }
   background: linear-gradient(120deg, #fffdfa, #f3eaf0 50%, #f1eee8) !important;
 }
 
+.home-action-card h2 { color: #40363b !important; }
+.home-action-card p { color: #5c5157 !important; }
+.home-action-card.home-action-primary {
+  border-color: rgba(141, 82, 102, 0.62) !important;
+  background: linear-gradient(145deg, #fffdfa, #f5e8ed) !important;
+  box-shadow: 0 18px 46px rgba(103, 60, 76, 0.15) !important;
+}
+.home-action-card.home-action-primary .home-card-cta {
+  padding: 0.55rem 0.85rem;
+  border-radius: 0.7rem;
+  color: #fffdfa !important;
+  background: #8d5266;
+}
+
+.creator-advanced-fields-collapsed .creator-advanced-field { display: none !important; }
+
 /* 遊戲閱讀區：章節像獨立紙頁，選項則像柔和的編輯註記。 */
 #gameplay-view {
+  width: 100%;
+  min-width: 0;
   max-width: 54rem;
   margin-right: auto;
   margin-left: auto;
@@ -483,6 +501,9 @@ select option { color: var(--text-main); background: #fffdfa; }
   border-color: rgba(152, 95, 114, 0.2) !important;
 }
 
+.chapter-actions-menu > summary::-webkit-details-marker { display: none; }
+.chapter-actions-menu[open] > summary { border-color: rgba(141, 82, 102, 0.55); }
+
 /* 抽屜與彈窗卡片保持紙張感。 */
 #status-drawer,
 #mobile-menu-drawer {
@@ -511,7 +532,29 @@ select option { color: var(--text-main); background: #fffdfa; }
   [role="button"] { min-height: 44px; }
   #home-view > div:first-child { padding-right: 1.2rem !important; padding-left: 1.2rem !important; }
   #home-view h1 { letter-spacing: 0.1em; }
-  #home-view > .grid > div { min-height: 0; padding: 1.25rem !important; }
+  .home-action-card { min-height: 0; padding: 1.25rem !important; }
+  #gameplay-view,
+  #gameplay-view > *,
+  #novel-stream-container,
+  #novel-stream-container > *,
+  #decisions-section { min-width: 0; max-width: 100%; }
+  #gameplay-view > .sticky { padding: 0.5rem !important; gap: 0.25rem; }
+  #back-to-home-btn { width: 2.75rem; padding-right: 0.55rem !important; padding-left: 0.55rem !important; justify-content: center; }
+  #back-to-home-btn .back-label { display: none; }
+  #gameplay-breadcrumb { max-width: 7.5rem !important; }
+  #gameplay-view > .sticky > div:last-child { gap: 0.25rem !important; }
+  #gameplay-view > .sticky > div:last-child button { min-width: 2.5rem; padding-right: 0.45rem !important; padding-left: 0.45rem !important; justify-content: center; }
+  #server-status-badge { align-items: flex-start; flex-direction: column; gap: 0.35rem; }
+  #server-status-badge > div:last-child { width: 100%; justify-content: space-between; }
+  #active-chapter-card,
+  #novel-stream-container > section { padding: 1.15rem !important; }
+  #active-chapter-card > div:first-child { align-items: flex-start; }
+  #active-chapter-card h1 { font-size: 1.35rem !important; }
+  .chapter-actions-menu > div { position: fixed !important; right: 1rem !important; top: calc(var(--header-height, 52px) + 4.6rem) !important; }
+  #decisions-section { padding: 1.1rem !important; }
+  #decisions-section > div:first-child { align-items: flex-start; flex-direction: column; }
+  #custom-action-input { min-width: 0; }
+  #submit-custom-btn { padding-right: 0.85rem !important; padding-left: 0.85rem !important; }
   .prose-tc { letter-spacing: 0.02em; line-height: 2; }
   .prose-tc p { margin-bottom: 1.2rem; }
 }
