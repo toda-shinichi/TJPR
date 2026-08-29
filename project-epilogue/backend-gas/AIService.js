@@ -3,7 +3,7 @@
  * 檔案：AIService.js
  * 
  * 透過相容 OpenAI 的 API 端點（https://api.banana2556.com/v1）驅動雙模型管線：
- * 1. 主要敘事模型 (Narrator: gemini-3.7-flash，備援為未審查模型)
+ * 1. 主要敘事模型 (Narrator: aion-3.0，備援 qwen3-vl-235b)
  * 2. 快速稽核模型 (Fast Auditor: aion-3.0-mini / 備用 mistral-nemo)
  */
 
@@ -228,9 +228,9 @@ var AIService = (function() {
   }
 
   /**
-   * 主要敘事模型 (Narrator: gemini-3.7-flash)：
+   * 主要敘事模型 (Narrator: aion-3.0)：
    * 生成 1,200~1,500 字的精緻章節內文、3 個互動選項以及存檔狀態更新（Delta）。
-   * 順位：gemini-3.7-flash -> gemini-3.7-flash -> mistral-large-3 -> dolphin-mistral(未審查)
+   * 順位：aion-3.0 -> aion-3.0 -> qwen3-vl-235b -> mistral-large-3
    * @param {Object} promptContext - 包含 System Prompt, 角色 Markdown, 摘要池與近期對話歷史
    * @returns {Object} 章節物件 { chapterTitle, prose, choices, stateDelta, narrativeSummaryDelta }
    */

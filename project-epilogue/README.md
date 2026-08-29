@@ -99,7 +99,7 @@
 1. 使用任何瀏覽器開啟 [`frontend-web/index.html`](file:///Users/huanhsu/Desktop/程式碼專案/TJPR/project-epilogue/frontend-web/index.html)（或透過本機伺服器如 Live Server / `python -m http.server` 預覽）。
 2. 點擊畫面底部的 **狀態抽屜**。
 3. 在最下方的 **「GAS 後端 Web App URL 設定」** 欄位中，貼上剛才第三步複製的 Apps Script 部署網址，並點擊 **「儲存」**。
-4. 系統將正式連線至 Google Apps Script 雲端後端，開始調用 `gemini-3.7-flash`（情慾章節被拒時自動輪替至未審查模型）展開 1,200~1,500 字的長篇互動分支冒險！
+4. 系統將正式連線至 Google Apps Script 雲端後端，開始調用 `aion-3.0`（主力，被拒或失敗時自動切換備援 `qwen3-vl-235b`）展開 1,200~1,500 字的長篇互動分支冒險！
 
 ---
 
@@ -233,72 +233,47 @@ npx wrangler deploy
 
 ---
 
-## 情慾章節的模型輪替機制
+## 模型鏈：主力 / 備援
 
-主模型是 `gemini-3.7-flash`（快、便宜），但 gemini 系列**會自我審查、擋掉情慾
-內容** —— 而那是本作的核心。因此在 `app.js` 建立了一套「重試後輪替」機制。
+經 `tools/probe-model-latitude.js`（尺度／設定遵循／文學性）與 22k tokens
+真實條件測試後定案：
 
-### 為什麼需要拒絕偵測
+| 角色 | 模型 | 首字 | 總計 | 前情銜接 | 設定遵循 |
+| --- | --- | --- | --- | --- | --- |
+| 主力 | `aion-3.0` | 56.6s | 76.1s | 3/3 | 6/6 零遺漏 |
+| 備援 | `qwen/qwen3-vl-235b-a22b-instruct` | 5.0s | 26.6s | 3/3 | 6/6 |
+| 保留 | `mistral-large-3` | — | — | — | 白名單保留但不在鏈上 |
 
-會審查的模型**不會回 HTTP 錯誤**，而是回 200 加上一段拒絕語，或是被淡化到
-失去張力的正文。先前的成功判定只看「有沒有 `prose`」，這種回應會被當成成功
-接受 —— 也就是說單純加重試次數是無效的，必須先能認出拒絕。
+**主力選 aion 的理由**：文學性與邏輯最強，會自行從角色卡推理出延伸細節
+（例如「圓眼鏡沾了水霧，顯然不是社交場合的裝束」）。**代價是首字約 56 秒** ——
+串流逐字顯示會有較長等待，這是刻意接受的取捨（`showLoading` 在 15 秒後
+會顯示已等待秒數）。若日後覺得太慢，把 `PRIMARY_MODEL` 換成 qwen 即可，
+它快近三倍且品質僅略遜。
 
-`detectRefusal()` 的判定策略：
+### 已淘汰的模型與原因
 
-- 正文 ≤ 220 字元時才用關鍵字比對（中英文常見拒絕語）。長篇正文裡角色本來
-  就可能說「我不能……」，長文命中關鍵字不代表模型拒絕。
-- 正文 < 80 字元一律視為拒絕（正常章節不會這麼短）。
-- 開頭 120 字元命中拒絕語即判為拒絕，即使後面接了長篇改寫建議。
-
-### 嘗試計畫
-
-Worker 與 Worker 故障後的 GAS 路徑共同使用同一份固定四段計畫：
-
-| 順位 | 模型 |
+| 模型 | 原因 |
 | --- | --- |
-| 1–2 | `gemini-3.7-flash` |
-| 3 | `mistral-large-3` |
-| 4 | `dolphin-mistral-24b-venice-edition`（未審查）|
+| `gemini-3.7-flash` | 60% 機率被靜默降級為 3.5 Flash-Lite；會審查情慾內容 |
+| `gemini-3.6-flash` | 上游已無可用通道 |
+| `gemini-3.1-pro` | 會審查；供應商間歇回傳空回應（Google 擋 Cloudflare egress IP）|
+| `dolphin-mistral-24b-venice-edition` | 22k tokens 長上下文下語意崩壞、輸出簡繁混雜 |
+| `minimax/minimax-m2.7` | L3 明確前戲即拒絕 |
+| `minimaxai/minimax-m3` | 供應商基礎設施故障 |
+| `glm-5.2-thinking` | 拒絕 R-18、輸出簡體、文字重複損毀 |
 
-重試是有意義的：溫度 0.88 下同一個提示詞未必每次都被拒。
+### 拒絕偵測（`detectRefusal`）
 
-**為什麼採四段而不是五段**：上游限制是**每分鐘 5 次、且跨模型共用**。
-少一次重試可保留一格額度；每次嘗試前另有 16 秒安全間隔，避免貼著滾動窗口
-邊界而觸發 429。`debug_checks.js` 會直接斷言四個模型的完整順序，防止 GAS
-路徑把重複的第二次 Gemini 去重。
+會審查的模型不回 HTTP 錯誤，而是回 200 加拒絕語，因此單純加重試次數無效，
+必須先能認出拒絕。判定包含**繁體與簡體**兩套樣式（中國廠商的模型多以簡體
+回覆，「无法」不會被「無法」命中），以及**供應商錯誤訊息**
+（實測抓到 gemini 的 `⚠️ Upstream Gemini returned an empty response...`
+與 minimax 的 `system disk overloaded`）—— 這類內容長度超過短文門檻又不含
+拒絕語，沒有這道防線會被當成小說正文寫進章節。
 
-### 「模型不可用」不重試
+### 嘗試計畫與速率限制
 
-`isModelUnavailableResponse()` 會辨識 `model_not_found`、
-`no available channel`、`model not allowed` 等回應。這類失敗是**確定性**的，
-重試同一個名字五次不會有不同結果，只是白打五次請求 —— 因此直接跳過該模型的
-其餘嘗試。拒絕（審查）則不同，會照計畫重試。
-
-### 玩家可見的回饋
-
-- 重試期間 loading 副標題顯示「模型 X（第 n/4 次嘗試）被拒絕，改試下一個……」，
-  避免四次嘗試期間畫面看起來像卡住。
-- 真的落到未審查備援時提示一次「主模型連續拒絕，本回改由 X 生成」——
-  玩家需要知道這一章換了模型寫，文風會有差異。
-- 主模型本身是會審查的模型，這是刻意選擇，因此**不會**每回都跳警告；
-  只有落到「非主模型的審查模型」才警告。
-
-### 上游速率限制（重要）
-
-**每分鐘 5 次，且跨模型共用**。`isRateLimitedResponse()` 會辨識上游的中文
-限流訊息並**中止整條嘗試鏈**（繼續往下試只會全部撞 429），同時提示玩家
-稍候約一分鐘。正常情況下每次嘗試起點至少相隔 16 秒，約為 3.75 RPM。
-
-### gemini-3.7-flash 的浮動路由
-
-實測（間隔 14 秒探測 5 次）：**2/5 命中 3.7 Flash，3/5 被靜默降級**為
-`gemini-auto` → **3.5 Flash-Lite**。降級不會回錯誤，只有回應中的
-`upstream_model` 欄位會顯示實際模型。
-
-也就是說章節品質會忽好忽壞，而這不是程式的問題。若想確認某一回實際用了
-哪個模型，看回應裡的 `route_status`（`matched` / `auto`）與 `upstream_model`。
-
-已確認 `gemini-3.6-flash` 在此帳號**已不可用**（上游回
-`No available channel ... under group Tavern`）。`dolphin-mistral-24b-venice-edition`
-與 `mistral-large-3` 均穩定可用。
+`buildAttemptPlan()`：主力 × `PRIMARY_MAX_ATTEMPTS`(2) → 備援。
+上游速率限制為**每分鐘 5 次、跨模型共用**，2 + 1 = 3 次請求在額度內。
+`isRateLimitedResponse()` 收到限流會中止整條鏈並提示玩家稍候。
+`debug_checks.js` 有斷言鎖住 `plan.length <= 5`。

@@ -244,7 +244,8 @@ assert.match(
 );
 assert.doesNotMatch(rootApp, /text-\[#d8dbe6\]/, '最新回合仍使用深色主題遺留的低對比淺字');
 assert.match(css, /#stream-prose-content\s*\{[\s\S]*?color:\s*#3e363a\s*!important/, '最新回合正文缺少高對比色保護');
-assert.match(rootApp, /PRIMARY_MODEL: 'gemini-3\.7-flash'/, '前端主要敘事模型未切換為 gemini-3.7-flash');
+assert.match(rootApp, /PRIMARY_MODEL: 'aion-3\.0'/, '前端主力敘事模型不是 aion-3.0');
+assert.match(rootApp, /FALLBACK_MODEL: 'qwen\/qwen3-vl-235b-a22b-instruct'/, '前端備援模型不是 qwen3-vl-235b');
 assert.strictEqual((rootApp.match(/800–1000 個中文字/g) || []).length, 4, '開局與續回的正文篇幅目標未完整更新');
 assert.doesNotMatch(rootApp, /字數上限強制執行|600~800 個中文字/, '前端提示詞仍殘留硬性字數上限');
 assert.match(rootApp, /不為守住字數把場景切成兩半[\s\S]*不為湊字數重複描寫或灌水/, '開局提示詞缺少場景完整與避免灌水規則');
@@ -256,8 +257,19 @@ assert.doesNotMatch(rootApp, /snippet:\s*\(h\.prose[\s\S]*?substring\(0,\s*250\)
 assert.match(rootApp, /prose:\s*clampBlock\(h\.prose,\s*CONTEXT_BUDGET\.recentProsePerTurn\)/, '摘要器未讀取每回較完整正文');
 assert.match(gasConfig, /RECENT_TURNS_CONTEXT_LIMIT:\s*5/, '備用後端近期全文視窗不是 5 回');
 assert.match(memoryPipelineCode, /prose:\s*\(turnOutput\.prose \|\| ''\)\.substring\(0, 1800\)/, '備用後端未保存近期完整正文');
-assert.match(workerCode, /'gemini-3\.7-flash'/, 'Worker 模型白名單缺少 gemini-3.7-flash');
-assert.match(gasConfig, /PRIMARY: 'gemini-3\.7-flash'/, 'GAS 主要敘事模型未切換為 gemini-3.7-flash');
+assert.match(workerCode, /'aion-3\.0'/, 'Worker 模型白名單缺少主力 aion-3.0');
+assert.match(workerCode, /'qwen\/qwen3-vl-235b-a22b-instruct'/, 'Worker 模型白名單缺少備援 qwen3-vl-235b');
+assert.match(gasConfig, /PRIMARY: 'aion-3\.0'/, 'GAS 主力敘事模型不是 aion-3.0');
+
+// 已淘汰的模型不得留在 Worker 白名單 —— 留著等於讓任何拿到 Worker URL 的人
+// 用這些燒額度，而且它們都是實測不合格的（審查／崩壞／供應商故障）。
+['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.1-pro', 'glm-5.2-thinking',
+ 'minimax-m2.7', 'minimax-m3', 'dolphin-mistral-24b-venice-edition'].forEach(dead => {
+  assert.ok(
+    !new RegExp(`^\\s*'[^']*${dead.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^']*',?\\s*$`, 'm').test(workerCode),
+    `Worker 白名單仍保留已淘汰的 ${dead}`
+  );
+});
 assert.doesNotMatch(rootApp, /deepseek/i, '前端仍殘留已停用的 DeepSeek 模型參照');
 
 // ── 情慾章節的拒絕偵測與模型輪替機制 ──
@@ -265,11 +277,11 @@ assert.doesNotMatch(rootApp, /deepseek/i, '前端仍殘留已停用的 DeepSeek 
 assert.match(rootApp, /PRIMARY_MAX_ATTEMPTS: 2/, '主模型重試次數不是 2 次');
 assert.match(
   rootApp,
-  /UNCENSORED_FALLBACK_MODELS: \[\s*'mistral-large-3',\s*'cognitivecomputations\/dolphin-mistral-24b-venice-edition'\s*\]/,
-  '備援模型順序不是 mistral-large-3 → dolphin-mistral-24b'
+  /UNCENSORED_FALLBACK_MODELS: \[\s*'qwen\/qwen3-vl-235b-a22b-instruct'\s*\]/,
+  '備援模型清單不是 qwen3-vl-235b'
 );
 assert.match(rootApp, /const MIN_REQUEST_GAP_MS = 16000;/, '前端共享 RPM 安全間隔不是 16 秒');
-assert.match(rootApp, /CENSORING_MODELS: \['gemini-3\.6-flash', 'gemini-3\.7-flash'\]/, 'gemini-3.7-flash 未被標記為會自我審查');
+assert.match(rootApp, /CENSORING_MODELS: \['gemini-3\.6-flash', 'gemini-3\.7-flash', 'gemini-3\.1-pro'\]/, 'gemini 系列未被完整標記為會自我審查');
 assert.ok(
   rootApp.includes('function detectRefusal(') && rootApp.includes('function buildAttemptPlan('),
   '缺少拒絕偵測或模型嘗試計畫'
@@ -294,32 +306,31 @@ const gasFnBody = rootApp.slice(rootApp.indexOf('async function generateStoryFro
   ['isModelUnavailableResponse', 'GAS 路徑未判別模型不可用']
 ].forEach(([needle, msg]) => assert.ok(gasFnBody.includes(needle + '('), msg));
 
-// 嘗試計畫必須保留重複 Gemini，不能被 Array 去重。
+// 嘗試計畫必須保留重複的主力，不能被 Array 去重。
 const plan = vm.runInContext('buildAttemptPlan()', frontendContext);
 assert.deepStrictEqual(
   Array.from(plan),
-  [
-    'gemini-3.7-flash',
-    'gemini-3.7-flash',
-    'mistral-large-3',
-    'cognitivecomputations/dolphin-mistral-24b-venice-edition'
-  ],
+  ['aion-3.0', 'aion-3.0', 'qwen/qwen3-vl-235b-a22b-instruct'],
   'Worker/GAS 共用嘗試計畫順序錯誤'
 );
+// 上游速率限制為每分鐘 5 次且跨模型共用，一回合的嘗試不得超出額度
+assert.ok(plan.length <= 5, '嘗試計畫總次數超出上游每分鐘 5 次的共用額度');
 assert.match(gasFnBody, /const models = buildAttemptPlan\(\);/, 'GAS 路徑沒有直接沿用完整嘗試計畫');
 assert.ok((rootApp.match(/await waitForRpmCooldown\(\);/g) || []).length >= 2, 'Worker/GAS 每次請求前未共同套用限速');
 assert.match(gasConfig, /MIN_REQUEST_INTERVAL_MS:\s*16000/, 'GAS 全域限速不是 16 秒');
 assert.match(gasConfig, /PRIMARY_ATTEMPTS:\s*2/, 'GAS 主模型嘗試次數不是 2 次');
+assert.match(gasConfig, /MAX_TOKENS:\s*4096/, 'GAS 敘事模型輸出上限不是 4096');
 assert.match(
   gasConfig,
-  /PRIMARY:\s*'gemini-3\.7-flash',[\s\S]*?FALLBACK:\s*'mistral-large-3',[\s\S]*?FALLBACK_2:\s*'cognitivecomputations\/dolphin-mistral-24b-venice-edition'/,
+  /PRIMARY:\s*'aion-3\.0',[\s\S]*?FALLBACK:\s*'qwen\/qwen3-vl-235b-a22b-instruct',[\s\S]*?FALLBACK_2:\s*'mistral-large-3'/,
   'GAS 模型設定未依指定順序排列'
 );
 assert.match(aiServiceCode, /maxRetries:\s*1/, 'GAS 敘事模型鏈仍會在每個節點內額外重試');
 assert.doesNotMatch(aiServiceCode, /NARRATOR\.FALLBACK_3|NARRATOR\.FALLBACK_4/, 'GAS 敘事鏈仍殘留額外模型');
 const liveGameTestCode = fs.readFileSync('test_10_turn_game.js', 'utf8');
 assert.match(liveGameTestCode, /const MIN_REQUEST_INTERVAL_MS = 16_000;/, '10 回合 live 測試未遵守 16 秒安全間隔');
-assert.match(liveGameTestCode, /MODEL_ATTEMPT_PLAN = \[[\s\S]*MODEL,[\s\S]*MODEL,[\s\S]*'mistral-large-3',[\s\S]*'cognitivecomputations\/dolphin-mistral-24b-venice-edition'/, '10 回合 live 測試未使用正式四段備援順序');
+assert.match(liveGameTestCode, /MODEL_ATTEMPT_PLAN = \[[\s\S]*MODEL,[\s\S]*MODEL,[\s\S]*'qwen\/qwen3-vl-235b-a22b-instruct',[\s\S]*'mistral-large-3'/, '10 回合 live 測試未使用正式備援順序');
+assert.match(liveGameTestCode, /TJPR_TEST_MODEL \|\| 'aion-3\.0'/, '10 回合 live 測試的預設模型不是 aion-3.0');
 
 // 拒絕偵測：短拒絕語要抓到、正常長篇正文不可誤判
 const refusalCases = [

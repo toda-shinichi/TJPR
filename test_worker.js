@@ -20,7 +20,7 @@ function post(body, headers = {}) {
 }
 
 const validPayload = {
-  model: 'gemini-3.7-flash',
+  model: 'aion-3.0',
   messages: [{ role: 'user', content: 'test' }],
   max_tokens: 100,
   stream: false

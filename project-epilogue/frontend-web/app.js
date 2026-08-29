@@ -1763,13 +1763,13 @@ function updateUserBadgeUI(status = 'active') {
 // 4. 純 AI 即時零範本生成引擎 (Pure Real-Time AI Generation Engine)
 // =========================================================================
 
+// 經 tools/probe-model-latitude.js 與 22k tokens 真實條件測試後留下的模型。
+// 已淘汰：gemini 系列（會自我審查、且 3.7-flash 有 60% 機率被靜默降級）、
+// dolphin-venice（長上下文下語意崩壞）、minimax/glm（拒絕 R-18 或輸出簡體）。
 const NARRATIVE_MODELS = [
-  'gemini-3.7-flash',
-  'mistral-large-3',
-  'gemini-3.6-flash',
-  'cognitivecomputations/dolphin-mistral-24b-venice-edition',
-  'gpt-5.6-luna',
-  'aion-3.0'
+  'aion-3.0',
+  'qwen/qwen3-vl-235b-a22b-instruct',
+  'mistral-large-3'
 ];
 
 const LLM_CONFIG = {
@@ -1779,23 +1779,27 @@ const LLM_CONFIG = {
   STALL_TIMEOUT_MS: 25000,
   API_URL: 'https://api.banana2556.com/v1/chat/completions',
   API_KEY: '', // 安全起見，已轉移至 GAS Proxy
-  PRIMARY_MODEL: 'gemini-3.7-flash',
-  // 備援必須也是不會自我審查的模型 —— 情慾描寫是本作核心。
-  FALLBACK_MODEL: 'mistral-large-3',
-  // gemini 系列會自我審查、擋掉情慾內容。主模型用 gemini-3.7-flash 是為了
-  // 速度與成本，代價是它在情慾章節極可能拒絕或淡化 —— 因此需要
-  // 「重試後依序切換未審查模型」機制（見 buildAttemptPlan）。
-  CENSORING_MODELS: ['gemini-3.6-flash', 'gemini-3.7-flash'],
-  // 主模型最多嘗試幾次（拒絕與硬失敗都計入）才改用未審查模型。
-  // 溫度 0.88 下同一個提示詞未必每次都被拒，所以重試是有意義的。
-  //
-  // 固定兩次：符合指定的 Gemini → Gemini → Mistral → Dolphin 四段鏈，
-  // 並比舊版五次嘗試少耗一格共享 RPM 額度。
+  // 主力：aion-3.0
+  // 22k tokens 真實條件實測：前情銜接 3/3、人設細節 3/4（會自行推理出
+  // 「圓眼鏡沾了水霧，顯然不是社交場合的裝束」這類延伸），四項尺度全通過，
+  // 設定遵循 6/6 零遺漏 —— 文學性與邏輯是候選中最強的。
+  // 代價：首字約 56 秒、總計約 76 秒。串流逐字顯示會有較長的等待，
+  // 這是刻意接受的取捨（showLoading 在 15 秒後會顯示已等待秒數）。
+  PRIMARY_MODEL: 'aion-3.0',
+  // 備援：qwen3-vl-235b
+  // 首字 5 秒、總計 26.6 秒，是主力的近三倍速；前情銜接同樣 3/3、
+  // 四項尺度全通過且是候選中最露骨的，因此情慾章節不需要再往下切。
+  FALLBACK_MODEL: 'qwen/qwen3-vl-235b-a22b-instruct',
+  // 目前主力與備援都不會自我審查，此清單僅供 warnIfCensoringModel 判斷用。
+  // gemini 系列實測會擋掉情慾內容，已全數移出生成鏈。
+  CENSORING_MODELS: ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.1-pro'],
+  // 主模型嘗試次數。aion 實測不會拒絕 R-18，重試主要是為了容忍供應商的
+  // 偶發 5xx（mistral 就實測到過連續 503 的高負載狀況）。
+  // 2 次主力 + 1 次備援 = 3 次請求，在上游每分鐘 5 次的共用額度內。
   PRIMARY_MAX_ATTEMPTS: 2,
-  // 主模型連續失敗後依固定順序嘗試；不再逐章輪替，確保 Worker/GAS 完全一致。
+  // 主模型連續失敗後依序嘗試。
   UNCENSORED_FALLBACK_MODELS: [
-    'mistral-large-3',
-    'cognitivecomputations/dolphin-mistral-24b-venice-edition'
+    'qwen/qwen3-vl-235b-a22b-instruct'
   ],
   MODELS: NARRATIVE_MODELS,
   TEMPERATURE: 0.88
@@ -6113,7 +6117,7 @@ async function sendTelemetryError(category, message, details = {}) {
       action: 'telemetry/log-error',
       category: category || 'GENERAL_ERROR',
       message: String(message || '未知錯誤'),
-      model: LLM_CONFIG.PRIMARY_MODEL || 'gemini-3.7-flash',
+      model: LLM_CONFIG.PRIMARY_MODEL || 'aion-3.0',
       userId: state.username || state.userId || localStorage.getItem('undercurrent_user_name') || 'guest',
       act: state.saveState?.meta?.currentAct || 1,
       turn: state.saveState?.turnCount || 1,
@@ -6204,7 +6208,7 @@ async function handleFeedbackSubmit(e) {
     turn: state.saveState?.turnCount || 1,
     targetLead: state.saveState?.meta?.targetLeadName || '未指定',
     playerProfile: state.saveState?.meta?.playerProfile || null,
-    model: LLM_CONFIG.PRIMARY_MODEL || 'gemini-3.7-flash',
+    model: LLM_CONFIG.PRIMARY_MODEL || 'aion-3.0',
     status: state.saveState?.protagonist || null
   } : null;
 

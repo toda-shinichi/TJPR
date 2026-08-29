@@ -24,14 +24,15 @@ const CONFIG = {
 
   // 雙模型配置
   MODELS: {
-    // 主要敘事模型：gemini-3.7-flash 首選（快、便宜），但它會自我審查、
-    // 在情慾章節極可能拒絕。因此備援一律排未審查模型，
-    // 且前端會偵測拒絕並依固定順序切換（見 app.js 的 buildAttemptPlan）。
+    // 主要敘事模型：aion-3.0（文學性與設定遵循最強），備援 qwen3-vl-235b（快近三倍）。
+    // 兩者實測皆不會自我審查。gemini 系列已全數移出 —— 實測會擋掉情慾內容，
+    // 且 3.7-flash 有 60% 機率被靜默降級為 3.5 Flash-Lite。
+    // 前端會偵測拒絕／供應商錯誤並依固定順序切換（見 app.js 的 buildAttemptPlan）。
     NARRATOR: {
-      PRIMARY: 'gemini-3.7-flash',
+      PRIMARY: 'aion-3.0',
       PRIMARY_ATTEMPTS: 2,
-      FALLBACK: 'mistral-large-3',
-      FALLBACK_2: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+      FALLBACK: 'qwen/qwen3-vl-235b-a22b-instruct',
+      FALLBACK_2: 'mistral-large-3',
       TEMPERATURE: 0.88,
       MAX_TOKENS: 4096,
       TOP_P: 0.95

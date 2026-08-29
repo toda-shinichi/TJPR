@@ -3,12 +3,12 @@ const fs = require('node:fs');
 
 const LIVE_URL = process.env.TJPR_LIVE_URL || 'https://tjpr-llm-proxy.todashinchi.workers.dev/';
 const ORIGIN = 'http://localhost:8731';
-const MODEL = process.env.TJPR_TEST_MODEL || 'gemini-3.7-flash';
+const MODEL = process.env.TJPR_TEST_MODEL || 'aion-3.0';
 const MODEL_ATTEMPT_PLAN = [
   MODEL,
   MODEL,
-  'mistral-large-3',
-  'cognitivecomputations/dolphin-mistral-24b-venice-edition'
+  'qwen/qwen3-vl-235b-a22b-instruct',
+  'mistral-large-3'
 ];
 const TURN_COUNT = 10;
 // 專案上游限制為 5 RPM；採 16 秒間隔降至約 3.75 RPM，避開共享額度與滾動窗口邊界。

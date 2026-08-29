@@ -28,23 +28,24 @@ const RATE_LIMIT = { windowSeconds: 60, maxRequests: 12 };
 
 /** 允許前端指定的模型白名單。避免有人拿這個端點去跑任意昂貴模型。 */
 const ALLOWED_MODELS = [
-  'gemini-3.7-flash',
-  'mistral-large-3',
-  'gemini-3.6-flash',
-  'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+  // 生成鏈實際使用的三個模型（主力 / 備援 / 保留）
   'aion-3.0',
-  'aion-3.0-mini',
-  'mistral-nemo',
-  'gpt-5.6-luna',
-  // 以下為候選模型，尺度／文學性／邏輯待測，尚未排進 LLM_CONFIG 的備援鏈。
-  // 評測方式見 tools/probe-model-latitude.js
   'qwen/qwen3-vl-235b-a22b-instruct',
-  'minimaxai/minimax-m3',
-  'minimax/minimax-m2.7',
-  'devstral-2',
-  'gemini-3.1-pro',
-  'glm-5.2-thinking'
+  'mistral-large-3',
+  // 稽核與摘要用的輕量模型
+  'aion-3.0-mini',
+  'mistral-nemo'
 ];
+
+// 已移除的模型與原因（保留紀錄以免日後重蹈）：
+//   gemini-3.7-flash  60% 機率被靜默降級為 3.5 Flash-Lite，且會審查情慾內容
+//   gemini-3.6-flash  上游已無可用通道（No available channel）
+//   gemini-3.1-pro    會審查，且供應商間歇性回傳空回應（Google 擋 egress IP）
+//   dolphin-venice    22k tokens 長上下文下語意崩壞、輸出簡繁混雜
+//   minimax-m2.7      L3 明確前戲即拒絕
+//   minimaxai/minimax-m3  供應商基礎設施故障（system disk overloaded）
+//   glm-5.2-thinking  拒絕 R-18、輸出簡體、文字重複損毀
+//   gpt-5.6-luna      未納入評測，暫不開放
 
 const MAX_TOKENS_CEILING = 4096;
 const MAX_BODY_BYTES = 128 * 1024;
