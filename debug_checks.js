@@ -28,7 +28,9 @@ assert.match(html, /rel="icon"/, '頁面缺少 favicon，瀏覽器會持續請�
 const htmlIds = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 assert.strictEqual(new Set(htmlIds).size, htmlIds.length, 'index.html 存在重複 id');
 ['toast-container', 'reading-speed-select', 'login-form-message', 'register-form-message',
- 'gameplay-memory-btn', 'memory-center-modal', 'memory-center-content', 'intel-ledger-list'].forEach(id => {
+ 'gameplay-memory-btn', 'memory-center-modal', 'memory-center-content', 'intel-ledger-list',
+ 'loading-phase-text', 'loading-progress-bar', 'minimize-generation-btn',
+ 'generation-status-dock', 'restore-generation-btn', 'dock-abort-generation-btn'].forEach(id => {
   assert.ok(htmlIds.includes(id), `index.html 缺少 UX 元件 #${id}`);
 });
 
@@ -365,6 +367,12 @@ assert.match(gasConfig, /MIN_REQUEST_INTERVAL_MS:\s*16000/, 'GAS 全域限速不
 assert.match(gasConfig, /PRIMARY_ATTEMPTS:\s*2/, 'GAS 主模型嘗試次數不是 2 次');
 assert.match(gasConfig, /MAX_TOKENS:\s*6144/, 'GAS 敘事模型輸出上限不是 6144');
 assert.match(rootApp, /recentProsePerTurn: 2400/, '近期正文視窗未與 max_tokens 6144 連動放寬');
+
+// 不同登入帳號必須使用各自的本機進度；註銷單一帳號不可清掉同裝置其他玩家資料。
+assert.match(rootApp, /const LOCAL_USER_DATA_KEYS = \[/, '缺少每位玩家獨立的本機資料範圍');
+assert.match(rootApp, /function switchLocalUserScope\(nextUserId\)/, '切換帳號時未切換本機資料範圍');
+assert.match(rootApp, /archiveCurrentLocalScope\(owner\);[\s\S]*restoreLocalScope\(nextUserId\);/, '切換帳號未封存舊玩家並載入新玩家資料');
+assert.doesNotMatch(rootApp, /localStorage\.clear\(\)/, '註銷單一帳號會清除同裝置所有玩家與閱讀偏好');
 assert.strictEqual(
   (rootApp.match(/max_tokens: 6144/g) || []).length, 2,
   '前端兩條生成路徑的 max_tokens 未同步為 6144'
@@ -380,12 +388,15 @@ assert.match(workerCode, /acquireQueueSlot\(env, request\.headers\.get\('X-Queue
 assert.match(workerCode, /X-Queue-Ticket/, 'Worker 排隊未使用不可插隊的預約票券');
 assert.match(workerCode, /if \(!env\.RPM_QUEUE\) return \{ proceed: false, unavailable: true/, '未綁定排隊器時仍會放行並突破共用 RPM');
 assert.match(workerCode, /queueUnavailable: true/, '排隊服務故障時沒有明確回傳安全暫停狀態');
+assert.match(workerCode, /url\.pathname === '\/defer'/, '上游 429 時排隊器沒有全域退避入口');
+assert.match(workerCode, /deferQueueSlot\(env, retryMs\)/, '上游 429 未重新保留玩家順位');
+assert.match(workerCode, /upstreamBackoff: true/, '上游退避回應未標記，前端無法提供正確提示');
 const wranglerToml = fs.readFileSync('worker/wrangler.toml', 'utf8');
 assert.match(wranglerToml, /class_name = "RpmQueue"/, 'wrangler.toml 缺少 RpmQueue 的 Durable Object 綁定');
 assert.match(wranglerToml, /new_sqlite_classes = \["RpmQueue"\]/, 'wrangler.toml 缺少 RpmQueue 的 migration');
 
 // 前端：排隊不是失敗，不可計入模型嘗試次數
-assert.match(rootApp, /QUEUE_MAX_TOTAL_WAIT_MS = 180000/, '前端排隊等待上限不是 180 秒');
+assert.match(rootApp, /QUEUE_MAX_TOTAL_WAIT_MS = 360000/, '前端排隊等待上限未涵蓋三人正式退避的最慢實測');
 assert.ok(
   rootApp.includes('function parseQueueResponse(') && rootApp.includes('function createQueueRetryError('),
   '前端缺少排隊回應解析或排隊重試錯誤'

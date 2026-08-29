@@ -5,7 +5,8 @@ const LIVE_URL = 'https://tjpr-llm-proxy.todashinchi.workers.dev/';
 const ALLOWED_ORIGIN = 'http://localhost:8731';
 const nativeFetch = globalThis.fetch;
 const AUTH_VERIFY_URL = 'https://auth.test/exec';
-const VALID_TOKEN = 'epi_' + 'a'.repeat(40);
+// 正式 GAS 的 web-safe Base64 token 會保留結尾 padding；以真實格式做回歸測試。
+const VALID_TOKEN = 'epi_' + 'a'.repeat(40) + '==';
 const LIVE_TOKEN = process.env.TJPR_LIVE_TOKEN || '';
 
 async function loadWorker() {
@@ -106,6 +107,26 @@ async function runOfflineTests() {
   assert.strictEqual(res.status, 401, '上游錯誤狀態未保留');
   assert.match(res.headers.get('content-type') || '', /application\/json/, '上游 JSON 錯誤類型未保留');
 
+  let sawDefer = false;
+  const backoffQueue = {
+    idFromName() { return 'global'; },
+    get() { return { async fetch(url) {
+      if (String(url).endsWith('/defer')) {
+        sawDefer = true;
+        return Response.json({ proceed: false, ticket: 'retry-ticket', waitMs: 30000,
+          etaSeconds: 30, position: 1, upstreamBackoff: true });
+      }
+      return Response.json({ proceed: true });
+    } }; }
+  };
+  globalThis.fetch = withAuth(async () => new Response('{"error":"busy"}', {
+    status: 429, headers: { 'Content-Type': 'application/json' }
+  }));
+  res = await worker.fetch(post(validPayload), { ...baseEnv, RPM_QUEUE: backoffQueue });
+  const backoffBody = await res.json();
+  assert.strictEqual(res.status, 429, '上游 429 未轉成可重試的排隊回應');
+  assert.ok(sawDefer && backoffBody.queued && backoffBody.ticket === 'retry-ticket', '上游 429 未重新保留順位');
+
   const kvData = new Map();
   const rateEnv = {
     ...baseEnv,
@@ -145,10 +166,15 @@ async function runOfflineTests() {
   assert.ok(q2.ticket && q2.waitMs > 0, '第二個排隊請求未取得預約票號');
   assert.ok(q3.ticket && q3.ticket !== q2.ticket, '第三個玩家未取得獨立預約票號');
   assert.ok(q3.waitMs > q2.waitMs, '第三個玩家沒有排在第二個玩家之後');
+  const deferred = await (await queue.fetch(new Request('https://queue/defer', {
+    headers: { 'X-Backoff-Ms': '30000' }
+  }))).json();
+  assert.ok(deferred.upstreamBackoff && deferred.ticket, '上游忙碌時未建立退避票號');
   const q2Early = await (await queue.fetch(new Request('https://queue/acquire', {
     headers: { 'X-Queue-Ticket': q2.ticket }
   }))).json();
   assert.strictEqual(q2Early.ticket, q2.ticket, '排隊輪詢未保留原票號');
+  assert.ok(q2Early.waitMs > deferred.waitMs, '既有等待者未在全域退避後依序平移');
 
   globalThis.fetch = nativeFetch;
   console.log('Worker 離線契約測試全部通過。');

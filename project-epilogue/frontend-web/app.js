@@ -521,9 +521,17 @@ const DOM_ID_MAP = {
   rosterGalleryList: 'roster-gallery-list',
 
   loadingOverlay: 'loading-overlay',
+  loadingPhaseText: 'loading-phase-text',
+  loadingProgressBar: 'loading-progress-bar',
   loadingText: 'loading-text',
   loadingSubtext: 'loading-subtext',
   abortGenerationBtn: 'abort-generation-btn',
+  minimizeGenerationBtn: 'minimize-generation-btn',
+  generationStatusDock: 'generation-status-dock',
+  generationDockTitle: 'generation-dock-title',
+  generationDockMeta: 'generation-dock-meta',
+  restoreGenerationBtn: 'restore-generation-btn',
+  dockAbortGenerationBtn: 'dock-abort-generation-btn',
   errorRecoveryBanner: 'error-recovery-banner',
   errorMessageText: 'error-message-text',
   retryTurnBtn: 'retry-turn-btn',
@@ -1090,7 +1098,7 @@ function setupEventListeners() {
     on('drawer-guide-btn', 'click', () => { closeDrawer(); openGameGuideModal('gameplay'); });
 
     // 抽屜開關
-    on('open-drawer-btn', 'click', openDrawer);
+    on('open-drawer-btn', 'click', openMenuDrawer);
     on('gameplay-drawer-btn', 'click', openDrawer);
     on('close-drawer-btn', 'click', closeDrawer);
     on('drawer-backdrop', 'click', closeDrawer);
@@ -1173,6 +1181,9 @@ function setupEventListeners() {
 
     // 中止與錯誤救援
     on('abort-generation-btn', 'click', handleAbortGeneration);
+    on('dock-abort-generation-btn', 'click', handleAbortGeneration);
+    on('minimize-generation-btn', 'click', minimizeGenerationOverlay);
+    on('restore-generation-btn', 'click', restoreGenerationOverlay);
     on('retry-turn-btn', 'click', handleRetryLastTurn);
     on('dismiss-error-btn', 'click', dismissError);
     on('rebase-act-btn', 'click', handleActRebase);
@@ -1338,6 +1349,71 @@ function openMenuDrawer() { openDrawerPanel('menu'); }
 // 3. 帳號門禁與認證管理 (Authentication)
 // ==========================================
 
+const LOCAL_DATA_OWNER_KEY = 'undercurrent_local_data_owner';
+const LOCAL_USER_DATA_KEYS = [
+  'undercurrent_current_save_state',
+  'undercurrent_full_story_chapters',
+  'undercurrent_current_player_profile',
+  'undercurrent_named_saves',
+  'undercurrent_custom_profiles',
+  'undercurrent_save_slot_1'
+];
+
+function scopedLocalKey(userId, key) {
+  return `undercurrent_scope_${encodeURIComponent(String(userId || 'anonymous'))}_${key}`;
+}
+
+function archiveCurrentLocalScope(userId) {
+  if (!userId) return;
+  LOCAL_USER_DATA_KEYS.forEach(key => {
+    const value = localStorage.getItem(key);
+    const scopedKey = scopedLocalKey(userId, key);
+    if (value === null) localStorage.removeItem(scopedKey);
+    else safeLocalStorageSet(scopedKey, value);
+  });
+}
+
+function restoreLocalScope(userId) {
+  LOCAL_USER_DATA_KEYS.forEach(key => {
+    const value = localStorage.getItem(scopedLocalKey(userId, key));
+    if (value === null) localStorage.removeItem(key);
+    else safeLocalStorageSet(key, value);
+  });
+}
+
+function refreshRuntimeFromLocalScope() {
+  state.saveState = null;
+  state.chapterData = null;
+  state.chapterHistoryList = [];
+  state.playerProfile = null;
+  restoreSavedStateFromStorage();
+  loadSavedProfilePresetsIntoSelect();
+  renderHomeRecentSaves();
+  updateHomeContinueCard();
+}
+
+function switchLocalUserScope(nextUserId) {
+  if (!nextUserId) return;
+  const owner = localStorage.getItem(LOCAL_DATA_OWNER_KEY);
+  if (!owner) {
+    // 升級前的既有本機資料歸屬目前已登入帳號；之後每次切換都會隔離。
+    safeLocalStorageSet(LOCAL_DATA_OWNER_KEY, nextUserId);
+    return;
+  }
+  if (owner === nextUserId) return;
+  archiveCurrentLocalScope(owner);
+  restoreLocalScope(nextUserId);
+  safeLocalStorageSet(LOCAL_DATA_OWNER_KEY, nextUserId);
+  refreshRuntimeFromLocalScope();
+}
+
+function clearCurrentLocalUserData(userId = localStorage.getItem(LOCAL_DATA_OWNER_KEY)) {
+  LOCAL_USER_DATA_KEYS.forEach(key => {
+    localStorage.removeItem(key);
+    if (userId) localStorage.removeItem(scopedLocalKey(userId, key));
+  });
+}
+
 async function checkAuthAndInitUser() {
   const storedUser = localStorage.getItem('undercurrent_user_name');
   const storedToken = localStorage.getItem('undercurrent_auth_token');
@@ -1350,6 +1426,7 @@ async function checkAuthAndInitUser() {
   state.username = storedUser;
   state.token = storedToken;
   state.userId = localStorage.getItem('undercurrent_user_id') || ('usr_' + Date.now());
+  switchLocalUserScope(state.userId);
   state.driveFolderId = localStorage.getItem('undercurrent_drive_folder_id') || '';
   updateUserBadgeUI();
   closeAuthModal();
@@ -1516,6 +1593,7 @@ async function handleLogin(e) {
     });
     const data = await res.json();
     if (data.success && data.data && data.data.token) {
+      switchLocalUserScope(data.data.userId);
       state.username = username;
       state.token = data.data.token;
       state.userId = data.data.userId;
@@ -1525,6 +1603,7 @@ async function handleLogin(e) {
       safeLocalStorageSet('undercurrent_user_id', state.userId);
       if (state.driveFolderId) safeLocalStorageSet('undercurrent_drive_folder_id', state.driveFolderId);
       updateUserBadgeUI();
+      updateCloudSyncBadge('idle');
       closeAuthModal();
       notifyUser('歡迎回來，' + username + '！', 'success');
     } else {
@@ -1536,10 +1615,12 @@ async function handleLogin(e) {
     state.username = username;
     state.token = 'tok_local_' + Date.now();
     state.userId = 'usr_' + btoa(encodeURIComponent(username)).slice(0, 12);
+    switchLocalUserScope(state.userId);
     safeLocalStorageSet('undercurrent_user_name', state.username);
     safeLocalStorageSet('undercurrent_auth_token', state.token);
     safeLocalStorageSet('undercurrent_user_id', state.userId);
     updateUserBadgeUI();
+    updateCloudSyncBadge('local');
     closeAuthModal();
     notifyUser('雲端暫時無法連線，已以本機模式進入。', 'info', 5000);
   } finally {
@@ -1570,6 +1651,7 @@ async function handleRegister(e) {
     });
     const data = await res.json();
     if (data.success && data.data && data.data.token) {
+      switchLocalUserScope(data.data.userId);
       state.username = username;
       state.token = data.data.token;
       state.userId = data.data.userId;
@@ -1579,6 +1661,7 @@ async function handleRegister(e) {
       safeLocalStorageSet('undercurrent_user_id', state.userId);
       if (state.driveFolderId) safeLocalStorageSet('undercurrent_drive_folder_id', state.driveFolderId);
       updateUserBadgeUI();
+      updateCloudSyncBadge('idle');
       closeAuthModal();
       notifyUser('註冊成功！歡迎踏入《暗流》，' + username + '。', 'success');
     } else {
@@ -1634,7 +1717,9 @@ async function handleDeleteAccount() {
       notifyUser('註銷失敗，帳號與本機資料保留不變：' + err.message, 'error', 6000);
       return;
     }
-    localStorage.clear();
+    const deletedUserId = state.userId;
+    clearCurrentLocalUserData(deletedUserId);
+    clearAuthSession();
     await notifyDialog('您的帳號及所有檔案已全數註銷刪除。', '註銷完成');
     location.reload();
   } else {
@@ -1648,11 +1733,7 @@ async function handleClearAllData() {
     { title: '清空本機存檔', confirmText: '清空本機資料' }
   );
   if (ok) {
-    localStorage.removeItem('undercurrent_current_save_state');
-    localStorage.removeItem('undercurrent_full_story_chapters');
-    localStorage.removeItem('undercurrent_named_saves');
-    localStorage.removeItem('undercurrent_save_slot_1');
-    localStorage.removeItem('undercurrent_current_player_profile');
+    clearCurrentLocalUserData();
     state.saveState = null;
     state.chapterData = null;
     state.chapterHistoryList = [];
@@ -2183,10 +2264,10 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         if (queueInfo && queueInfo.queued) {
           queueTicket = queueInfo.ticket || queueTicket;
           if (queuedTotalMs + queueInfo.waitMs > QUEUE_MAX_TOTAL_WAIT_MS) {
-            notifyUser('排隊等待已超過 3 分鐘，請稍後再試這一回。', 'error', 9000);
+            notifyUser('排隊等待已超過 6 分鐘，本回尚未送出；請稍後再試。', 'error', 9000);
             throw new Error('排隊等待逾時，請稍後再試。');
           }
-          reportQueueStatus(queueInfo.position, queueInfo.etaSeconds, queuedTotalMs);
+          reportQueueStatus(queueInfo.position, queueInfo.etaSeconds, queuedTotalMs, queueInfo.upstreamBackoff);
           await new Promise(r => setTimeout(r, queueInfo.waitMs));
           queuedTotalMs += queueInfo.waitMs;
           throwIfGenerationAborted();
@@ -2199,11 +2280,13 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         throw new Error(`Worker HTTP ${response.status}${errBody ? ': ' + errBody.slice(0, 120) : ''}`);
       }
 
+      setLoadingPhase('writing', '故事引擎已開始撰寫；首段文字出現後會即時顯示。');
       const reader = response.body.getReader();
       queueTicket = '';
       const decoder = new TextDecoder("utf-8");
       let fullContent = "";
       let buffer = "";
+      let receivedFirstToken = false;
       // 用來即時顯示的狀態
       let proseStartIdx = -1; // 在 fullContent 中 prose 值起始的 index
 
@@ -2224,6 +2307,10 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
             const parsed = JSON.parse(line.slice(6));
             const token = parsed?.choices?.[0]?.delta?.content ?? '';
             if (!token) continue;
+            if (!receivedFirstToken) {
+              receivedFirstToken = true;
+              setLoadingPhase('streaming', '故事已開始回傳，正在完成本回後半段。');
+            }
             fullContent += token;
 
             // 即時顯示：找到 "prose": " 之後才開始串流
@@ -2255,6 +2342,7 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
       
       // Stream 結束，解析最終完整 JSON
       if (fullContent.length > 10) {
+        setLoadingPhase('polishing', '正文已完成，正在檢查章節、數值與下一步選項。');
         // 嘗試 1: parseJsonSafely
         let finalParsed = null;
         try {
@@ -2372,7 +2460,8 @@ function isRateLimitedResponse(text) {
  * 收到 429 且帶 queued 旗標時代表「還沒輪到」—— 這不是失敗，
  * 不可計入模型嘗試次數，睡完該等的時間後重試同一個模型即可。
  */
-const QUEUE_MAX_TOTAL_WAIT_MS = 180000;
+// 三人正式併發遇到上游退避時最慢約 232 秒；保留 6 分鐘避免快輪到時被踢出。
+const QUEUE_MAX_TOTAL_WAIT_MS = 360000;
 
 /**
  * 解析 Worker 的排隊回應。
@@ -2388,7 +2477,8 @@ function parseQueueResponse(bodyText) {
         ticket: typeof data.ticket === 'string' ? data.ticket : '',
         waitMs: Math.max(1000, Number(data.waitMs) || 1000),
         etaSeconds: Number(data.etaSeconds) || 1,
-        position: Number(data.position) || 1
+        position: Number(data.position) || 1,
+        upstreamBackoff: !!data.upstreamBackoff
       };
     }
     if (data && data.error && data.error.queueFull) {
@@ -2400,15 +2490,18 @@ function parseQueueResponse(bodyText) {
 }
 
 /** 排隊期間把等待狀況寫進 loading，讓玩家知道系統沒當掉而是在排隊 */
-function reportQueueStatus(position, etaSeconds, waitedMs) {
+function reportQueueStatus(position, etaSeconds, waitedMs, upstreamBackoff = false) {
   const waited = Math.round(waitedMs / 1000);
   const statusText = document.getElementById('server-status-text');
   const cooldownText = document.getElementById('server-cooldown-text');
-  if (dom.loadingText) dom.loadingText.textContent = '正在等待故事生成順位……';
+  setLoadingPhase('queue', upstreamBackoff
+    ? '上游暫時忙碌，已保留你的優先重試順位；不需要重新操作。'
+    : `目前排在第 ${position} 位，預計還需 ${etaSeconds} 秒。`);
   if (dom.loadingSubtext) {
-    dom.loadingSubtext.textContent =
-      `目前排在第 ${position} 位，預計還需 ${etaSeconds} 秒`
-      + (waited > 0 ? `（已等待 ${waited} 秒）。順位已保留，可安心等待或取消。` : '。順位已為你保留。');
+    dom.loadingSubtext.textContent = upstreamBackoff
+      ? `上游正在恢復服務，約 ${etaSeconds} 秒後自動重試。順位與遊戲進度都已保留。`
+      : `目前排在第 ${position} 位，預計還需 ${etaSeconds} 秒`
+        + (waited > 0 ? `（已等待 ${waited} 秒）。可縮小視窗閱讀前文。` : '。可縮小視窗閱讀前文。');
   }
   if (statusText) statusText.textContent = `前方有其他玩家，已保留第 ${position} 位`;
   if (cooldownText) cooldownText.textContent = `約 ${etaSeconds} 秒`;
@@ -3620,6 +3713,8 @@ ${CHARACTER_IDENTITY_FIREWALL}
 2. 描寫要求：極致性張力、上位者男性佔有欲、五感溫度、喘息、支配與臣服、細節肢體碰觸、成人情慾拉扯與權謀博弈，使用純台灣繁體中文。
    - 徐令謙專屬例外：他的張力來自風度、克制、可靠承擔與深情守護；給玩家自由並在暗處備妥保險。除非玩家主動表達偏好，不得預設威脅、羞辱、疼痛、強迫或封鎖退路。
 3. 絕不重複前篇標題與對話，每次推進都是全新事件與衝突升級！
+3-A. 【時空連續性】本回必須從上一回最後的時間、地點與人物物理位置接續。若 timeLocation 改變，prose 必須明寫離開、移動、抵達或時間流逝的過程；嚴禁狀態面板靜默跳到新地點。連續對話或同一場景原則上只能自然推進數分鐘；若時鐘跳動超過 30 分鐘，正文必須明確交代經過多久與期間發生何事，不得自行從深夜跳到凌晨數小時後。
+3-B. 【核心人物連續性】主要攻略對象若上一回仍在場，本回必須延續其反應或明寫其離場／暫時分開；不得無故消失、換人或重置彼此已知情報。若本回合理分線，也要保留其未完成承諾與下一個可追蹤連結。
 4. 【數值真實性運算規則】：
    - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
    - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，微醺度保持原值或隨時間代謝衰減 5%！
@@ -3682,7 +3777,8 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     `- 抉擇標籤或自訂行動：${playerActionText}`,
     '',
     '請緊接著玩家的最新行動，完全原創演繹對手男主的反應、眼神殺伐、近身肢體推拉與情慾爆發，並生成 3 個全新分支選項！',
-    '務必與上方【近期劇情】的場景、時間、在場人物與物理位置完全銜接，不可跳接或重置場景。'
+    '務必與上方【近期劇情】的場景、時間、在場人物與物理位置完全銜接，不可跳接或重置場景。',
+    '若本回變更 timeLocation，正文必須先敘明移動或時間流逝；連續場景不可讓時鐘無故跳超過 30 分鐘。若主要攻略對象離場，正文必須明寫離場原因與未完成的關係線。'
   ].filter(part => part !== undefined && part !== null).join('\n');
 
   return { systemPrompt, userPrompt };
@@ -3857,6 +3953,7 @@ async function startNewGameWithProfile(profile) {
   };
 
   safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+  renderSaveState();
 
   switchView('gameplay');
   showLoading('選項確認中……', '正在依照自訂人設與情境即時生成第 1 回……');
@@ -3865,7 +3962,7 @@ async function startNewGameWithProfile(profile) {
   try {
     const { systemPrompt, userPrompt } = buildFirstTurnPrompt(profile);
     
-    hideLoading();
+    minimizeGenerationOverlay();
     const tempChapter = { act: 1, turn: 1, chosenLabel: '【正式開局】', prose: '', statusPanel: null, choices: [] };
     renderStoryStream(tempChapter);
     const proseEl = document.getElementById('stream-prose-content');
@@ -3886,6 +3983,7 @@ async function startNewGameWithProfile(profile) {
          }
     });
     if (didStream) initialChapter.skipTypewriter = true;
+    setLoadingPhase('saving', '內容檢查完成，正在建立第一回存檔。');
   } catch (aiErr) {
     if (isGenerationAbortError(aiErr)) {
       state.playerProfile = previousGameSnapshot.playerProfile;
@@ -3952,6 +4050,7 @@ async function startNewGameWithProfile(profile) {
   
   saveGameStateToSlot('1');
   syncStateToGoogleDriveCloud(state.saveState, initialChapter);
+  startServerCooldown(10);
 }
 
 async function makeChoice(choiceId, customInput, isRegenerating = false) {
@@ -4004,8 +4103,8 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
         state.saveState.summaryPool || ''
       );
       
-      // 先隱藏全螢幕 loading，直接渲染出空的對話框準備接收 stream
-      hideLoading();
+      // 將等待畫面縮成常駐狀態列，玩家仍可閱讀前文或隨時展開查看進度。
+      minimizeGenerationOverlay();
       const tempChapter = {
         act: state.saveState.meta.currentAct || 1,
         turn: state.saveState.turnCount,
@@ -4060,6 +4159,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
       };
     }
 
+    setLoadingPhase('saving', '內容檢查完成，正在套用數值變化並保存本回進度。');
     nextChapter = auditGeneratedChapter(nextChapter, profile);
     nextChapter.act = state.saveState.meta.currentAct || 1;
     nextChapter.turn = state.saveState.turnCount;
@@ -6223,46 +6323,57 @@ function startServerCooldown(seconds) {
   }, 1000);
 }
 
-const WAIT_ANIMATION_TEXTS = [
-  '他似乎正在斟酌用詞...',
-  '他沒有立刻回答...',
-  '他靜靜地看著你...',
-  '對方若有所思...',
-  '空氣中陷入短暫的沉默...',
-  '你們之間陷入了一陣安靜...'
-];
-
 let loadingTimer = null;
-let loadingStepInterval = null;
-
 const LOADING_TIMER_REVEAL_MS = 15000; // 超過這個時間才顯示已等待秒數
-const LOADING_TEXT_ROTATE_MS = 4000;
+
+const LOADING_PHASES = {
+  preparing: { label: '準備故事', title: '正在整理本回脈絡……', progress: 12, step: '' },
+  queue: { label: '順位已保留', title: '正在等待故事生成順位……', progress: 24, step: 'queue' },
+  writing: { label: '故事撰寫中', title: '故事引擎正在落筆……', progress: 48, step: 'writing' },
+  streaming: { label: '內容回傳中', title: '本回故事正在成形……', progress: 72, step: 'writing' },
+  polishing: { label: '內容整理中', title: '正在檢查章節與選項……', progress: 90, step: 'polishing' },
+  saving: { label: '保存進度', title: '正在保存這一回……', progress: 98, step: 'saving' }
+};
+
+function setLoadingPhase(phase, detail) {
+  const config = LOADING_PHASES[phase] || LOADING_PHASES.preparing;
+  state.loadingPhase = phase;
+  if (dom.loadingPhaseText) dom.loadingPhaseText.textContent = config.label;
+  if (dom.loadingText) dom.loadingText.textContent = config.title;
+  if (detail && dom.loadingSubtext) dom.loadingSubtext.textContent = detail;
+  if (dom.loadingProgressBar) dom.loadingProgressBar.style.width = `${config.progress}%`;
+  document.querySelectorAll('[data-loading-step]').forEach(el => {
+    const active = el.dataset.loadingStep === config.step;
+    el.classList.toggle('bg-amber-900/50', active);
+    el.classList.toggle('text-amber-200', active);
+    el.classList.toggle('border', active);
+    el.classList.toggle('border-amber-700/50', active);
+    el.classList.toggle('bg-slate-800', !active);
+    el.classList.toggle('text-slate-500', !active);
+  });
+  if (dom.generationDockTitle) dom.generationDockTitle.textContent = config.title.replace(/……$/, '');
+  if (dom.generationDockMeta) {
+    dom.generationDockMeta.textContent = detail || '生成會在背景繼續，可安心閱讀前文。';
+  }
+}
+
+function minimizeGenerationOverlay() {
+  if (!state.isGenerating || !dom.loadingOverlay) return;
+  dom.loadingOverlay.style.display = 'none';
+  if (dom.generationStatusDock) dom.generationStatusDock.style.display = 'flex';
+}
+
+function restoreGenerationOverlay() {
+  if (!state.isGenerating || !dom.loadingOverlay) return;
+  dom.loadingOverlay.style.display = 'flex';
+  if (dom.generationStatusDock) dom.generationStatusDock.style.display = 'none';
+}
 
 function showLoading(initialText, initialSubtext) {
   if (!dom.loadingOverlay) return;
   dom.loadingOverlay.style.display = 'flex';
-
-  // D2: 先前 8 秒才換一句，短生成永遠只看到第一句、長生成又會繞回重複的句子。
-  // 改為 4 秒一句並從隨機起點依序推進，不重複同一句。
-  let stepIndex = Math.floor(Math.random() * WAIT_ANIMATION_TEXTS.length);
-  const paintStep = () => {
-    if (!dom.loadingText) return;
-    dom.loadingText.style.opacity = '0';
-    setTimeout(() => {
-      dom.loadingText.textContent = WAIT_ANIMATION_TEXTS[stepIndex];
-      dom.loadingText.style.opacity = '1';
-    }, 260);
-  };
-
-  if (dom.loadingText) {
-    dom.loadingText.textContent = WAIT_ANIMATION_TEXTS[stepIndex];
-    dom.loadingText.classList.add('animate-pulse', 'text-brand-gold');
-    dom.loadingText.style.transition = 'opacity 0.26s ease-in-out';
-    dom.loadingText.style.opacity = '1';
-  }
-  if (dom.loadingSubtext) {
-    dom.loadingSubtext.textContent = initialSubtext || '暗流湧動，命運推演中……';
-  }
+  if (dom.generationStatusDock) dom.generationStatusDock.style.display = 'none';
+  setLoadingPhase('preparing', initialSubtext || initialText || '正在整理人物、場景與上一回的重要線索。');
 
   // D1: 計時器原本每秒累加卻從不顯示，且 state.loadingSeconds 從未被設定，
   // 遙測的等待時間永遠回報 0。現在維持氣氛（15 秒內不顯示），超時才淡入。
@@ -6277,16 +6388,13 @@ function showLoading(initialText, initialSubtext) {
   loadingTimer = setInterval(() => {
     state.loadingSeconds++;
     if (timerBadge && state.loadingSeconds * 1000 >= LOADING_TIMER_REVEAL_MS) {
-      timerBadge.textContent = `⏱️ 已等待 ${state.loadingSeconds} 秒 · 仍在生成中`;
+      timerBadge.textContent = `已等待 ${state.loadingSeconds} 秒`;
       timerBadge.classList.remove('opacity-0');
     }
+    if (dom.generationDockMeta && dom.generationStatusDock?.style.display === 'flex') {
+      dom.generationDockMeta.textContent = `已等待 ${state.loadingSeconds} 秒 · 可繼續閱讀前文`;
+    }
   }, 1000);
-
-  if (loadingStepInterval) clearInterval(loadingStepInterval);
-  loadingStepInterval = setInterval(() => {
-    stepIndex = (stepIndex + 1) % WAIT_ANIMATION_TEXTS.length;
-    paintStep();
-  }, LOADING_TEXT_ROTATE_MS);
 }
 
 function hideLoading() {
@@ -6294,17 +6402,10 @@ function hideLoading() {
     clearInterval(loadingTimer);
     loadingTimer = null;
   }
-  if (loadingStepInterval) {
-    clearInterval(loadingStepInterval);
-    loadingStepInterval = null;
-  }
   if (dom.loadingOverlay) {
     dom.loadingOverlay.style.display = 'none';
   }
-  if (dom.loadingText) {
-    dom.loadingText.style.opacity = '1';
-    dom.loadingText.classList.remove('animate-pulse', 'text-brand-gold');
-  }
+  if (dom.generationStatusDock) dom.generationStatusDock.style.display = 'none';
   state.currentAbortController = null;
 }
 

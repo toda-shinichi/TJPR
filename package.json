@@ -4,7 +4,9 @@
   "scripts": {
     "build:css": "BROWSERSLIST_IGNORE_OLD_DATA=1 tailwindcss -i ./tailwind-input.css -o ./tailwind.generated.css --minify",
     "assets": "npm run build:css && node tools/stamp-assets.js",
-    "test": "node debug_checks.js && node test_worker.js && node tools/stamp-assets.js --check"
+    "test": "node debug_checks.js && node test_worker.js && node tools/stamp-assets.js --check",
+    "test:live": "node tools/run-live-suite.js",
+    "test:live:queue": "node tools/run-live-suite.js --queue-only"
   },
   "devDependencies": {
     "caniuse-lite": "^1.0.30001810",

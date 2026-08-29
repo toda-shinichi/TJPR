@@ -15,8 +15,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./tailwind.generated.css?v=e2d890f1a8">
-  <link rel="stylesheet" href="./style.css?v=e2d890f1a8">
+  <link rel="stylesheet" href="./tailwind.generated.css?v=d825d1f69f">
+  <link rel="stylesheet" href="./style.css?v=d825d1f69f">
 </head>
 <body class="bg-brand-dark text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-white">
 
@@ -56,7 +56,7 @@
         <span id="username-display" class="font-mono text-brand-gold text-xs font-bold truncate max-w-[120px]">已登入</span>
         <button id="logout-btn" class="ml-1 text-[11px] text-slate-400 hover:text-rose-400 transition cursor-pointer" title="登出當前帳號">登出</button>
       </div>
-      <button id="open-drawer-btn" class="p-2 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold transition cursor-pointer" title="打開角色狀態與好感度數值">
+      <button id="open-drawer-btn" class="p-2 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold transition cursor-pointer" title="打開功能選單" aria-label="打開功能選單">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
       </button>
     </div>
@@ -1044,13 +1044,44 @@
 
   <!-- 載入中動畫遮罩 (動態進度輪轉) -->
   <div id="loading-overlay" class="fixed inset-0 bg-[#0c0d12]/90 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-4 transition-opacity" style="display:none;">
-    <div id="loading-text" class="font-serif font-bold text-brand-gold text-lg tracking-wider text-center mb-2 animate-pulse">選項確認中……</div>
-    <div id="loading-subtext" class="text-xs text-slate-400 mb-2 text-center max-w-sm">正在依照當前局勢動態演算與鋪陳情節……</div>
-    <div id="loading-timer-badge" class="text-xs text-amber-400 font-mono mb-5 bg-amber-950/40 px-3 py-1 rounded-full border border-amber-800/40 transition-opacity duration-500 opacity-0"></div>
-    <button id="abort-generation-btn" class="px-4 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-700/50 text-rose-200 hover:text-white transition text-xs font-bold flex items-center gap-1.5 shadow-lg cursor-pointer">
-      <span>🛑</span>
-      <span>中止本次生成</span>
-    </button>
+    <div class="w-full max-w-md rounded-2xl border border-brand-border bg-brand-surface/95 p-5 sm:p-6 shadow-2xl shadow-black/50" role="status" aria-live="polite">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <div id="loading-phase-text" class="text-[11px] font-bold tracking-[0.18em] text-amber-400 mb-1">準備故事</div>
+          <div id="loading-text" class="font-serif font-bold text-white text-lg tracking-wider mb-2">正在整理本回脈絡……</div>
+        </div>
+        <div id="loading-timer-badge" class="shrink-0 text-[11px] text-amber-300 font-mono bg-amber-950/50 px-2.5 py-1 rounded-full border border-amber-800/40 transition-opacity duration-500 opacity-0"></div>
+      </div>
+      <div class="h-1.5 rounded-full bg-slate-800 overflow-hidden mb-3" aria-hidden="true">
+        <div id="loading-progress-bar" class="h-full w-[12%] rounded-full bg-gradient-to-r from-amber-600 to-yellow-300 transition-all duration-700"></div>
+      </div>
+      <div class="grid grid-cols-4 gap-1 mb-4 text-[10px] text-center" aria-hidden="true">
+        <span data-loading-step="queue" class="rounded-md bg-slate-800 px-1 py-1 text-slate-500">取得順位</span>
+        <span data-loading-step="writing" class="rounded-md bg-slate-800 px-1 py-1 text-slate-500">撰寫故事</span>
+        <span data-loading-step="polishing" class="rounded-md bg-slate-800 px-1 py-1 text-slate-500">整理內容</span>
+        <span data-loading-step="saving" class="rounded-md bg-slate-800 px-1 py-1 text-slate-500">保存進度</span>
+      </div>
+      <div id="loading-subtext" class="text-xs text-slate-400 mb-5 leading-relaxed">正在整理人物、場景與上一回的重要線索。</div>
+      <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+        <button id="abort-generation-btn" class="px-4 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-700/50 text-rose-200 hover:text-white transition text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
+          <span>中止本回</span>
+        </button>
+        <button id="minimize-generation-btn" class="px-4 py-2.5 rounded-xl bg-brand-card hover:bg-brand-border border border-brand-border text-slate-200 hover:text-white transition text-xs font-bold cursor-pointer">
+          縮小並閱讀前文
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 生成縮小後的常駐狀態：等待時仍可閱讀前文與查看角色狀態 -->
+  <div id="generation-status-dock" class="fixed left-3 right-3 sm:left-auto sm:right-5 z-[85] sm:w-[390px] rounded-2xl border border-brand-gold/40 bg-brand-surface/95 backdrop-blur-md p-3 shadow-2xl shadow-black/50 items-center gap-3" style="display:none; bottom:calc(1rem + env(safe-area-inset-bottom, 0px));" role="status" aria-live="polite">
+    <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
+    <div class="min-w-0 flex-1">
+      <div id="generation-dock-title" class="text-xs font-bold text-amber-200 truncate">故事正在準備中</div>
+      <div id="generation-dock-meta" class="text-[11px] text-slate-400 truncate">可以繼續閱讀前文</div>
+    </div>
+    <button id="restore-generation-btn" class="shrink-0 px-3 py-2 rounded-lg bg-brand-gold text-slate-950 text-[11px] font-black cursor-pointer">查看進度</button>
+    <button id="dock-abort-generation-btn" class="shrink-0 p-2 text-slate-500 hover:text-rose-300 cursor-pointer" aria-label="中止本回生成">✕</button>
   </div>
 
   <!-- 📖 閱讀輔助浮動控制：跳過打字機 / 回到最新章節 -->
@@ -1117,6 +1148,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=e2d890f1a8" defer></script>
+    <script src="app.js?v=d825d1f69f" defer></script>
 </body>
 </html>

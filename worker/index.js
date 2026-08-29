@@ -101,7 +101,9 @@ async function sha256Hex(value) {
 async function authenticateRequest(request, env, viaSharedKey) {
   if (viaSharedKey) return { ok: true, viaSharedKey: true };
   const token = request.headers.get('X-Undercurrent-Token') || '';
-  if (!/^epi_[A-Za-z0-9_-]{20,2048}$/.test(token)) {
+  // GAS 的 Utilities.base64EncodeWebSafe() 會保留最多兩個結尾 padding「=」。
+  // padding 只能出現在字串尾端，避免放寬成可在任意位置出現的字元。
+  if (!/^epi_[A-Za-z0-9_-]{20,2048}={0,2}$/.test(token)) {
     return { ok: false, reason: 'missing-or-invalid-token' };
   }
   if (!env.AUTH_VERIFY_URL) {
@@ -238,6 +240,36 @@ export class RpmQueue {
     const now = Date.now();
     this.reservations = this.reservations.filter(item => item.readyAt > now - 60000);
 
+    // 上游即使經本站排隊，仍可能因同一金鑰的其他流量回 429。
+    // 把剛失敗的玩家放到退避後第一格，並將既有等待者依序往後平移；
+    // 這樣不會讓所有票券在退避結束的同一秒一起衝向上游。
+    if (url.pathname === '/defer') {
+      const requestedBackoff = Number(request.headers.get('X-Backoff-Ms'));
+      const backoffMs = Number.isFinite(requestedBackoff)
+        ? Math.max(QUEUE_MIN_INTERVAL_MS, Math.min(requestedBackoff, 120000))
+        : QUEUE_UPSTREAM_BACKOFF_MS;
+      const ticket = crypto.randomUUID();
+      let cursor = now + backoffMs;
+      const rescheduled = [{ ticket, readyAt: cursor }];
+      cursor += QUEUE_MIN_INTERVAL_MS;
+      for (const item of this.reservations.slice().sort((a, b) => a.readyAt - b.readyAt)) {
+        const readyAt = Math.max(cursor, item.readyAt);
+        rescheduled.push({ ticket: item.ticket, readyAt });
+        cursor = readyAt + QUEUE_MIN_INTERVAL_MS;
+      }
+      this.reservations = rescheduled;
+      this.nextSlotTs = Math.max(this.nextSlotTs, cursor);
+      await this.state.storage.put({ nextSlotTs: this.nextSlotTs, reservations: this.reservations });
+      return Response.json({
+        proceed: false,
+        ticket,
+        waitMs: backoffMs,
+        etaSeconds: Math.ceil(backoffMs / 1000),
+        position: 1,
+        upstreamBackoff: true
+      });
+    }
+
     const presentedTicket = request.headers.get('X-Queue-Ticket');
     if (presentedTicket) {
       const reservation = this.reservations.find(item => item.ticket === presentedTicket);
@@ -293,12 +325,14 @@ export class RpmQueue {
 
 /** 兩次上游請求的最小間隔。16 秒約 3.75 RPM，為 5 RPM 的滾動窗口保留緩衝。 */
 const QUEUE_MIN_INTERVAL_MS = 16000;
+/** 上游仍回 429 時的預設全域退避，退避完成後仍維持每格 16 秒。 */
+const QUEUE_UPSTREAM_BACKOFF_MS = 30000;
 /** 佇列超過這個長度就請玩家稍後再試，而不是無限等下去。 */
 const QUEUE_MAX_WAIT_MS = 180000;
 
 /**
  * 向排隊器要一個時段。
- * 未綁定 RPM_QUEUE 時直接放行（沿用舊行為），不因為缺少綁定就讓服務整個掛掉。
+ * 未綁定 RPM_QUEUE 時採 fail-closed，避免部署設定遺漏後突破共用 RPM。
  */
 async function acquireQueueSlot(env, ticket) {
   if (!env.RPM_QUEUE) return { proceed: false, unavailable: true };
@@ -313,6 +347,22 @@ async function acquireQueueSlot(env, ticket) {
   } catch (err) {
     console.warn('排隊器異常，為保護上游 RPM 暫停放行: ' + err.message);
     return { proceed: false, unavailable: true, error: err.message };
+  }
+}
+
+/** 上游回 429 時重新保留順位，並讓排隊器把所有既有票券安全往後平移。 */
+async function deferQueueSlot(env, retryMs) {
+  if (!env.RPM_QUEUE) return { unavailable: true };
+  try {
+    const id = env.RPM_QUEUE.idFromName('global');
+    const stub = env.RPM_QUEUE.get(id);
+    const res = await stub.fetch('https://queue/defer', {
+      headers: { 'X-Backoff-Ms': String(retryMs || QUEUE_UPSTREAM_BACKOFF_MS) }
+    });
+    return await res.json();
+  } catch (err) {
+    console.warn('上游退避排程失敗: ' + err.message);
+    return { unavailable: true, error: err.message };
   }
 }
 
@@ -433,6 +483,32 @@ export default {
         },
         body: JSON.stringify(body)
       });
+
+      if (upstream.status === 429) {
+        const retryHeader = Number(upstream.headers.get('Retry-After'));
+        const retryMs = Number.isFinite(retryHeader) && retryHeader > 0
+          ? retryHeader * 1000
+          : QUEUE_UPSTREAM_BACKOFF_MS;
+        try { if (upstream.body) await upstream.body.cancel(); } catch (ignore) {}
+        const deferred = await deferQueueSlot(env, retryMs);
+        if (deferred.unavailable) {
+          return json({ error: { message: '上游忙碌，且暫時無法重新保留順位。', queueUnavailable: true } }, 503, origin);
+        }
+        return new Response(JSON.stringify({
+          queued: true,
+          ticket: deferred.ticket,
+          waitMs: deferred.waitMs,
+          etaSeconds: deferred.etaSeconds,
+          position: deferred.position,
+          upstreamBackoff: true
+        }), {
+          status: 429,
+          headers: Object.assign(
+            { 'Content-Type': 'application/json', 'Retry-After': String(Math.ceil(deferred.waitMs / 1000)) },
+            corsHeaders(origin)
+          )
+        });
+      }
 
       // Content-Type 必須沿用上游的：先前無條件寫死 text/event-stream，
       // 上游回 JSON 錯誤（例如 401）時，前端的 SSE 解析器會拿到一段
