@@ -53,13 +53,31 @@ const CONSTRAINT_PROMPT = `【既定事實，不可違反】
 請接續上一回，寫一段 200 字的場景：韓正寰突然出現在倉庫外。
 必須同時提到兩位男主的座車與眼鏡狀態，並延續胸針與雨的情節。`;
 
+/**
+ * 首輪跑完後修正過的檢查規則。原始版本有兩個誤判，值得記錄以免重蹈：
+ *
+ * 1.「未讓韓正寰戴眼鏡」原本用 /韓正寰...(戴|扶|推)...眼鏡/，
+ *    結果「韓正寰【沒戴】眼鏡」也被命中 —— 否定詞裡含「戴」。
+ * 2.「未搞錯職銜」原本用 /徐令謙...檢察官/，結果徐令謙【稱呼】對方
+ *    「檢察官大人」也被命中 —— 沒有區分「某人是X」與「某人叫對方X」。
+ *
+ * 另外「座車正確」原本把【遺漏】與【寫錯】混為一談，現在分開回報。
+ */
 const CONSTRAINT_CHECKS = [
-  { name: '徐令謙座車正確', pass: /BMW|X6/i, fail: /徐令謙[^。]{0,40}(Škoda|Skoda|Enyaq)/i },
-  { name: '韓正寰座車正確', pass: /Škoda|Skoda|Enyaq/i, fail: /韓正寰[^。]{0,40}(BMW|X6)/i },
-  { name: '未讓韓正寰戴眼鏡', pass: null, fail: /韓正寰[^。]{0,30}(戴|扶|推)[^。]{0,10}眼鏡/ },
+  { name: '徐令謙座車未寫錯', pass: null,
+    fail: /徐令謙(?:的)?[^。！？]{0,30}(Škoda|Skoda|Enyaq)/i,
+    mention: /BMW|X6/i },
+  { name: '韓正寰座車未寫錯', pass: null,
+    fail: /韓正寰(?:的)?[^。！？]{0,30}(BMW|X6)/i,
+    mention: /Škoda|Skoda|Enyaq/i },
+  // 排除否定：沒戴/未戴/不戴/沒有戴 都是正確描述
+  { name: '未讓韓正寰戴眼鏡', pass: null,
+    fail: /韓正寰(?![^。！？]{0,30}(?:沒|未|不|無)[^。！？]{0,5}戴)[^。！？]{0,30}(?:戴上|戴著|扶了扶|推了推)[^。！？]{0,8}眼鏡/ },
   { name: '延續胸針情節', pass: /胸針/, fail: null },
   { name: '延續雨的場景', pass: /雨/, fail: null },
-  { name: '未搞錯職銜', pass: null, fail: /徐令謙[^。]{0,20}檢察官|韓正寰[^。]{0,20}(幫|黑道|二把手)/ }
+  // 只抓「斷言身分」的句式，排除稱呼（「檢察官大人」「檢察官，...」）
+  { name: '未搞錯職銜', pass: null,
+    fail: /徐令謙(?:是|身為|這位|擔任)[^。！？]{0,12}檢察官|韓正寰(?:是|身為|這位|擔任)[^。！？]{0,12}(幫|黑道|二把手)/ }
 ];
 
 const REFUSAL_RE = [
@@ -176,14 +194,22 @@ function literaryMetrics(text) {
       console.log(`  ✗ ${c.error.slice(0, 60)}`);
     } else {
       let score = 0;
+      const omissions = [];
       CONSTRAINT_CHECKS.forEach(chk => {
         const violated = chk.fail ? chk.fail.test(c.text) : false;
         const satisfied = chk.pass ? chk.pass.test(c.text) : true;
         const ok = satisfied && !violated;
         if (ok) score++;
-        console.log(`  ${ok ? '✓' : '✗'} ${chk.name}`);
+        // 遺漏（該提而沒提）與寫錯（張冠李戴）分開回報 —— 嚴重度不同
+        let note = '';
+        if (ok && chk.mention && !chk.mention.test(c.text)) {
+          note = '（未寫錯，但也沒提到）';
+          omissions.push(chk.name);
+        }
+        console.log(`  ${ok ? '✓' : '✗'} ${chk.name}${note}`);
       });
-      console.log(`  → 設定遵循 ${score}/${CONSTRAINT_CHECKS.length}`);
+      console.log(`  → 設定未寫錯 ${score}/${CONSTRAINT_CHECKS.length}`
+        + (omissions.length ? ` ｜ 遺漏 ${omissions.length} 項` : ''));
       const m = literaryMetrics(c.text);
       console.log('【C. 文學性指標】');
       console.log(`  句數 ${m.sentences} ｜ 平均句長 ${m.avgLen} ｜ 句長變異 ${m.lenSd}`
