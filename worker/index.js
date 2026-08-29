@@ -35,7 +35,12 @@ const ALLOWED_MODELS = [
   'aion-3.0',
   'aion-3.0-mini',
   'mistral-nemo',
-  'gpt-5.6-luna'
+  'gpt-5.6-luna',
+  // 以下為候選模型，尺度／文學性／邏輯待測，尚未排進 LLM_CONFIG 的備援鏈。
+  // 評測方式見 tools/probe-model-latitude.js
+  'qwen/qwen3-vl-235b-a22b-instruct',
+  'minimaxai/minimax-m3',
+  'minimax/minimax-m2.7'
 ];
 
 const MAX_TOKENS_CEILING = 4096;
