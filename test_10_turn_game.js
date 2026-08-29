@@ -248,7 +248,7 @@ async function requestTurn(messages, model = MODEL) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: ORIGIN },
       // 與正式遊戲生成設定一致，避免測試本身截斷狀態面板或選項。
-      body: JSON.stringify({ model, messages, temperature: 0.65, max_tokens: 4096, stream: true }),
+      body: JSON.stringify({ model, messages, temperature: 0.65, max_tokens: 6144, stream: true }),
       signal: controller.signal
     });
     if (!response.ok) {

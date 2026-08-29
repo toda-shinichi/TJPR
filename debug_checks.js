@@ -316,10 +316,50 @@ assert.deepStrictEqual(
 // 上游速率限制為每分鐘 5 次且跨模型共用，一回合的嘗試不得超出額度
 assert.ok(plan.length <= 5, '嘗試計畫總次數超出上游每分鐘 5 次的共用額度');
 assert.match(gasFnBody, /const models = buildAttemptPlan\(\);/, 'GAS 路徑沒有直接沿用完整嘗試計畫');
-assert.ok((rootApp.match(/await waitForRpmCooldown\(\);/g) || []).length >= 2, 'Worker/GAS 每次請求前未共同套用限速');
+// 限速的歸屬：Worker 路徑交給 Durable Object 全域排隊器，前端不得再等一次
+// （重複計算實測會讓三次嘗試白等 32 秒，而前端冷卻只管自己這個瀏覽器、
+//  本來就擋不住多玩家同時上線）。GAS 備援路徑不經過 Worker，仍需前端限速。
+const workerStreamFn = rootApp.slice(
+  rootApp.indexOf('async function generateStoryWithWorkerStream'),
+  rootApp.indexOf('async function generateStoryFromLLM')
+);
+const gasFn = rootApp.slice(rootApp.indexOf('async function generateStoryFromLLM'));
+assert.doesNotMatch(workerStreamFn, /await waitForRpmCooldown\(\);/, 'Worker 路徑與全域排隊器重複限速');
+assert.match(gasFn, /await waitForRpmCooldown\(\);/, 'GAS 備援路徑缺少前端限速');
 assert.match(gasConfig, /MIN_REQUEST_INTERVAL_MS:\s*16000/, 'GAS 全域限速不是 16 秒');
 assert.match(gasConfig, /PRIMARY_ATTEMPTS:\s*2/, 'GAS 主模型嘗試次數不是 2 次');
-assert.match(gasConfig, /MAX_TOKENS:\s*4096/, 'GAS 敘事模型輸出上限不是 4096');
+assert.match(gasConfig, /MAX_TOKENS:\s*6144/, 'GAS 敘事模型輸出上限不是 6144');
+assert.match(rootApp, /recentProsePerTurn: 2400/, '近期正文視窗未與 max_tokens 6144 連動放寬');
+assert.strictEqual(
+  (rootApp.match(/max_tokens: 6144/g) || []).length, 2,
+  '前端兩條生成路徑的 max_tokens 未同步為 6144'
+);
+assert.match(workerCode, /MAX_TOKENS_CEILING = 6144/, 'Worker 的 max_tokens 夾制上限不是 6144');
+
+// ── 全域排隊機制 ──
+// 上游額度是所有玩家共用的，Worker 是唯一匯流點，排隊必須放在那裡。
+assert.match(workerCode, /export class RpmQueue/, 'Worker 缺少 Durable Object 排隊器');
+assert.match(workerCode, /QUEUE_MIN_INTERVAL_MS = 16000/, '排隊間隔不是 16 秒');
+assert.match(workerCode, /QUEUE_MAX_WAIT_MS = 180000/, '排隊上限不是 180 秒');
+assert.match(workerCode, /acquireQueueSlot\(env\)/, 'Worker 未在轉發前取得排隊時段');
+assert.match(workerCode, /if \(!env\.RPM_QUEUE\) return \{ proceed: true/, '未綁定排隊器時應直接放行而非整體失效');
+const wranglerToml = fs.readFileSync('worker/wrangler.toml', 'utf8');
+assert.match(wranglerToml, /class_name = "RpmQueue"/, 'wrangler.toml 缺少 RpmQueue 的 Durable Object 綁定');
+assert.match(wranglerToml, /new_sqlite_classes = \["RpmQueue"\]/, 'wrangler.toml 缺少 RpmQueue 的 migration');
+
+// 前端：排隊不是失敗，不可計入模型嘗試次數
+assert.match(rootApp, /QUEUE_MAX_TOTAL_WAIT_MS = 180000/, '前端排隊等待上限不是 180 秒');
+assert.ok(
+  rootApp.includes('function parseQueueResponse(') && rootApp.includes('function createQueueRetryError('),
+  '前端缺少排隊回應解析或排隊重試錯誤'
+);
+const workerStreamBody = rootApp.slice(
+  rootApp.indexOf('async function generateStoryWithWorkerStream'),
+  rootApp.indexOf('async function generateStoryFromLLM')
+);
+assert.match(workerStreamBody, /retryCurrentModel = true;/, '排隊後未安排重試同一個模型');
+assert.match(workerStreamBody, /planIdx--;/, '排隊重試會誤跳到下一個模型');
+assert.match(workerStreamBody, /err\.isQueueRetry/, '排隊重試未與真正的失敗區分');
 assert.match(
   gasConfig,
   /PRIMARY:\s*'aion-3\.0',[\s\S]*?FALLBACK:\s*'qwen\/qwen3-vl-235b-a22b-instruct',[\s\S]*?FALLBACK_2:\s*'mistral-large-3'/,

@@ -2098,16 +2098,28 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
   const primaryModel = LLM_CONFIG.PRIMARY_MODEL;
   const unavailableModels = new Set();
   let attemptNo = 0;
+  // 排隊相關：排隊不是失敗，不計入模型嘗試次數
+  let queuedTotalMs = 0;
+  let retryCurrentModel = false;
 
-  for (const model of modelsToTry) {
-    attemptNo++;
+  for (let planIdx = 0; planIdx < modelsToTry.length; planIdx++) {
+    const model = modelsToTry[planIdx];
+    if (retryCurrentModel) {
+      retryCurrentModel = false;
+      planIdx--;                 // 排隊完成後重試同一個模型
+    } else {
+      attemptNo++;
+    }
     // 已確認不可用的模型不再重試 —— 那是確定性失敗，重試只是白打請求
     if (unavailableModels.has(model)) continue;
     let timeoutId = null;
     try {
       throwIfGenerationAborted();
-      await waitForRpmCooldown();
-      // 以請求起點計算間隔；在 fetch 前寫入，失敗請求也必須占用速率額度。
+      // 這條路徑【不】呼叫 waitForRpmCooldown()：上游額度由 Worker 的
+      // 全域排隊器（Durable Object）統一調度，前端再等一次是重複計算。
+      // 實測會讓三次嘗試白等 32 秒，而且前端的冷卻只管自己這個瀏覽器，
+      // 本來就擋不住多玩家同時上線 —— 那正是排隊器存在的理由。
+      // GAS 備援路徑不經過 Worker，仍保留 waitForRpmCooldown()。
       lastRequestTimestamp = Date.now();
       const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       state.currentAbortController = controller;
@@ -2139,7 +2151,7 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
             { role: 'user', content: userPrompt }
           ],
           temperature: LLM_CONFIG.TEMPERATURE,
-          max_tokens: 4096,
+          max_tokens: 6144,
           stream: true
         }),
         ...(controller ? { signal: controller.signal } : {})
@@ -2148,6 +2160,26 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
       if (!response.ok) {
         let errBody = '';
         try { errBody = await response.text(); } catch (e) { /* 忽略 */ }
+
+        // 排隊中：還沒輪到，不是失敗。睡完該等的時間後重試同一個模型。
+        const queueInfo = parseQueueResponse(errBody);
+        if (queueInfo && queueInfo.queueFull) {
+          notifyUser(`目前同時遊玩人數較多（約需 ${queueInfo.etaSeconds} 秒），請稍後再試這一回。`, 'error', 9000);
+          throw new Error('排隊人數過多，請稍後再試。');
+        }
+        if (queueInfo && queueInfo.queued) {
+          if (queuedTotalMs + queueInfo.waitMs > QUEUE_MAX_TOTAL_WAIT_MS) {
+            notifyUser('排隊等待已超過 3 分鐘，請稍後再試這一回。', 'error', 9000);
+            throw new Error('排隊等待逾時，請稍後再試。');
+          }
+          reportQueueStatus(queueInfo.position, queueInfo.etaSeconds, queuedTotalMs);
+          await new Promise(r => setTimeout(r, queueInfo.waitMs));
+          queuedTotalMs += queueInfo.waitMs;
+          throwIfGenerationAborted();
+          retryCurrentModel = true;
+          throw createQueueRetryError(model);
+        }
+
         if (isRateLimitedResponse(errBody)) throw createRateLimitError(model, errBody);
         if (isModelUnavailableResponse(errBody)) throw createModelUnavailableError(model, errBody);
         throw new Error(`Worker HTTP ${response.status}${errBody ? ': ' + errBody.slice(0, 120) : ''}`);
@@ -2255,6 +2287,9 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         notifyUser('已達上游每分鐘請求上限，請稍候約一分鐘再重試本回。', 'error', 9000);
         throw err;
       }
+      if (err && err.isQueueRetry) {
+        continue;   // 排隊等待已完成，下一輪重試同一個模型
+      }
       if (err && err.isModelUnavailable) {
         unavailableModels.add(model);
         console.warn(`[Worker] ${model} 在上游不可用，跳過其餘重試：`, err.message);
@@ -2309,6 +2344,59 @@ const RATE_LIMIT_PATTERNS = [
 
 function isRateLimitedResponse(text) {
   return RATE_LIMIT_PATTERNS.some(re => re.test(String(text || '')));
+}
+
+/**
+ * 排隊：Worker 是所有玩家的唯一匯流點，上游額度由全體共用。
+ *
+ * 為什麼不能只靠前端的 waitForRpmCooldown()：那個只管自己這個瀏覽器。
+ * 三個玩家同時按下選項時，各自算各自的冷卻，必然一起打上游、一起吃 429。
+ * Worker 的 KV 限速是「每 IP」的，同樣擋不住不同玩家。
+ *
+ * 收到 429 且帶 queued 旗標時代表「還沒輪到」—— 這不是失敗，
+ * 不可計入模型嘗試次數，睡完該等的時間後重試同一個模型即可。
+ */
+const QUEUE_MAX_TOTAL_WAIT_MS = 180000;
+
+/**
+ * 解析 Worker 的排隊回應。
+ * @returns {{queued:true,waitMs:number,etaSeconds:number,position:number}
+ *          |{queueFull:true,etaSeconds:number}|null}
+ */
+function parseQueueResponse(bodyText) {
+  try {
+    const data = JSON.parse(bodyText);
+    if (data && data.queued) {
+      return {
+        queued: true,
+        waitMs: Math.max(1000, Number(data.waitMs) || 1000),
+        etaSeconds: Number(data.etaSeconds) || 1,
+        position: Number(data.position) || 1
+      };
+    }
+    if (data && data.error && data.error.queueFull) {
+      return { queueFull: true, etaSeconds: Number(data.error.etaSeconds) || 0 };
+    }
+  } catch (e) { /* 不是排隊回應，交給後續的錯誤判別 */ }
+  return null;
+}
+
+/** 排隊期間把等待狀況寫進 loading，讓玩家知道系統沒當掉而是在排隊 */
+function reportQueueStatus(position, etaSeconds, waitedMs) {
+  const waited = Math.round(waitedMs / 1000);
+  if (dom.loadingText) dom.loadingText.textContent = '前方尚有其他玩家，排隊中……';
+  if (dom.loadingSubtext) {
+    dom.loadingSubtext.textContent =
+      `目前排在第 ${position} 位，預計還需 ${etaSeconds} 秒`
+      + (waited > 0 ? `（已等待 ${waited} 秒）。` : '。');
+  }
+}
+
+/** 排隊重試不是失敗，只是「還沒輪到」，必須與真正的錯誤區分 */
+function createQueueRetryError(model) {
+  const err = new Error(`Model ${model} queued`);
+  err.isQueueRetry = true;
+  return err;
 }
 
 function createRateLimitError(model, detail) {
@@ -2524,7 +2612,7 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
             { role: 'user', content: userPrompt }
           ],
           temperature: LLM_CONFIG.TEMPERATURE,
-          max_tokens: 4096,
+          max_tokens: 6144,
           token: state.token,
           userId: state.userId
         }),
@@ -2804,7 +2892,9 @@ function warmLoreCache(profile) {
  */
 const CONTEXT_BUDGET = {
   recentTurns: 5,              // 近期劇情回合數（保留足夠對話與場景細節）
-  recentProsePerTurn: 1800,    // 單回正文上限（mistral 實測約 1,458 字，留餘裕）
+  // 單回正文上限。與 max_tokens 6144 連動：模型可寫到約 1,800–2,000 字，
+  // 這裡若設太小，較長的章節餵回下一回的歷史時會被裁掉、失去銜接細節。
+  recentProsePerTurn: 2400,
   actDossiers: 2,              // 保留最近幾幕的幕篇檔案
   actDossierChars: 900,        // 單份幕篇檔案上限
   playerProfileChars: 900,

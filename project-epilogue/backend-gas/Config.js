@@ -34,7 +34,11 @@ const CONFIG = {
       FALLBACK: 'qwen/qwen3-vl-235b-a22b-instruct',
       FALLBACK_2: 'mistral-large-3',
       TEMPERATURE: 0.88,
-      MAX_TOKENS: 4096,
+      // 硬性截斷上限，不是用來控字數（字數由提示詞決定）。
+      // 它的作用是防止無限擴寫並設成本上限。必須留足餘裕：
+      // 模型回傳的是一整包 JSON，prose 之後還有 statusPanel 與 choices，
+      // 若在中途被截斷，整個 JSON 會壞掉、該回直接失敗，而不只是正文變短。
+      MAX_TOKENS: 6144,
       TOP_P: 0.95
     },
     // 快速稽核模型 (Fast Auditor: aion-3.0-mini 首選，mistral-nemo 備援)

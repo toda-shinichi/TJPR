@@ -47,7 +47,7 @@ const ALLOWED_MODELS = [
 //   glm-5.2-thinking  拒絕 R-18、輸出簡體、文字重複損毀
 //   gpt-5.6-luna      未納入評測，暫不開放
 
-const MAX_TOKENS_CEILING = 4096;
+const MAX_TOKENS_CEILING = 6144;
 const MAX_BODY_BYTES = 128 * 1024;
 
 function corsHeaders(origin) {
@@ -111,6 +111,93 @@ async function checkRateLimit(env, request) {
   }
 }
 
+
+/**
+ * 全域請求排隊（Durable Object）。
+ *
+ * 為什麼需要：上游限制是【每分鐘 5 次、跨模型且跨使用者共用】。
+ * 前端的 waitForRpmCooldown() 只管自己那個瀏覽器，Worker 的 KV 限速是每 IP 的
+ * —— 兩者都擋不住「三個玩家同時按下選項」的情況，封閉測試時必然一起吃 429。
+ * Worker 是所有玩家的唯一匯流點，排隊必須放在這裡。
+ *
+ * 為什麼用 Durable Object 而非 KV：KV 是最終一致性，兩個並發請求可能讀到
+ * 同一個「下一個空檔」並都認為輪到自己。DO 單執行緒、天然序列化，是唯一
+ * 能正確發號的選擇。
+ *
+ * 設計取捨：等待中的請求【不預先佔用】時段，只回報還要等多久，由前端睡完再問。
+ * 這樣不會因為玩家關掉分頁而留下無人認領的空檔（不需要逾期回收機制）。
+ * 代價是多個等待者可能同時醒來搶同一格 —— DO 會序列化，只有一個拿到，
+ * 其餘拿到新的短等待。三人規模下這個取捨是划算的。
+ */
+export class RpmQueue {
+  constructor(state) {
+    this.state = state;
+    this.nextSlotTs = 0;
+    // 從儲存還原，避免 DO 被回收後重置導致瞬間放行過多請求
+    this.state.blockConcurrencyWhile(async () => {
+      this.nextSlotTs = (await this.state.storage.get('nextSlotTs')) || 0;
+    });
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    const now = Date.now();
+    const slot = Math.max(now, this.nextSlotTs);
+    const waitMs = slot - now;
+
+    // 只是詢問還要等多久，不佔用時段
+    if (url.pathname === '/peek') {
+      return Response.json({
+        waitMs,
+        etaSeconds: Math.ceil(waitMs / 1000),
+        position: Math.ceil(waitMs / QUEUE_MIN_INTERVAL_MS)
+      });
+    }
+
+    // 佇列太長：直接請玩家稍後再試，不要無限排隊
+    if (waitMs > QUEUE_MAX_WAIT_MS) {
+      return Response.json({ rejected: true, waitMs, etaSeconds: Math.ceil(waitMs / 1000) });
+    }
+
+    // 還沒輪到：回報等待時間，但不佔用時段
+    if (waitMs > 0) {
+      return Response.json({
+        proceed: false,
+        waitMs,
+        etaSeconds: Math.ceil(waitMs / 1000),
+        position: Math.ceil(waitMs / QUEUE_MIN_INTERVAL_MS)
+      });
+    }
+
+    // 輪到了：佔用這一格並往後推
+    this.nextSlotTs = slot + QUEUE_MIN_INTERVAL_MS;
+    await this.state.storage.put('nextSlotTs', this.nextSlotTs);
+    return Response.json({ proceed: true });
+  }
+}
+
+/** 兩次上游請求的最小間隔。16 秒約 3.75 RPM，為 5 RPM 的滾動窗口保留緩衝。 */
+const QUEUE_MIN_INTERVAL_MS = 16000;
+/** 佇列超過這個長度就請玩家稍後再試，而不是無限等下去。 */
+const QUEUE_MAX_WAIT_MS = 180000;
+
+/**
+ * 向排隊器要一個時段。
+ * 未綁定 RPM_QUEUE 時直接放行（沿用舊行為），不因為缺少綁定就讓服務整個掛掉。
+ */
+async function acquireQueueSlot(env) {
+  if (!env.RPM_QUEUE) return { proceed: true, skipped: true };
+  try {
+    const id = env.RPM_QUEUE.idFromName('global');
+    const stub = env.RPM_QUEUE.get(id);
+    const res = await stub.fetch('https://queue/acquire');
+    return await res.json();
+  } catch (err) {
+    console.warn('排隊器異常，放行以免整體不可用: ' + err.message);
+    return { proceed: true, error: err.message };
+  }
+}
+
 export default {
   async fetch(request, env) {
     const { ok: originOk, origin, reason } = resolveOrigin(request, env);
@@ -150,6 +237,42 @@ export default {
           )
         }
       );
+    }
+
+    // 全域排隊：上游額度是所有玩家共用的，這是唯一的匯流點
+    const slot = await acquireQueueSlot(env);
+    if (slot.rejected) {
+      return new Response(JSON.stringify({
+        error: {
+          message: `目前排隊人數過多（約需等待 ${slot.etaSeconds} 秒），請稍後再試。`,
+          queueFull: true,
+          etaSeconds: slot.etaSeconds
+        }
+      }), {
+        status: 429,
+        headers: Object.assign(
+          { 'Content-Type': 'application/json', 'Retry-After': String(Math.ceil(slot.waitMs / 1000)) },
+          corsHeaders(origin)
+        )
+      });
+    }
+    if (!slot.proceed) {
+      // 還沒輪到：回報等待時間，由前端睡完再重試。
+      // 刻意不長時間佔住連線 —— 那樣得先以 200 開頭回應，
+      // 上游後續的錯誤狀態碼就再也傳不回前端，
+      // 現有的「模型不可用／限流」判別會全部失效。
+      return new Response(JSON.stringify({
+        queued: true,
+        waitMs: slot.waitMs,
+        etaSeconds: slot.etaSeconds,
+        position: slot.position
+      }), {
+        status: 429,
+        headers: Object.assign(
+          { 'Content-Type': 'application/json', 'Retry-After': String(Math.max(1, Math.ceil(slot.waitMs / 1000))) },
+          corsHeaders(origin)
+        )
+      });
     }
 
     try {
