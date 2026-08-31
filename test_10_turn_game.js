@@ -10,7 +10,8 @@ const MODEL_ATTEMPT_PLAN = [
   MODEL,
   'qwen/qwen3-vl-235b-a22b-instruct'
 ];
-const TURN_COUNT = 10;
+const TURN_COUNT = Math.max(1, Number(process.env.TJPR_TURN_COUNT) || 10);
+const LITERARY_GATE = process.env.TJPR_LITERARY_GATE === '1';
 // 專案上游限制為 5 RPM；採 16 秒間隔降至約 3.75 RPM，避開共享額度與滾動窗口邊界。
 const MIN_REQUEST_INTERVAL_MS = 16_000;
 const REQUEST_TIMEOUT_MS = 120_000;
@@ -188,9 +189,19 @@ function validateTurn(chapter, turn) {
   assert.strictEqual(new Set(ids).size, 3, `第 ${turn} 回選項 id 重複`);
 }
 
-function getValidationError(chapter, turn) {
+function getValidationError(chapter, turn, history = []) {
   try {
     validateTurn(chapter, turn);
+    if (LITERARY_GATE) {
+      const literary = literaryMetrics(chapter, history);
+      if (literary.clichéHits.length >= 3) throw new Error(`第 ${turn} 回套路語過多`);
+      if (literary.simileCount > 4) throw new Error(`第 ${turn} 回比喻訊號過密`);
+      if (literary.simplifiedChineseCount) throw new Error(`第 ${turn} 回混入簡體字`);
+      if (literary.formulaicClosure) throw new Error(`第 ${turn} 回使用判詞式模板`);
+      if (literary.repeatedSentenceCount >= 2) throw new Error(`第 ${turn} 回完整句子重複`);
+      if (literary.recentEchoLength >= 12) throw new Error(`第 ${turn} 回沿用近期回合措辭`);
+      if (literary.score < 65) throw new Error(`第 ${turn} 回文學品質分數過低`);
+    }
     return '';
   } catch (error) {
     return error.message;
@@ -215,6 +226,70 @@ function continuityWarnings(chapter, previous) {
   return warnings;
 }
 
+const LITERARY_CLICHES = [
+  '空氣瞬間凝滯', '空氣凝滯', '眼底閃過一絲', '眼底閃過', '眸中掠過',
+  '唇角勾起', '嘴角勾起', '心跳如鼓', '看穿靈魂', '無形的網', '無形的牆',
+  '蟄伏的獸', '危險又迷人', '不容置疑', '不容拒絕', '宣告主權',
+  '喉結滾動', '指尖微顫', '呼吸一滯', '渾身一僵', '電流竄過',
+  '眼神銳利如刀', '銳利如刀刃', '眼神像刀', '未引爆的計時器', '未引爆計時器'
+];
+const RHYTHMS = ['潛流鋪陳', '言語試探', '情報揭露', '關係偏移', '壓力峰值', '餘韻留白'];
+
+function countLiterarySimiles(prose) {
+  return (String(prose || '').match(/(?:彷彿|如同|宛如|好像|像是|像被|像在|像要|像從|像一(?:個|把|張|道|場|頭|隻|枚|座|面|根|顆|條|件))/g) || []).length;
+}
+
+function countRepeatedLiterarySentences(prose) {
+  const counts = new Map();
+  String(prose || '').split(/[。！？!?；;\n]+/)
+    .map(sentence => sentence.replace(/[「」『』“”\s，、：:—…]/g, '').trim())
+    .filter(sentence => sentence.length >= 3)
+    .forEach(sentence => counts.set(sentence, (counts.get(sentence) || 0) + 1));
+  return Array.from(counts.values()).reduce((total, count) => total + Math.max(0, count - 1), 0);
+}
+
+function countSimplifiedChineseMarkers(prose) {
+  return (String(prose || '').match(/[这为后发会门问见与东个来时说车书里边应过还从对将无现开关经处实试]/g) || []).length;
+}
+
+function getLongestRecentLiteraryEcho(prose, history = []) {
+  const normalize = value => String(value || '').replace(/[\s，。！？!?；;、：「」『』“”‘’（）()—…·,.:'"\-]/g, '');
+  const current = normalize(prose);
+  let longest = 0;
+  history.slice(-3).forEach(item => {
+    const previous = normalize(item?.chapter?.prose || item?.prose || '');
+    let priorRow = new Uint16Array(previous.length + 1);
+    for (let i = 1; i <= current.length; i += 1) {
+      const row = new Uint16Array(previous.length + 1);
+      for (let j = 1; j <= previous.length; j += 1) {
+        if (current[i - 1] === previous[j - 1]) {
+          row[j] = priorRow[j - 1] + 1;
+          if (row[j] > longest) longest = row[j];
+        }
+      }
+      priorRow = row;
+    }
+  });
+  return longest;
+}
+
+function literaryMetrics(chapter, history = []) {
+  const prose = String(chapter?.prose || '');
+  const clichéHits = LITERARY_CLICHES.filter(phrase => prose.includes(phrase));
+  const simileCount = countLiterarySimiles(prose);
+  const repeatedSentenceCount = countRepeatedLiterarySentences(prose);
+  const simplifiedChineseCount = countSimplifiedChineseMarkers(prose);
+  const recentEchoLength = getLongestRecentLiteraryEcho(prose, history);
+  const longChoices = (chapter?.choices || []).filter(choice => String(choice?.label || '').length > 120).length;
+  const sentences = prose.split(/[。！？!?]+/).map(item => item.trim()).filter(item => item.length >= 4);
+  const tail = prose.slice(-220).replace(/\s+/g, ' ');
+  const formulaicClosure = /這不是[^。！？]{1,40}[。！？][\s\S]{0,28}?這是[^。！？]{1,40}[。！？]/.test(prose)
+    || /這不是[^，。！？]{1,40}[，,]\s*是[^。！？]{1,40}[。！？]/.test(prose)
+    || /(?:這只是|一切才|一切只是).{0,10}(?:開始|剛開始)/.test(tail);
+  const score = Math.max(0, 100 - clichéHits.length * 10 - Math.max(0, simileCount - 2) * 5 - repeatedSentenceCount * 8 - simplifiedChineseCount * 12 - Math.max(0, recentEchoLength - 11) * 3 - longChoices * 8 - (formulaicClosure ? 15 : 0));
+  return { score, clichéHits, simileCount, repeatedSentenceCount, simplifiedChineseCount, recentEchoLength, longChoices, formulaicClosure, sentenceCount: sentences.length };
+}
+
 function buildMessages(turn, history, action, memory) {
   const recent = history.slice(-3).map(item => ({
     turn: item.turn,
@@ -224,11 +299,27 @@ function buildMessages(turn, history, action, memory) {
     statusPanel: item.chapter.statusPanel
   }));
 
-  const system = `你是《暗流》互動小說的測試敘事引擎。這是一段 PG-15 台灣政商懸疑劇，不寫露骨成人內容。
+  const recentCliches = LITERARY_CLICHES.filter(phrase => recent.some(item => String(item.prose || '').includes(phrase)));
+  const system = `你是連載長篇小說作者，同時維持《暗流》互動故事的狀態資料。這是一段 PG-15 台灣政商懸疑劇，不寫露骨成人內容。正文必須先像可出版小說成立，再正確填寫遊戲欄位。
 固定設定：玩家林映真，29歲調查記者；主要對象徐令謙，35歲，玄辰幫天裕會首領兼德行法律事務所顧問。他不是警察、刑警或檢察官。徐令謙冷靜、自持、尊重玩家自主，不威脅或限制玩家自由。
 必須緊接前情，時間、地點、物品與人物認知不可無故重置。若更換地點或時間，正文必須寫出轉場。
+
+【文學敘事規格】
+- 限知第二人稱，只寫玩家當下可察覺或合理推斷之事；台灣當代都會黑色小說質感。
+- 用精準名詞、動詞與具體後果形成張力，克制形容詞，不直接宣布人物危險、迷人、強勢或充滿性張力。
+- 對話須有潛台詞；不要在旁白立即解釋每句台詞。
+- 長短句交錯；核心比喻最多 2 個且取材自場景；「像、彷彿、如同、宛如」合計最多 3 次。
+- 交稿前逐字搜尋「像、彷彿、如同、宛如」，合計超過 3 次就刪減；這是硬性上限。
+- 同一句話、同一物件狀態或「你＋動作」句型不得換字反覆描述；完整句子不可重複。
+- 不可把上一回的招牌物件、收尾意象或整段動作只換幾個字重寫；物件若仍在場，必須產生新的變化或後果。
+- 本回節奏：${RHYTHMS[(turn - 1) % RHYTHMS.length]}。
+- 避免套路語及近義改寫：${LITERARY_CLICHES.join('、')}。近期尤其不可重用：${recentCliches.join('、') || '無'}。
+- 完成一個有因果的戲劇節拍，不要求高潮或封口；以具體餘波保留下一回張力。
+- 不得用「這不是 X。這是 Y。」「裂縫已經打開」「一切才剛開始」等判詞總結；以仍在發生的動作、物件、聲音或未完成對話收尾。
+- 選項 label 25–60 字，hint 10–24 字，每項只有一個行動與必要對白。
+
 只輸出合法 JSON，不要 markdown：
-{"chapterTitle":"第 ${turn} 回．標題","prose":"350至550字繁體中文正文","statusPanel":{"timeLocation":"明確時間地點","tension":0,"tensionLabel":"描述","intoxication":0,"intoxicationLabel":"描述","favorabilityDelta":0,"favorabilityReason":"原因","outfit":"服裝神態","interaction":"互動距離","inventory":"關鍵物品","rumors":"新情報"},"choices":[{"id":"A","label":"行動","risk":"low","hint":"提示"},{"id":"B","label":"行動","risk":"medium","hint":"提示"},{"id":"C","label":"行動","risk":"high","hint":"提示"}]}`;
+{"chapterTitle":"第 ${turn} 回．標題","prose":"800至1200字繁體中文正文","statusPanel":{"timeLocation":"明確時間地點","tension":0,"tensionLabel":"描述","intoxication":0,"intoxicationLabel":"描述","favorabilityDelta":0,"favorabilityReason":"原因","outfit":"服裝神態","interaction":"互動距離","inventory":"關鍵物品","rumors":"新情報"},"choices":[{"id":"A","label":"25至60字行動","risk":"low","hint":"提示"},{"id":"B","label":"25至60字行動","risk":"medium","hint":"提示"},{"id":"C","label":"25至60字行動","risk":"high","hint":"提示"}]}`;
 
   const user = `【長期測試記憶】\n${memory || '林映真取得一支疑似記錄政商洗錢帳目的隨身碟。'}\n\n【最近三回】\n${JSON.stringify(recent)}\n\n【第 ${turn} 回玩家行動】\n${action}\n\n請推進一個完整但不結案的場景，保留下一回可延續的線索。`;
   return [{ role: 'system', content: system }, { role: 'user', content: user }];
@@ -240,19 +331,39 @@ function updateMemory(memory, turn, chapter, action) {
 }
 
 async function requestTurn(messages, model = MODEL) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const startedAt = Date.now();
-  try {
+  let ticket = '';
+  let queuedMs = 0;
+  while (queuedMs <= 360_000) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
     const response = await fetch(LIVE_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Origin: ORIGIN, 'X-Undercurrent-Token': LIVE_TOKEN },
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: ORIGIN,
+        'X-Undercurrent-Token': LIVE_TOKEN,
+        ...(ticket ? { 'X-Queue-Ticket': ticket } : {})
+      },
       // 與正式遊戲生成設定一致，避免測試本身截斷狀態面板或選項。
       body: JSON.stringify({ model, messages, temperature: 0.65, max_tokens: 6144, stream: true }),
       signal: controller.signal
     });
     if (!response.ok) {
       const body = await response.text();
+      if (response.status === 429) {
+        const queue = JSON.parse(body);
+        if (queue?.queued && queue.ticket) {
+          ticket = queue.ticket;
+          const waitMs = Math.max(1000, Number(queue.waitMs) || 1000);
+          queuedMs += waitMs;
+          if (queuedMs > 360_000) throw new Error('排隊等待超過 6 分鐘');
+          console.log(`模型 ${model} 已保留第 ${Number(queue.position) || 1} 位，${Math.ceil(waitMs / 1000)} 秒後重試……`);
+          await sleep(waitMs + 250);
+          continue;
+        }
+      }
       throw new Error(`HTTP ${response.status}: ${body.slice(0, 300)}`);
     }
     const streamed = await readSseContent(response);
@@ -274,9 +385,11 @@ async function requestTurn(messages, model = MODEL) {
       latencyMs: Date.now() - startedAt,
       sawDone: streamed.sawDone
     };
-  } finally {
-    clearTimeout(timeout);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+  throw new Error('排隊等待超過 6 分鐘');
 }
 
 async function main() {
@@ -312,7 +425,7 @@ async function main() {
       nextAllowedAt = requestStartedAt + MIN_REQUEST_INTERVAL_MS;
       try {
         const candidate = await requestTurn(messages, model);
-        validationError = getValidationError(candidate.chapter, turn);
+        validationError = getValidationError(candidate.chapter, turn, history);
         attempts.push({ model, outcome: validationError || candidate.parseMode });
         if (!validationError) {
           result = candidate;
@@ -327,7 +440,15 @@ async function main() {
     if (!result) {
       throw new Error(`第 ${turn} 回三段備援均未產生合格章節：${JSON.stringify(attempts)}`);
     }
+    const literary = literaryMetrics(result.chapter, history);
     const warnings = continuityWarnings(result.chapter, previous?.chapter);
+    if (literary.clichéHits.length > 1) warnings.push(`套路語偏多：${literary.clichéHits.join('、')}`);
+    if (literary.simileCount > 3) warnings.push(`比喻訊號過密：${literary.simileCount}`);
+    if (literary.longChoices) warnings.push(`過長選項：${literary.longChoices}`);
+    if (literary.formulaicClosure) warnings.push('結尾使用判詞式總結');
+    if (literary.repeatedSentenceCount) warnings.push(`完整句子重複 ${literary.repeatedSentenceCount} 次`);
+    if (literary.recentEchoLength >= 12) warnings.push(`沿用近期回合措辭 ${literary.recentEchoLength} 字`);
+    if (literary.simplifiedChineseCount) warnings.push(`混入簡體字 ${literary.simplifiedChineseCount} 字`);
     if (validationError) warnings.unshift(validationError);
     if (validationError || result.parseMode !== 'json') {
       fs.writeFileSync(REPORT_PATH.replace(/\.json$/i, `-turn-${turn}-raw.txt`), result.raw);
@@ -342,10 +463,15 @@ async function main() {
       sawDone: result.sawDone,
       parseMode: result.parseMode,
       validationPassed: !validationError,
-      attempts
+      attempts,
+      literary
     });
+    fs.writeFileSync(
+      REPORT_PATH.replace(/\.json$/i, '-partial.json'),
+      JSON.stringify({ startedAt, turnsCompleted: history.length, turns: history }, null, 2)
+    );
     memory = updateMemory(memory, turn, result.chapter, action);
-    console.log(`第 ${turn}/10 回完成｜嚴格驗證通過｜${result.model}｜${result.latencyMs}ms｜正文 ${result.chapter.prose.length} 字｜${result.parseMode}｜警告 ${warnings.length}`);
+    console.log(`第 ${turn}/${TURN_COUNT} 回完成｜嚴格驗證通過｜${result.model}｜${result.latencyMs}ms｜正文 ${result.chapter.prose.length} 字｜文學分 ${literary.score}｜${result.parseMode}｜警告 ${warnings.length}`);
   }
 
   const intervals = requestStarts.slice(1).map((value, index) => value - requestStarts[index]);
@@ -365,6 +491,7 @@ async function main() {
     minRequestIntervalMs: intervals.length ? Math.min(...intervals) : null,
     averageLatencyMs: Math.round(history.reduce((sum, item) => sum + item.latencyMs, 0) / history.length),
     totalProseChars: history.reduce((sum, item) => sum + item.chapter.prose.length, 0),
+    averageLiteraryScore: Math.round(history.reduce((sum, item) => sum + item.literary.score, 0) / history.length),
     warnings,
     turns: history.map(item => ({
       turn: item.turn,
@@ -375,20 +502,33 @@ async function main() {
       intoxication: item.chapter.statusPanel.intoxication,
       favorabilityDelta: item.chapter.statusPanel.favorabilityDelta,
       proseChars: item.chapter.prose.length,
+      prose: item.chapter.prose,
+      choices: item.chapter.choices,
       latencyMs: item.latencyMs,
       model: item.model,
       sawDone: item.sawDone,
       parseMode: item.parseMode,
       validationPassed: item.validationPassed,
       warnings: item.warnings,
-      attempts: item.attempts
+      attempts: item.attempts,
+      literary: item.literary
     }))
   };
   fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2));
-  console.log(`10 回合全部完成；嚴格通過 ${report.turnsPassed}/${TURN_COUNT}。報告：${REPORT_PATH}`);
+  if (LITERARY_GATE) {
+    assert.ok(report.averageLiteraryScore >= 85, `平均文學品質分數過低：${report.averageLiteraryScore}`);
+    assert.ok(history.every(item => item.literary.clichéHits.length <= 1), '至少一回仍含多個套路語');
+    assert.ok(history.every(item => item.literary.simileCount <= 4), '至少一回仍有過密比喻訊號');
+    assert.ok(history.every(item => item.literary.longChoices === 0), '至少一回仍有過長選項');
+    assert.ok(history.every(item => !item.literary.formulaicClosure), '至少一回仍以判詞式句型收尾');
+    assert.ok(history.every(item => item.literary.repeatedSentenceCount < 2), '至少一回出現機械式完整句重複');
+    assert.ok(history.every(item => item.literary.recentEchoLength < 12), '至少一回沿用近期回合段落措辭');
+    assert.ok(history.every(item => item.literary.simplifiedChineseCount === 0), '至少一回混入簡體字');
+  }
+  console.log(`${TURN_COUNT} 回合全部完成；嚴格通過 ${report.turnsPassed}/${TURN_COUNT}；平均文學分 ${report.averageLiteraryScore}。報告：${REPORT_PATH}`);
 }
 
-module.exports = { parseModelJson, validateTurn, continuityWarnings };
+module.exports = { parseModelJson, validateTurn, continuityWarnings, literaryMetrics };
 
 if (require.main === module) {
   main().catch(error => {

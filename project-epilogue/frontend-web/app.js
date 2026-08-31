@@ -2024,7 +2024,7 @@ function extractFirstJson(text) { return extractGameData(text); }
  * 生成後的輕量品質閘門。只做可確定的結構修復；世界觀疑點保留正文並標記，
  * 避免自動替字破壞小說語意或為了稽核額外消耗一次模型請求。
  */
-function auditGeneratedChapter(input, profile) {
+function auditGeneratedChapter(input, profile, historyList = []) {
   const chapter = isPlainObject(input) ? input : {};
   chapter.chapterTitle = String(chapter.chapterTitle || '未命名章節').slice(0, 160);
   chapter.prose = String(chapter.prose || '').trim();
@@ -2064,6 +2064,16 @@ function auditGeneratedChapter(input, profile) {
   const lead = profile?.targetLeadName || '';
   if (lead === '徐令謙' && /徐令謙.{0,16}(?:檢察官|警察|刑警)|(?:檢察官|警察|刑警).{0,16}徐令謙/.test(chapter.prose)) {
     warnings.push('疑似混淆徐令謙的官方職業');
+  }
+  const literaryQuality = assessLiteraryQuality(chapter, historyList);
+  literaryQuality.warnings.forEach(warning => warnings.push(`文學品質：${warning}`));
+  chapter.literaryQuality = literaryQuality;
+  if (literaryQuality.warnings.length) {
+    console.warn('[Literary Quality]', {
+      score: literaryQuality.score,
+      warnings: literaryQuality.warnings,
+      metrics: literaryQuality.metrics
+    });
   }
   chapter.qualityWarnings = warnings;
   return chapter;
@@ -2366,6 +2376,11 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
           if (verdict.refused) throw createRefusalError(model, verdict.reason);
           const validationError = getNarrativeValidationError(finalParsed);
           if (validationError) throw new Error(`模型章節結構不完整：${validationError}`);
+          const literaryError = getLiteraryValidationError(finalParsed, state.chapterHistoryList);
+          if (literaryError && planIdx < modelsToTry.length - 1) {
+            throw new Error(`模型文學品質未達門檻：${literaryError}`);
+          }
+          if (literaryError) console.warn(`[Literary Quality] 最終備援仍有警告，保留可遊玩章節：${literaryError}`);
           console.log(`[Worker] ${model} 成功（第 ${attemptNo} 次嘗試），正文 ${finalParsed.prose.length} 字、選項 ${(finalParsed.choices||[]).length} 個`);
           if (model !== primaryModel) noteUncensoredFallbackUsed(model, attemptNo);
           warnIfCensoringModel(model);
@@ -2784,6 +2799,13 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
           reportGenerationProgress(model, mIdx + 1, models.length, '結構不完整，改試下一個');
           continue;
         }
+        const literaryError = getLiteraryValidationError(parsed, state.chapterHistoryList);
+        if (literaryError && mIdx < models.length - 1) {
+          console.warn(`[Pure AI] ${model} 文學品質未達門檻（${literaryError}），改試下一個。`);
+          reportGenerationProgress(model, mIdx + 1, models.length, '文學品質不足，改試下一個');
+          continue;
+        }
+        if (literaryError) console.warn(`[Literary Quality] 最終 GAS 備援仍有警告，保留可遊玩章節：${literaryError}`);
         console.log(`[Pure AI] Successfully generated with model: ${model} via proxy (${parsed.prose.length} chars)`);
         if (model !== LLM_CONFIG.PRIMARY_MODEL) noteUncensoredFallbackUsed(model, mIdx + 1);
         warnIfCensoringModel(model);
@@ -3602,6 +3624,160 @@ function finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs, tier2AlreadyD
   return blocks.join('\n');
 }
 
+const LITERARY_CLICHE_PATTERNS = [
+  '空氣瞬間凝滯', '空氣凝滯', '眼底閃過一絲', '眼底閃過', '眸中掠過',
+  '唇角勾起', '嘴角勾起', '心跳如鼓', '看穿靈魂', '無形的網', '無形的牆',
+  '蟄伏的獸', '危險又迷人', '不容置疑', '不容拒絕', '宣告主權',
+  '喉結滾動', '指尖微顫', '呼吸一滯', '渾身一僵', '電流竄過',
+  '眼神銳利如刀', '銳利如刀刃', '眼神像刀', '未引爆的計時器', '未引爆計時器'
+];
+
+const SCENE_RHYTHM_CYCLE = [
+  { name: '潛流鋪陳', brief: '降低表面音量，以一個具體物件或環境變化承載不安；不急著製造高潮。' },
+  { name: '言語試探', brief: '讓對話表層與真正意圖錯開；至少一句話在後文產生第二層意思。' },
+  { name: '情報揭露', brief: '只揭開一項會改變判斷的新事實，同時讓角色為知道它付出代價。' },
+  { name: '關係偏移', brief: '用選擇、讓步或拒絕改變雙方距離，不直接替讀者宣布感情升溫。' },
+  { name: '壓力峰值', brief: '讓先前累積的矛盾落到不可迴避的行動；高潮必須改變局勢，而非只提高形容詞強度。' },
+  { name: '餘韻留白', brief: '處理上一個轉折的後果，以未說完的話、物件或動作收尾，保留下一回張力。' }
+];
+
+function getSceneRhythm(turnCount) {
+  const turn = Math.max(1, Number(turnCount) || 1);
+  return SCENE_RHYTHM_CYCLE[(turn - 1) % SCENE_RHYTHM_CYCLE.length];
+}
+
+function collectRecentStyleEchoes(historyList) {
+  const prose = (Array.isArray(historyList) ? historyList : [])
+    .slice(-3)
+    .map(item => String(item?.prose || ''))
+    .join('\n');
+  return LITERARY_CLICHE_PATTERNS.filter(phrase => prose.includes(phrase)).slice(0, 8);
+}
+
+function buildLiteraryCraftBlock(turnCount, historyList) {
+  const rhythm = getSceneRhythm(turnCount);
+  const echoes = collectRecentStyleEchoes(historyList);
+  return `【本回文學敘事規格（優先於氣氛口號，僅次於人物設定與事實連續性）】
+- 敘事視角：貼近玩家感官的限知第二人稱；只寫當下可察覺或合理推斷之事，不替其他角色解說內心。
+- 文體：台灣當代都會黑色小說。用精準名詞、動詞與可驗證細節形成質感；克制形容詞，避免把「高級、危險、壓迫、性感」當成結論反覆宣告。
+- 對話：台詞表面意義與真正目的之間要有距離，以停頓、答非所問、避開稱謂或改變動作呈現潛台詞；不要在旁白立刻解釋每句台詞。
+- 節奏：長短句與段落密度須有變化。一段只保留一個主要感官焦點；全回核心比喻最多 2 個，且必須取材自當前場景；「像、彷彿、如同、宛如」四種詞合計最多 3 次。
+- 交稿前靜默自檢：逐字搜尋「像、彷彿、如同、宛如」，合計超過 3 次就刪減；這是硬性上限，不是建議。
+- 避免機械重複：同一句話、同一物件狀態或「你＋動作」句型不得換字反覆描述；除非是刻意設計的唯一一次回聲，完整句子不可重複。
+- 跨回推進：不可把上一回的招牌物件、收尾意象或整段動作只換幾個字再寫一次；若物件仍在場，必須寫出它因新行動產生的變化或後果。
+- 情慾與權力：由人物承擔的風險、允許或拒絕、物理距離與具體後果產生；不得直接用「性張力爆發、佔有慾、危險迷人」代替戲劇行動。
+- 場景單位：完成一個有因果的戲劇節拍即可，不必每回高潮或封口。結尾留下會影響下一回的具體餘波，不寫「這只是開始」式總結。
+- 收尾禁制：不得用「這不是 X。這是 Y。」「裂縫已經打開」「一切才剛開始」等判詞替讀者總結；必須以仍在發生的動作、物件、聲音或未完成對話收尾。
+- 本回節奏角色：${rhythm.name}——${rhythm.brief}
+- 通用反套路：避免使用「${LITERARY_CLICHE_PATTERNS.join('、')}」及其近義改寫；若確有必要，整回最多只能出現其中一項。
+- 近期三回已出現、尤其不可再用：${echoes.length ? echoes.join('、') : '無；仍須遵守通用反套路'}。
+- 三個選項各自只寫「一個明確行動＋必要的一句話」，label 建議 25–60 字，hint 建議 10–24 字；不要把選項寫成另一段正文。`;
+}
+
+function countLiterarySimiles(prose) {
+  const text = String(prose || '');
+  // 不把「監視影像、圖像、攝像」等名詞中的「像」誤判成比喻。
+  return (text.match(/(?:彷彿|如同|宛如|好像|像是|像被|像在|像要|像從|像一(?:個|把|張|道|場|頭|隻|枚|座|面|根|顆|條|件))/g) || []).length;
+}
+
+function countRepeatedLiterarySentences(prose) {
+  const counts = new Map();
+  String(prose || '')
+    .split(/[。！？!?；;\n]+/)
+    .map(sentence => sentence.replace(/[「」『』“”\s，、：:—…]/g, '').trim())
+    .filter(sentence => sentence.length >= 3)
+    .forEach(sentence => counts.set(sentence, (counts.get(sentence) || 0) + 1));
+  return Array.from(counts.values()).reduce((total, count) => total + Math.max(0, count - 1), 0);
+}
+
+function countSimplifiedChineseMarkers(prose) {
+  return (String(prose || '').match(/[这为后发会门问见与东个来时说车书里边应过还从对将无现开关经处实试]/g) || []).length;
+}
+
+function getLongestRecentLiteraryEcho(prose, historyList = []) {
+  const normalize = value => String(value || '').replace(/[\s，。！？!?；;、：「」『』“”‘’（）()—…·,.:'"\-]/g, '');
+  const current = normalize(prose);
+  let longest = 0;
+  (Array.isArray(historyList) ? historyList : []).slice(-3).forEach(item => {
+    const previous = normalize(item?.prose || item?.chapter?.prose || '');
+    if (!current || !previous) return;
+    let priorRow = new Uint16Array(previous.length + 1);
+    for (let i = 1; i <= current.length; i += 1) {
+      const row = new Uint16Array(previous.length + 1);
+      for (let j = 1; j <= previous.length; j += 1) {
+        if (current[i - 1] === previous[j - 1]) {
+          row[j] = priorRow[j - 1] + 1;
+          if (row[j] > longest) longest = row[j];
+        }
+      }
+      priorRow = row;
+    }
+  });
+  return longest;
+}
+
+function assessLiteraryQuality(chapter, historyList = []) {
+  const prose = String(chapter?.prose || '').trim();
+  const warnings = [];
+  const clichéHits = LITERARY_CLICHE_PATTERNS.filter(phrase => prose.includes(phrase));
+  if (clichéHits.length > 1) warnings.push(`套路語密度偏高：${clichéHits.slice(0, 4).join('、')}`);
+
+  const simileCount = countLiterarySimiles(prose);
+  if (simileCount > 3) warnings.push(`比喻訊號過密（${simileCount} 次）`);
+
+  const repeatedSentenceCount = countRepeatedLiterarySentences(prose);
+  if (repeatedSentenceCount) warnings.push(`完整句子重複（${repeatedSentenceCount} 次）`);
+
+  const simplifiedChineseCount = countSimplifiedChineseMarkers(prose);
+  if (simplifiedChineseCount) warnings.push(`混入簡體字（${simplifiedChineseCount} 字）`);
+
+  const recentEchoLength = getLongestRecentLiteraryEcho(prose, historyList);
+  if (recentEchoLength >= 12) warnings.push(`沿用近期回合措辭（連續 ${recentEchoLength} 字）`);
+
+  const sentences = prose.split(/[。！？!?]+/).map(s => s.trim()).filter(s => s.length >= 4);
+  if (sentences.length >= 8) {
+    const lengths = sentences.map(s => s.length);
+    const average = lengths.reduce((sum, n) => sum + n, 0) / lengths.length;
+    const variance = lengths.reduce((sum, n) => sum + Math.pow(n - average, 2), 0) / lengths.length;
+    if (Math.sqrt(variance) < 7) warnings.push('句長變化偏低，節奏可能過度整齊');
+  }
+
+  const previousOpenings = (Array.isArray(historyList) ? historyList : [])
+    .slice(-3)
+    .map(item => String(item?.prose || '').replace(/\s+/g, '').slice(0, 18))
+    .filter(Boolean);
+  const currentOpening = prose.replace(/\s+/g, '').slice(0, 18);
+  if (currentOpening && previousOpenings.includes(currentOpening)) warnings.push('章節開頭與近期回合重複');
+
+  const choices = Array.isArray(chapter?.choices) ? chapter.choices : [];
+  const longChoices = choices.filter(choice => String(choice?.label || '').length > 120).length;
+  if (longChoices) warnings.push(`${longChoices} 個選項過長，分散正文注意力`);
+
+  const tail = prose.slice(-220).replace(/\s+/g, ' ');
+  const formulaicClosure = /這不是[^。！？]{1,40}[。！？][\s\S]{0,28}?這是[^。！？]{1,40}[。！？]/.test(prose)
+    || /這不是[^，。！？]{1,40}[，,]\s*是[^。！？]{1,40}[。！？]/.test(prose)
+    || /(?:這只是|一切才|一切只是).{0,10}(?:開始|剛開始)/.test(tail);
+  if (formulaicClosure) warnings.push('結尾使用判詞式總結，缺少具體餘韻');
+
+  return {
+    score: Math.max(0, 100 - clichéHits.length * 8 - Math.max(0, simileCount - 2) * 5 - repeatedSentenceCount * 8 - simplifiedChineseCount * 12 - Math.max(0, recentEchoLength - 11) * 3 - longChoices * 5 - (formulaicClosure ? 12 : 0) - warnings.length * 4),
+    warnings,
+    metrics: { clichéHits, simileCount, repeatedSentenceCount, simplifiedChineseCount, recentEchoLength, sentenceCount: sentences.length, longChoices, formulaicClosure }
+  };
+}
+
+function getLiteraryValidationError(chapter, historyList = []) {
+  const quality = assessLiteraryQuality(chapter, historyList);
+  if (quality.metrics.clichéHits.length >= 3) return `套路語過多（${quality.metrics.clichéHits.length} 項）`;
+  if (quality.metrics.simileCount > 4) return `比喻訊號過密（${quality.metrics.simileCount} 次）`;
+  if (quality.metrics.simplifiedChineseCount) return `混入簡體字（${quality.metrics.simplifiedChineseCount} 字）`;
+  if (quality.metrics.formulaicClosure) return '使用判詞式模板收尾';
+  if (quality.metrics.repeatedSentenceCount >= 2) return `完整句子重複（${quality.metrics.repeatedSentenceCount} 次）`;
+  if (quality.metrics.recentEchoLength >= 12) return `沿用近期回合措辭（連續 ${quality.metrics.recentEchoLength} 字）`;
+  if (quality.score < 65) return `文學品質分數過低（${quality.score}）`;
+  return '';
+}
+
 function buildFirstTurnPrompt(profile) {
   const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
   const customScenario = (profile.customScenario || '').trim();
@@ -3610,8 +3786,9 @@ function buildFirstTurnPrompt(profile) {
   // 1. 動態偵測自訂情境中是否包含配角
   const activeNPCs = detectActiveNPCs('', customScenario, leadKey, profile.supportingLeads || []);
   const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura);
+  const literaryCraftBlock = buildLiteraryCraftBlock(1, []);
 
-  const systemPrompt = `你是一位專精沉浸式情感小說、權謀博弈與多方張力的頂級角色扮演敘事者與RPG核心引擎。
+  const systemPrompt = `你是連載長篇小說作者，同時負責維持互動故事的狀態資料。正文必須先像可出版的小說成立，再正確填寫遊戲欄位。
 ${CHARACTER_IDENTITY_FIREWALL}
 【最高指導原則：全量人物設定 100% 絕對對標（最高約束力）】：
 1. 【嚴格對標座車與配件】：提及角色出入或座車時，必須 100% 使用其設定檔中的指定座車（例如：楊紹宸為私人鐵灰 Audi RS7 / 公務黑色 Benz S680 配司機，絕非邁巴赫；徐令謙為 BMW M760i / X6 M60i；韓正寰為 Škoda Enyaq；邵翊衡為 Porsche 911 / Audi A8；徐宇寧為 Volvo XC60；徐承勳為 Audi A8 L 防彈裝甲車 / Jaguar F-Type；江瀚文為 Aston Martin DBS 等），嚴禁 AI 自行隨意發明！
@@ -3619,10 +3796,12 @@ ${CHARACTER_IDENTITY_FIREWALL}
 3. 【嚴格對標專屬說話風格與語句】：必須嚴格參照各角色設定檔中的口吻與範例台詞。徐令謙必須冷靜、自持、紳士，台詞簡潔有份量，不油條、不浮誇、不逞兇鬥狠；對玩家尊重自主，以克制形成張力，力量只朝向外部風險。不得把冷靜寫成冷酷、保護寫成控制、佔有慾寫成剝奪自由。
 4. 【血緣與親情既定事實】：楊慕璃與二哥楊紹宸同住陽明山大宅，熟知彼此生活習慣，嚴禁任何初次見面的陌生化描寫！
 
+${literaryCraftBlock}
+
 請嚴格遵守《情慾文學指引》與《系統核心指令》：
-1. 風格與成人情慾（R-18）：極致性張力、高位推拉、五感具象（體溫、喘息、香氣、眼神壓迫、肢體碰觸）、權謀殺伐與多方博弈，使用純台灣繁體中文。
+1. 風格與成人情慾（R-18）：以人物意圖、選擇後果、五感細節與未說出口的欲望形成張力，並結合權謀殺伐與多方博弈；使用純台灣繁體中文。
    - 徐令謙專屬例外：他的張力來自風度、克制、可靠承擔與深情守護；除非玩家主動表達偏好，不得預設威脅、羞辱、疼痛、強迫或封鎖退路。
-2. 【正文篇幅目標】prose 建議以 800–1000 個中文字為目標範圍，但這不是硬性限制。以完整寫完一個有情節推進、情緒變化且自然收束的場景段落為優先；可依內容需要略多或略少，絕不為守住字數把場景切成兩半，也不為湊字數重複描寫或灌水，且不套用固定模板。
+2. 【正文篇幅目標】prose 建議 800–1200 個中文字，依場景需要自然增減。完成一個實質改變局勢或關係的戲劇節拍，不必每回高潮或封口；不截斷、不灌水、不套固定模板。
 3. 【數值真實性運算規則】：
    - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
    - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，數值必須保持 0！
@@ -3658,11 +3837,11 @@ ${characterPromptBlock}
     "relationshipChanges": { "${profile.targetLeadName || '主要對象'}": 0 },
     "questProgress": "本回實際推進的任務狀態；沒有則留空字串"
   },
-  "prose": "【以 800–1000 個中文字為建議目標、優先完整推進並自然收束場景的小說正文；可依內容需要略多或略少，不截斷、不灌水】",
+  "prose": "【800–1200 個中文字為建議範圍；完成一個有因果的戲劇節拍，保留具體餘波，不截斷、不灌水、不以旁白解釋潛台詞】",
   "choices": [
-    { "id": "A", "label": "[A] 【選項A完整行動與對白描述】", "risk": "low", "hint": "策略提示" },
-    { "id": "B", "label": "[B] 【選項B完整行動與對白描述】", "risk": "medium", "hint": "策略提示" },
-    { "id": "C", "label": "[C] 【選項C情慾暗示/主動靠近/破局點】", "risk": "high", "hint": "策略提示" }
+    { "id": "A", "label": "[A] 【25–60 字：一個明確行動＋必要對白】", "risk": "low", "hint": "【10–24 字策略提示】" },
+    { "id": "B", "label": "[B] 【25–60 字：不同策略的一個行動＋必要對白】", "risk": "medium", "hint": "【10–24 字策略提示】" },
+    { "id": "C", "label": "[C] 【25–60 字：高風險破局行動＋必要對白】", "risk": "high", "hint": "【10–24 字策略提示】" }
   ]
 }`;
 
@@ -3678,7 +3857,7 @@ ${characterPromptBlock}
 
 - 玩家自訂開局情境：${customScenario || '深夜暴雨台北，帶著關鍵政商洗錢密錄暗帳初次入局'}
 
-請根據以上設定與開局情境，完全從零即時創作第 1 回長篇小說，精準呈現情境地點、男主眼神壓迫、性張力拉扯與三個全新抉擇選項！`;
+請根據以上設定與開局情境創作第 1 回。直接從一個正在發生的具體動作切入，讓人物意圖透過選擇、對話潛台詞與場景細節浮現；不要先介紹世界觀，也不要用旁白宣告角色危險、迷人或充滿性張力。最後生成三個精簡且真正不同策略的抉擇。全文「像、彷彿、如同、宛如」合計不得超過 3 次。`;
 
   return { systemPrompt, userPrompt };
 }
@@ -3705,8 +3884,9 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
   const pinnedMemoryBlock = buildPinnedMemoryBlock(historyList, saveState);
   const liveStateBlock = buildLiveStateBlock(saveState, profile);
   const summaryBlock = summaryPool ? `【長期劇情摘要池（中期劇情的濃縮事實）】\n${summaryPool}\n` : '';
+  const literaryCraftBlock = buildLiteraryCraftBlock(turnCount, historyList);
 
-  const systemPrompt = `你是一位專精沉浸式情感小說、權謀博弈與多方張力的頂級角色扮演敘事者與RPG核心引擎。
+  const systemPrompt = `你是連載長篇小說作者，同時負責維持互動故事的狀態資料。正文必須先像可出版的小說成立，再正確填寫遊戲欄位。
 ${CHARACTER_IDENTITY_FIREWALL}
 【最高指導原則：全量人物設定 100% 絕對對標（最高約束力）】：
 1. 【嚴格對標座車與配件】：提及角色出入或座車時，必須 100% 使用其設定檔中的指定座車（例如：楊紹宸為私人鐵灰 Audi RS7 / 公務黑色 Benz S680 配司機，絕非邁巴赫；徐令謙為 BMW M760i / X6 M60i；韓正寰為 Škoda Enyaq；邵翊衡為 Porsche 911 / Audi A8；徐宇寧為 Volvo XC60；徐承勳為 Audi A8 L 防彈裝甲車 / Jaguar F-Type；江瀚文為 Aston Martin DBS 等），嚴禁 AI 自行隨意發明！
@@ -3714,11 +3894,13 @@ ${CHARACTER_IDENTITY_FIREWALL}
 3. 【嚴格對標專屬說話風格與語句】：必須嚴格參照各角色設定檔中的口吻與範例台詞。徐令謙必須冷靜、自持、紳士，台詞簡潔有份量，不油條、不浮誇、不逞兇鬥狠；對玩家尊重自主，以克制形成張力，力量只朝向外部風險。不得把冷靜寫成冷酷、保護寫成控制、佔有慾寫成剝奪自由。
 4. 【血緣與親情既定事實】：楊慕璃與二哥楊紹宸同住陽明山大宅，熟知彼此生活習慣，嚴禁任何初次見面的陌生化描寫！
 
+${literaryCraftBlock}
+
 請嚴格遵守《情慾文學指引》與《系統核心指令》：
-1. 嚴格依據玩家剛才執行的最新行動/抉擇，即時推進後續正文。prose 建議以 800–1000 個中文字為目標範圍，但不是硬性限制；以完整寫完一個有推進、情緒變化且自然收束的場景段落為優先。可依內容需要略多或略少，不得為守住數字把場景切成兩半，也不得為湊字數重複描寫或灌水。
-2. 描寫要求：極致性張力、上位者男性佔有欲、五感溫度、喘息、支配與臣服、細節肢體碰觸、成人情慾拉扯與權謀博弈，使用純台灣繁體中文。
+1. 嚴格依據玩家最新行動推進。prose 建議 800–1200 個中文字，依場景自然增減；完成一個有因果、會改變局勢或關係的戲劇節拍，不要求每回高潮或封口，不截斷、不灌水。
+2. 描寫要求：以人物選擇、實際風險、距離變化、對話潛台詞及具體感官細節形成成人情慾與權力博弈；不得只提高形容詞強度，使用純台灣繁體中文。
    - 徐令謙專屬例外：他的張力來自風度、克制、可靠承擔與深情守護；給玩家自由並在暗處備妥保險。除非玩家主動表達偏好，不得預設威脅、羞辱、疼痛、強迫或封鎖退路。
-3. 絕不重複前篇標題與對話，每次推進都是全新事件與衝突升級！
+3. 絕不重複前篇標題與對話；每回必須產生新資訊、選擇代價或關係偏移，但不必機械式升級衝突。
 3-A. 【時空連續性】本回必須從上一回最後的時間、地點與人物物理位置接續。若 timeLocation 改變，prose 必須明寫離開、移動、抵達或時間流逝的過程；嚴禁狀態面板靜默跳到新地點。連續對話或同一場景原則上只能自然推進數分鐘；若時鐘跳動超過 30 分鐘，正文必須明確交代經過多久與期間發生何事，不得自行從深夜跳到凌晨數小時後。
 3-B. 【核心人物連續性】主要攻略對象若上一回仍在場，本回必須延續其反應或明寫其離場／暫時分開；不得無故消失、換人或重置彼此已知情報。若本回合理分線，也要保留其未完成承諾與下一個可追蹤連結。
 4. 【數值真實性運算規則】：
@@ -3733,7 +3915,7 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
 6. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼標記）：
 {
   "chapterTitle": "第 1 幕 第 ${turnCount} 回：【全新章節標題】",
-  "prose": "【以 800–1000 個中文字為建議目標、緊接玩家行動並完整推進至自然收束的小說正文；可依內容需要略多或略少，不截斷、不灌水】",
+  "prose": "【800–1200 個中文字為建議範圍；緊接玩家行動，完成一個有因果的戲劇節拍並保留具體餘波；不截斷、不灌水、不解釋潛台詞】",
   "statusPanel": {
     "timeLocation": "時空地點",
     "tension": 70,
@@ -3759,9 +3941,9 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     "questProgress": "本回實際推進的任務狀態；沒有則留空字串"
   },
   "choices": [
-    { "id": "A", "label": "[A] 【選項A完整行動與對白描述】", "risk": "low", "hint": "提示" },
-    { "id": "B", "label": "[B] 【選項B完整行動與對白描述】", "risk": "medium", "hint": "提示" },
-    { "id": "C", "label": "[C] 【選項C情慾暗示/破局點】", "risk": "high", "hint": "提示" }
+    { "id": "A", "label": "[A] 【25–60 字：一個明確行動＋必要對白】", "risk": "low", "hint": "【10–24 字提示】" },
+    { "id": "B", "label": "[B] 【25–60 字：不同策略的一個行動＋必要對白】", "risk": "medium", "hint": "【10–24 字提示】" },
+    { "id": "C", "label": "[C] 【25–60 字：高風險破局行動＋必要對白】", "risk": "high", "hint": "【10–24 字提示】" }
   ]
 }`;
 
@@ -3782,9 +3964,10 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     '【玩家本回最新行動】',
     `- 抉擇標籤或自訂行動：${playerActionText}`,
     '',
-    '請緊接著玩家的最新行動，完全原創演繹對手男主的反應、眼神殺伐、近身肢體推拉與情慾爆發，並生成 3 個全新分支選項！',
+    '請緊接玩家最新行動，以具體選擇、對話潛台詞與場景後果呈現對手反應；不要用旁白直接宣布情緒、權力或性張力。生成 3 個精簡、策略真正不同的分支選項。',
     '務必與上方【近期劇情】的場景、時間、在場人物與物理位置完全銜接，不可跳接或重置場景。',
-    '若本回變更 timeLocation，正文必須先敘明移動或時間流逝；連續場景不可讓時鐘無故跳超過 30 分鐘。若主要攻略對象離場，正文必須明寫離場原因與未完成的關係線。'
+    '若本回變更 timeLocation，正文必須先敘明移動或時間流逝；連續場景不可讓時鐘無故跳超過 30 分鐘。若主要攻略對象離場，正文必須明寫離場原因與未完成的關係線。',
+    '全文「像、彷彿、如同、宛如」合計不得超過 3 次；不要使用近期已列出的套路語或近義改寫。'
   ].filter(part => part !== undefined && part !== null).join('\n');
 
   return { systemPrompt, userPrompt };
@@ -4018,7 +4201,7 @@ async function startNewGameWithProfile(profile) {
     showErrorRecovery('AI 生成逾時，已先為您鋪上臨時開局。可點擊「重新生成」重試第 1 回。', { canRetry: false });
     initialChapter = {
       chapterTitle: `第 1 回．雨夜初會 · ${profile.targetLeadName || '徐令謙'}`,
-      prose: `五月深夜的台北，暴雨如注。\n\n${profile.name}手握關鍵底牌踏入現場，對面男人的視線在第一時間精準鎖定了她……`,
+      prose: `五月深夜，雨水沿著騎樓邊緣落成一道不整齊的簾。\n\n${profile.name}把濕掉的文件袋換到另一隻手。對面的男人先看了封口處的泥痕，才抬眼確認她的身分；他沒有招呼，只替她留住即將闔上的門。`,
       statusPanel: {
         timeLocation: '台北市深夜暴雨街頭',
         tension: '張力值 [75%]',
@@ -4147,7 +4330,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
       console.warn('[Pure AI] Next turn LLM call failed, generating dynamic fallback turn:', llmErr);
       nextChapter = {
         chapterTitle: `第 1 幕 第 ${state.saveState.turnCount} 回：暗流激盪 · 局勢推進`,
-        prose: `隨著${profile.name}做出這一抉擇，空氣中的張力陡然飆升！\n\n對面的男人修長的手指輕輕叩擊著桌面，深邃的雙眸中掠過一抹極致的玩味與佔有慾……`,
+        prose: `${profile.name}的話落下後，桌面那杯沒有人碰過的水仍在慢慢退去霧氣。\n\n對面的男人沒有立刻回答。他把原本準備收起的文件留在原處，指腹壓著紙頁一角，像是在衡量這句話究竟值得哪一種回應。門外傳來電梯抵達的提示音，兩人都沒有回頭。`,
         statusPanel: {
           timeLocation: '台北市深宵密室',
           tension: '張力值 [85%]',
@@ -4166,7 +4349,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     }
 
     setLoadingPhase('saving', '內容檢查完成，正在套用數值變化並保存本回進度。');
-    nextChapter = auditGeneratedChapter(nextChapter, profile);
+    nextChapter = auditGeneratedChapter(nextChapter, profile, state.chapterHistoryList);
     nextChapter.act = state.saveState.meta.currentAct || 1;
     nextChapter.turn = state.saveState.turnCount;
     applyChapterStateChanges(nextChapter, profile, state.saveState.turnCount);
@@ -6107,7 +6290,7 @@ async function handleRegenerateTurn() {
         }
       });
       if (rDidStream) regeneratedChapter.skipTypewriter = true;
-      const auditedRegeneratedChapter = auditGeneratedChapter(regeneratedChapter, profile);
+      const auditedRegeneratedChapter = auditGeneratedChapter(regeneratedChapter, profile, state.chapterHistoryList.slice(0, -1));
       regeneratedChapter = auditedRegeneratedChapter;
       regeneratedChapter.act = 1;
       regeneratedChapter.turn = 1;

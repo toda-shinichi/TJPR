@@ -283,11 +283,11 @@ assert.doesNotMatch(rootApp, /text-\[#d8dbe6\]/, '最新回合仍使用深色主
 assert.match(css, /#stream-prose-content\s*\{[\s\S]*?color:\s*#3e363a\s*!important/, '最新回合正文缺少高對比色保護');
 assert.match(rootApp, /PRIMARY_MODEL: 'aion-3\.0'/, '前端主力敘事模型不是 aion-3.0');
 assert.match(rootApp, /FALLBACK_MODEL: 'qwen\/qwen3-vl-235b-a22b-instruct'/, '前端備援模型不是 qwen3-vl-235b');
-assert.strictEqual((rootApp.match(/800–1000 個中文字/g) || []).length, 4, '開局與續回的正文篇幅目標未完整更新');
+assert.strictEqual((rootApp.match(/800–1200 個中文字/g) || []).length, 4, '開局與續回的文學篇幅目標未完整更新');
 assert.doesNotMatch(rootApp, /字數上限強制執行|600~800 個中文字/, '前端提示詞仍殘留硬性字數上限');
-assert.match(rootApp, /不為守住字數把場景切成兩半[\s\S]*不為湊字數重複描寫或灌水/, '開局提示詞缺少場景完整與避免灌水規則');
-assert.match(rootApp, /不得為守住數字把場景切成兩半[\s\S]*不得為湊字數重複描寫或灌水/, '續回提示詞缺少場景完整與避免灌水規則');
-assert.strictEqual((memoryPipelineCode.match(/800–1000 個中文字/g) || []).length, 3, '長期記憶管線的正文篇幅目標未完整更新');
+assert.match(rootApp, /完成一個實質改變局勢或關係的戲劇節拍[\s\S]*不截斷、不灌水、不套固定模板/, '開局提示詞缺少戲劇節拍與避免灌水規則');
+assert.match(rootApp, /完成一個有因果、會改變局勢或關係的戲劇節拍[\s\S]*不截斷、不灌水/, '續回提示詞缺少戲劇節拍與避免灌水規則');
+assert.strictEqual((memoryPipelineCode.match(/800–1200 個中文字/g) || []).length, 3, '長期記憶管線的文學篇幅目標未完整更新');
 assert.doesNotMatch(memoryPipelineCode, /上限強制執行|600(?:~| 至 )800 個中文字/, '長期記憶管線仍殘留硬性字數上限');
 assert.match(rootApp, /recentTurns:\s*5/, '前端近期全文視窗不是 5 回');
 assert.doesNotMatch(rootApp, /snippet:\s*\(h\.prose[\s\S]*?substring\(0,\s*250\)/, '摘要器仍只讀取每回前 250 字');
@@ -367,6 +367,19 @@ assert.match(gasConfig, /MIN_REQUEST_INTERVAL_MS:\s*16000/, 'GAS 全域限速不
 assert.match(gasConfig, /PRIMARY_ATTEMPTS:\s*2/, 'GAS 主模型嘗試次數不是 2 次');
 assert.match(gasConfig, /MAX_TOKENS:\s*6144/, 'GAS 敘事模型輸出上限不是 6144');
 assert.match(rootApp, /recentProsePerTurn: 2400/, '近期正文視窗未與 max_tokens 6144 連動放寬');
+assert.match(rootApp, /const LITERARY_CLICHE_PATTERNS = \[/, '缺少文學反套路詞庫');
+assert.match(rootApp, /const SCENE_RHYTHM_CYCLE = \[/, '缺少回合場景節奏輪替');
+assert.match(rootApp, /function buildLiteraryCraftBlock\(turnCount, historyList\)/, '提示詞未注入文風聖經');
+assert.match(rootApp, /function assessLiteraryQuality\(chapter, historyList = \[\]\)/, '缺少本機文學品質檢查');
+assert.match(rootApp, /function getLiteraryValidationError\(chapter, historyList = \[\]\)/, '缺少低品質章節重試閘門');
+assert.match(rootApp, /模型文學品質未達門檻/, 'Worker 生成路徑未套用文學品質重試');
+assert.match(rootApp, /function countLiterarySimiles\(prose\)/, '缺少可排除「監視影像」誤判的比喻計數器');
+assert.match(rootApp, /function countRepeatedLiterarySentences\(prose\)/, '缺少機械式句子重複偵測');
+assert.match(rootApp, /function countSimplifiedChineseMarkers\(prose\)/, '缺少簡體字混入偵測');
+assert.match(rootApp, /function getLongestRecentLiteraryEcho\(prose, historyList = \[\]\)/, '缺少跨回合措辭回收偵測');
+assert.match(rootApp, /收尾禁制：不得用「這不是 X。這是 Y。/, '提示詞缺少判詞式收尾禁制');
+assert.match(memoryPipelineCode, /【本回文學敘事規格】/, 'GAS 敘事管線未同步文學規格');
+assert.match(memoryPipelineCode, /sceneRhythm/, 'GAS 敘事管線未同步場景節奏輪替');
 
 // 不同登入帳號必須使用各自的本機進度；註銷單一帳號不可清掉同裝置其他玩家資料。
 assert.match(rootApp, /const LOCAL_USER_DATA_KEYS = \[/, '缺少每位玩家獨立的本機資料範圍');
@@ -376,6 +389,38 @@ assert.doesNotMatch(rootApp, /localStorage\.clear\(\)/, '註銷單一帳號會�
 assert.strictEqual(
   (rootApp.match(/max_tokens: 6144/g) || []).length, 2,
   '前端兩條生成路徑的 max_tokens 未同步為 6144'
+);
+
+assert.strictEqual(vm.runInContext('getSceneRhythm(1).name', frontendContext), '潛流鋪陳', '第 1 回節奏角色錯誤');
+assert.strictEqual(vm.runInContext('getSceneRhythm(2).name', frontendContext), '言語試探', '第 2 回節奏角色錯誤');
+assert.strictEqual(vm.runInContext('getSceneRhythm(7).name', frontendContext), '潛流鋪陳', '場景節奏未按六回循環');
+assert.strictEqual(vm.runInContext("countLiterarySimiles('監視影像、圖像資料、攝像機')", frontendContext), 0, '一般影像名詞被誤判為比喻');
+assert.strictEqual(vm.runInContext("countLiterarySimiles('好像下雨，彷彿隔世，像一把傘')", frontendContext), 3, '真正的比喻訊號計數錯誤');
+assert.strictEqual(vm.runInContext("countRepeatedLiterarySentences('你沒動。燈熄了。你沒動。你沒動。')", frontendContext), 2, '重複句子計數錯誤');
+assert.strictEqual(vm.runInContext("countSimplifiedChineseMarkers('這不是试探，是確認。')", frontendContext), 1, '簡體字混入計數錯誤');
+assert.ok(vm.runInContext("getLongestRecentLiteraryEcho('你沒動，他從公事包取出一張紙。', [{prose:'你沒動。他從公事包取出一張照片。'}])", frontendContext) >= 12, '跨回合近似段落未被偵測');
+frontendContext.clicheChapter = {
+  prose: '空氣瞬間凝滯。他的唇角勾起，眼底閃過一絲幽光，像蟄伏的獸，彷彿一張無形的網。'.repeat(8),
+  choices: [
+    { label: '這是一個刻意拉得非常長、用來驗證品質檢查能否察覺選項已經搶走正文注意力的行動描述。'.repeat(4) }
+  ]
+};
+const literaryAudit = vm.runInContext('assessLiteraryQuality(clicheChapter, [])', frontendContext);
+assert.ok(literaryAudit.score < 70, '套路密集文本未被文學品質檢查降分');
+assert.ok(literaryAudit.warnings.length >= 2, '套路、比喻或過長選項未產生品質警告');
+frontendContext.formulaicEndingChapter = {
+  prose: '兩人隔著桌面沉默，雨聲落在窗外。'.repeat(20) + '這不是交換。這是對峙。',
+  choices: []
+};
+assert.strictEqual(
+  vm.runInContext('assessLiteraryQuality(formulaicEndingChapter, []).metrics.formulaicClosure', frontendContext),
+  true,
+  '判詞式模板收尾未被品質檢查攔下'
+);
+assert.match(
+  vm.runInContext('getLiteraryValidationError(formulaicEndingChapter, [])', frontendContext),
+  /判詞式模板收尾/,
+  '判詞式收尾沒有觸發文學品質重試原因'
 );
 assert.match(workerCode, /MAX_TOKENS_CEILING = 6144/, 'Worker 的 max_tokens 夾制上限不是 6144');
 

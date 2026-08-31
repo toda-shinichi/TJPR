@@ -21,11 +21,17 @@ async function gas(payload) {
   return data.data;
 }
 
-function runTenTurns(token) {
+function runTenTurns(token, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [path.join(__dirname, '..', 'test_10_turn_game.js')], {
       stdio: 'inherit',
-      env: { ...process.env, TJPR_LIVE_TOKEN: token, TJPR_TEST_REPORT: REPORT_PATH }
+      env: {
+        ...process.env,
+        TJPR_LIVE_TOKEN: token,
+        TJPR_TEST_REPORT: REPORT_PATH,
+        ...(options.turnCount ? { TJPR_TURN_COUNT: String(options.turnCount) } : {}),
+        ...(options.literaryGate ? { TJPR_LITERARY_GATE: '1' } : {})
+      }
     });
     child.on('error', reject);
     child.on('exit', code => code === 0 ? resolve() : reject(new Error(`十回合測試退出碼 ${code}`)));
@@ -99,6 +105,7 @@ async function runThreePlayerQueue(token) {
 
 async function main() {
   const queueOnly = process.argv.includes('--queue-only');
+  const literaryOnly = process.argv.includes('--literary-only');
   const marker = `${Date.now()}-${randomUUID().slice(0, 8)}`;
   const email = `codex-e2e-${marker}@example.com`;
   const password = `E2e-${randomUUID()}`;
@@ -108,11 +115,17 @@ async function main() {
     const account = await gas({ action: 'auth/register', email, password });
     token = account.token;
     assert.match(token, /^epi_[A-Za-z0-9_-]{20,2048}={0,2}$/);
-    if (!queueOnly) await runTenTurns(token);
-    await runThreePlayerQueue(token);
-    console.log(queueOnly
-      ? '三位玩家正式排隊驗收完成。'
-      : `正式付費驗收完成，十回合報告：${REPORT_PATH}`);
+    if (literaryOnly) {
+      await runTenTurns(token, { turnCount: Number(process.env.TJPR_LITERARY_TURNS) || 3, literaryGate: true });
+    } else {
+      if (!queueOnly) await runTenTurns(token);
+      await runThreePlayerQueue(token);
+    }
+    console.log(literaryOnly
+      ? `文學強化正式付費驗收完成，報告：${REPORT_PATH}`
+      : queueOnly
+        ? '三位玩家正式排隊驗收完成。'
+        : `正式付費驗收完成，十回合報告：${REPORT_PATH}`);
   } finally {
     if (token) {
       try {

@@ -6,7 +6,8 @@
     "assets": "npm run build:css && node tools/stamp-assets.js",
     "test": "node debug_checks.js && node test_worker.js && node tools/stamp-assets.js --check",
     "test:live": "node tools/run-live-suite.js",
-    "test:live:queue": "node tools/run-live-suite.js --queue-only"
+    "test:live:queue": "node tools/run-live-suite.js --queue-only",
+    "test:live:literary": "TJPR_TEST_REPORT=/tmp/tjpr-literary-live-report.json node tools/run-live-suite.js --literary-only"
   },
   "devDependencies": {
     "caniuse-lite": "^1.0.30001810",
