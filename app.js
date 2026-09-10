@@ -1501,10 +1501,13 @@ function switchAuthTab(tab) {
 /**
  * ☁️ 非同步同步真實遊戲存檔至 Google Drive (Player_Saves) 與 Google Sheets (Master_Index)
  */
-async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManual = false) {
+let cloudWriteChain = Promise.resolve();
+let cloudWriteRevision = 0;
+
+async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManual = false, historyList = state.chapterHistoryList) {
   const saveState = saveStateObj || state.saveState;
   const chapterData = chapterDataObj || state.chapterData;
-  const playerProfile = state.playerProfile || (saveState && saveState.meta && saveState.meta.playerProfile);
+  const playerProfile = saveState?.meta?.playerProfile || state.playerProfile;
 
   if (!saveState && !chapterData) {
     if (isManual) notifyUser('目前尚無進行中的遊戲進度可同步至雲端。', 'error');
@@ -1518,6 +1521,9 @@ async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManua
   }
 
   updateCloudSyncBadge('syncing');
+  const revision = ++cloudWriteRevision;
+  const syncToken = state.token;
+  const syncUrl = state.gasApiUrl;
 
   try {
     const email = state.username ? (state.username.includes('@') ? state.username : `${state.username}@undercurrent.game`) : 'player@undercurrent.game';
@@ -1530,7 +1536,7 @@ async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManua
       chapter: chapterData,
       playerProfile: playerProfile,
       // 只帶最近視窗，不再每回合整份上傳（完整正文由後端 Full_Novel.md 累積歸檔）
-      chapterHistory: chapterWindow(state.chapterHistoryList),
+      chapterHistory: chapterWindow(historyList),
       namedSaves: getNamedSavesList()
     };
 
@@ -1541,14 +1547,24 @@ async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManua
       namedSaves: payload.namedSaves.length
     });
 
-    const res = await fetch(state.gasApiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload),
-      redirect: 'follow'
+    // Capture the complete payload now, then serialize writes so older requests
+    // cannot finish after newer progress and overwrite it in Drive.
+    const body = JSON.stringify(payload);
+    const pending = cloudWriteChain.catch(() => {}).then(async () => {
+      if (state.token !== syncToken) return null;
+      const res = await fetch(syncUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body,
+        redirect: 'follow'
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
     });
+    cloudWriteChain = pending.catch(() => {});
+    const data = await pending;
+    if (!data || state.token !== syncToken || revision !== cloudWriteRevision) return;
 
-    const data = await res.json();
     if (data.success) {
       console.log('[Cloud Sync] Successfully synchronized to Google Drive.');
       updateCloudSyncBadge('synced', new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false }));
@@ -1564,6 +1580,7 @@ async function syncStateToGoogleDriveCloud(saveStateObj, chapterDataObj, isManua
     }
   } catch (err) {
     console.warn('[Cloud Sync] Sync failed:', err.message);
+    if (state.token !== syncToken || revision !== cloudWriteRevision) return;
     updateCloudSyncBadge('failed');
     if (isManual) {
       notifyUser('雲端伺服器暫時無法連線，進度已保存於本機。', 'error', 6000);
@@ -1748,6 +1765,10 @@ async function handleClearAllData() {
  * 從雲端載入存檔（跨裝置接續遊玩）
  */
 async function loadStateFromCloud() {
+  if (state.isGenerating) return notifyUser('生成進行中，請先完成或中止本回。', 'info');
+  const loadToken = state.token;
+  const loadState = state.saveState;
+  const loadHistory = JSON.stringify(state.chapterHistoryList || []);
   if (!state.token || state.token.startsWith('tok_local_')) {
     notifyUser('您目前為本機模式，請先使用雲端帳號登入後再載入雲端存檔。', 'error', 5000);
     return;
@@ -1765,6 +1786,8 @@ async function loadStateFromCloud() {
       redirect: 'follow'
     });
     const data = await res.json();
+    if (state.token !== loadToken || state.saveState !== loadState || state.isGenerating
+      || JSON.stringify(state.chapterHistoryList || []) !== loadHistory) return;
     if (data.success && data.data) {
       const cloudSave = data.data;
       if (cloudSave.saveState) {
@@ -1865,6 +1888,7 @@ const LLM_CONFIG = {
   WORKER_URL: 'https://tjpr-llm-proxy.todashinchi.workers.dev/',
   // 連續多久收不到新資料才判定該模型失敗並切換備援。
   // 這是「停滯」門檻，不是總時長上限 —— 正在正常吐字的串流不會被中斷。
+  FIRST_BYTE_TIMEOUT_MS: 120000,
   STALL_TIMEOUT_MS: 25000,
   API_URL: 'https://api.banana2556.com/v1/chat/completions',
   API_KEY: '', // 安全起見，已轉移至 GAS Proxy
@@ -2229,17 +2253,19 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
       // 於是每回都在它身上白等 50 秒、最後仍改用備援的輸出）。
       // 現在只在「連續一段時間收不到新資料」時判定失敗，健康的串流不會被中斷。
       let lastChunkAt = Date.now();
+      let hasReceivedChunk = false;
       const armStallTimer = () => {
         if (timeoutId) clearTimeout(timeoutId);
+        const idleLimit = hasReceivedChunk ? LLM_CONFIG.STALL_TIMEOUT_MS : LLM_CONFIG.FIRST_BYTE_TIMEOUT_MS;
         timeoutId = setTimeout(() => {
           const idleMs = Date.now() - lastChunkAt;
-          if (idleMs >= LLM_CONFIG.STALL_TIMEOUT_MS - 50) {
+          if (idleMs >= idleLimit - 50) {
             console.warn(`[Worker] ${model} 停滯 ${Math.round(idleMs / 1000)}s 無回應，切換備援。`);
             if (controller) controller.abort();
           } else {
             armStallTimer();
           }
-        }, LLM_CONFIG.STALL_TIMEOUT_MS);
+        }, idleLimit);
       };
       armStallTimer();
       const workerHeaders = {
@@ -2311,6 +2337,8 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         if (done) break;
         throwIfGenerationAborted();
         lastChunkAt = Date.now();
+        hasReceivedChunk = true;
+        armStallTimer();
 
         const chunk = decoder.decode(value, { stream: true });
         buffer += chunk;
@@ -3126,7 +3154,13 @@ function buildPinnedMemoryBlock(historyList, saveState = state.saveState) {
   const saved = Array.isArray(saveState?.pinnedMemories) ? saveState.pinnedMemories : [];
   const byTurn = new Map();
   saved.forEach(h => { if (h) byTurn.set(Number(h.turn), h); });
-  list.filter(h => h && h.memoryPinned).forEach(h => byTurn.set(Number(h.turn), h));
+  list.filter(h => h && h.memoryPinned).forEach(h => {
+    const saved = byTurn.get(Number(h.turn));
+    // Archived display excerpts must not replace the player's longer pinned copy.
+    if (!saved || String(h.prose || '').length > String(saved.prose || '').length) {
+      byTurn.set(Number(h.turn), h);
+    }
+  });
   const pinned = Array.from(byTurn.values()).slice(-8);
   if (pinned.length === 0) return '';
   const entries = pinned.map(h => {
@@ -3975,6 +4009,10 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
 
 async function triggerRollingSummaryUpdate(turnCount) {
   if (!state.saveState || turnCount <= 1 || !state.token || state.token.startsWith('tok_local_')) return;
+  const sourceState = state.saveState;
+  const sourceToken = state.token;
+  const sourceSummary = sourceState.summaryPool || '';
+  const sourceHistory = JSON.stringify(state.chapterHistoryList || []);
   console.log(`[MemoryPipeline] Triggering rolling summary compression for Turn ${turnCount}...`);
 
   const recent5Turns = (state.chapterHistoryList || []).slice(-5).map(h => ({
@@ -4006,13 +4044,18 @@ async function triggerRollingSummaryUpdate(turnCount) {
         token: state.token,
         userId: state.userId
       }),
-      redirect: 'follow'
+      redirect: 'follow',
+      signal: AbortSignal.timeout(90000)
     });
 
     if (response.ok) {
       const data = await response.json();
       const newSummary = data.success && data.data?.content?.trim();
-      if (newSummary && newSummary.length > 20) {
+      const stillCurrent = state.saveState === sourceState && state.token === sourceToken
+        && state.saveState.turnCount === turnCount
+        && (state.saveState.summaryPool || '') === sourceSummary
+        && JSON.stringify(state.chapterHistoryList || []) === sourceHistory;
+      if (stillCurrent && newSummary && newSummary.length > 20) {
         state.saveState.summaryPool = clampSummaryPool(newSummary);
         safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
         console.log(`[MemoryPipeline] Summary Pool successfully updated (${newSummary.length} chars).`);
@@ -4089,7 +4132,6 @@ async function startNewGameWithProfile(profile) {
   if (dom.choicesContainer) dom.choicesContainer.innerHTML = '';
   if (dom.customActionInput) dom.customActionInput.value = '';
 
-  safeLocalStorageSet('undercurrent_current_player_profile', JSON.stringify(profile));
 
   const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
   const targetLeadDisplay = isShura ? '全勢力男主（修羅場）' : profile.targetLeadName;
@@ -4141,7 +4183,6 @@ async function startNewGameWithProfile(profile) {
     turnHistory: []
   };
 
-  safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
   renderSaveState();
 
   switchView('gameplay');
@@ -4174,49 +4215,28 @@ async function startNewGameWithProfile(profile) {
     if (didStream) initialChapter.skipTypewriter = true;
     setLoadingPhase('saving', '內容檢查完成，正在建立第一回存檔。');
   } catch (aiErr) {
-    if (isGenerationAbortError(aiErr)) {
-      state.playerProfile = previousGameSnapshot.playerProfile;
-      state.saveState = previousGameSnapshot.saveState;
-      state.chapterData = previousGameSnapshot.chapterData;
-      state.chapterHistoryList = previousGameSnapshot.chapterHistoryList || [];
-      state.lastChoicePayload = previousGameSnapshot.lastChoicePayload;
-      state.previousStateSnapshot = previousGameSnapshot.previousStateSnapshot;
-      if (state.saveState) safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
-      else localStorage.removeItem('undercurrent_current_save_state');
-      persistChapterHistory(state.chapterHistoryList);
-      if (state.playerProfile) safeLocalStorageSet('undercurrent_current_player_profile', JSON.stringify(state.playerProfile));
-      else localStorage.removeItem('undercurrent_current_player_profile');
-      if (state.chapterData) {
-        renderStoryStream(state.chapterData);
-        renderSaveState();
-        updateGameplayBreadcrumb();
-      } else {
-        if (dom.novelStreamContainer) dom.novelStreamContainer.innerHTML = '';
-        if (dom.choicesContainer) dom.choicesContainer.innerHTML = '';
-      }
-      notifyUser('已中止本次開局生成。', 'info');
-      return;
+    state.playerProfile = previousGameSnapshot.playerProfile;
+    state.saveState = previousGameSnapshot.saveState;
+    state.chapterData = previousGameSnapshot.chapterData;
+    state.chapterHistoryList = previousGameSnapshot.chapterHistoryList || [];
+    state.lastChoicePayload = previousGameSnapshot.lastChoicePayload;
+    state.previousStateSnapshot = previousGameSnapshot.previousStateSnapshot;
+    if (state.saveState) safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+    else localStorage.removeItem('undercurrent_current_save_state');
+    persistChapterHistory(state.chapterHistoryList);
+    if (state.playerProfile) safeLocalStorageSet('undercurrent_current_player_profile', JSON.stringify(state.playerProfile));
+    else localStorage.removeItem('undercurrent_current_player_profile');
+    if (state.chapterData) {
+      renderStoryStream(state.chapterData);
+      renderSaveState();
+      updateGameplayBreadcrumb();
+    } else {
+      if (dom.novelStreamContainer) dom.novelStreamContainer.innerHTML = '';
+      if (dom.choicesContainer) dom.choicesContainer.innerHTML = '';
     }
-    console.error('[Pure AI] First turn generation error:', aiErr);
-    showErrorRecovery('AI 生成逾時，已先為您鋪上臨時開局。可點擊「重新生成」重試第 1 回。', { canRetry: false });
-    initialChapter = {
-      chapterTitle: `第 1 回．雨夜初會 · ${profile.targetLeadName || '徐令謙'}`,
-      prose: `五月深夜，雨水沿著騎樓邊緣落成一道不整齊的簾。\n\n${profile.name}把濕掉的文件袋換到另一隻手。對面的男人先看了封口處的泥痕，才抬眼確認她的身分；他沒有招呼，只替她留住即將闔上的門。`,
-      statusPanel: {
-        timeLocation: '台北市深夜暴雨街頭',
-        tension: '張力值 [75%]',
-        intoxication: '微醺度 [20%]',
-        outfit: `${profile.name}（高級訂製風衣） ｜ ${profile.targetLeadName || '徐令謙'}`,
-        interaction: '目光鎖定',
-        rumors: '台北政媒暗潮湧動'
-      },
-      intelDelta: { add: [], update: [] },
-      choices: [
-        { id: 'A', label: '[A] 掌局談判：迎上視線開出交換條件', risk: 'low', hint: '展現從容底氣' },
-        { id: 'B', label: '[B] 機鋒推拉：言語試探對方底線', risk: 'medium', hint: '心理推拉' },
-        { id: 'C', label: '[C] 情慾反撩：主動靠近拉滿性張力', risk: 'high', hint: '極限點火' }
-      ]
-    };
+    if (isGenerationAbortError(aiErr)) notifyUser('已中止本次開局生成。', 'info');
+    else showErrorRecovery('開局生成失敗，原進度已保留，請重新開局：' + aiErr.message, { canRetry: false });
+    return;
   } finally {
     hideLoading();
     setGenerationBusy(false);
@@ -4227,6 +4247,8 @@ async function startNewGameWithProfile(profile) {
   initialChapter.turn = 1;
   initialChapter.chosenLabel = '【正式開局】';
   applyChapterStateChanges(initialChapter, profile, 1);
+  safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+  safeLocalStorageSet('undercurrent_current_player_profile', JSON.stringify(profile));
 
   state.chapterData = initialChapter;
   initialChapter.stateSnapshot = JSON.parse(JSON.stringify(state.saveState || {}));
@@ -4278,7 +4300,6 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     const profile = getActivePlayerProfile();
     state.saveState.meta = state.saveState.meta || {};
     state.saveState.meta.playerProfile = profile;
-    safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
 
     let nextChapter = null;
 
@@ -4327,25 +4348,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
       if (didStream) nextChapter.skipTypewriter = true;
     } catch (llmErr) {
       if (isGenerationAbortError(llmErr)) throw createGenerationAbortError();
-      console.warn('[Pure AI] Next turn LLM call failed, generating dynamic fallback turn:', llmErr);
-      nextChapter = {
-        chapterTitle: `第 1 幕 第 ${state.saveState.turnCount} 回：暗流激盪 · 局勢推進`,
-        prose: `${profile.name}的話落下後，桌面那杯沒有人碰過的水仍在慢慢退去霧氣。\n\n對面的男人沒有立刻回答。他把原本準備收起的文件留在原處，指腹壓著紙頁一角，像是在衡量這句話究竟值得哪一種回應。門外傳來電梯抵達的提示音，兩人都沒有回頭。`,
-        statusPanel: {
-          timeLocation: '台北市深宵密室',
-          tension: '張力值 [85%]',
-          intoxication: '微醺度 [30%]',
-          outfit: `${profile.name} ｜ ${profile.targetLeadName}`,
-          interaction: '近距離推拉',
-          rumors: '暗流湧動'
-        },
-        intelDelta: { add: [], update: [] },
-        choices: [
-          { id: 'A', label: '[A] 步步逼近：直視其眼眸開出底線條件', risk: 'low', hint: '穩健博弈' },
-          { id: 'B', label: '[B] 言語挑釁：機鋒試探拉扯對峙節奏', risk: 'medium', hint: '心理戰術' },
-          { id: 'C', label: '[C] 肢體反撩：傾身拉近物理距離點燃性張力', risk: 'high', hint: '極限誘惑' }
-        ]
-      };
+      throw llmErr;
     }
 
     setLoadingPhase('saving', '內容檢查完成，正在套用數值變化並保存本回進度。');
@@ -4353,6 +4356,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     nextChapter.act = state.saveState.meta.currentAct || 1;
     nextChapter.turn = state.saveState.turnCount;
     applyChapterStateChanges(nextChapter, profile, state.saveState.turnCount);
+    safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
 
     nextChapter.chosenLabel = choiceLabel;
     dismissError();
@@ -4383,7 +4387,9 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
       renderSaveState();
       notifyUser('已中止本次生成，回合進度未變更。', 'info');
     } else {
-      showErrorRecovery('推進章節時發生錯誤：' + err.message);
+      renderStoryStream(state.chapterData);
+      renderSaveState();
+      showErrorRecovery('本回生成失敗，進度未變更，可重試：' + err.message);
     }
   } finally {
     hideLoading();
@@ -5558,7 +5564,7 @@ function createCurrentStoryFork() {
   const turn = state.saveState?.turnCount || state.chapterData.turn || 1;
   const title = String(state.chapterData.chapterTitle || '未命名章節').replace(/^第[^：:]*[：:]?\s*/, '').slice(0, 28);
   const name = `分歧・第${turn}回・${title}`;
-  createNamedSave(name, { branchOrigin: { turn, title: state.chapterData.chapterTitle || '' } });
+  return createNamedSave(name, { branchOrigin: { turn, title: state.chapterData.chapterTitle || '' } });
 }
 
 async function rewindStoryToTurn(turn) {
@@ -5576,7 +5582,7 @@ async function rewindStoryToTurn(turn) {
     title: '回溯故事時間線', confirmText: '建立分歧並回溯'
   });
   if (!ok) return;
-  createCurrentStoryFork();
+  if (!createCurrentStoryFork()) return;
   state.saveState = JSON.parse(JSON.stringify(target.stateSnapshot));
   state.chapterHistoryList = chapters.slice(0, index + 1);
   state.chapterData = state.chapterHistoryList[state.chapterHistoryList.length - 1];
@@ -5605,7 +5611,7 @@ function createNamedSave(saveName, metadata = {}) {
   const lastChapter = state.chapterHistoryList[state.chapterHistoryList.length - 1] || state.chapterData;
 
   const newSaveEntry = {
-    id: 'save_' + Date.now(),
+    id: 'save_' + crypto.randomUUID(),
     name: name,
     timestamp: new Date().toLocaleString('zh-TW', { hour12: false }),
     turnCount: state.saveState?.turnCount || 1,
@@ -5655,6 +5661,7 @@ async function deleteNamedSave(saveId) {
 }
 
 function loadNamedSave(saveId) {
+  if (state.isGenerating) return notifyUser('生成進行中，請先完成或中止本回。', 'info');
   const saves = getNamedSavesList();
   const target = saves.find(s => s.id === saveId);
   if (!target) return notifyUser('找不到該筆存檔。', 'error');
@@ -5847,7 +5854,7 @@ function renderSaveArchivesList() {
     card.querySelector('.load-archive-btn')?.addEventListener('click', () => loadNamedSave(s.id));
     card.querySelector('.rename-archive-btn')?.addEventListener('click', () => renameNamedSave(s.id));
     card.querySelector('.sync-single-archive-btn')?.addEventListener('click', () => {
-      syncStateToGoogleDriveCloud(s.saveState, s.chapterData, true);
+      syncStateToGoogleDriveCloud(s.saveState, s.chapterData, true, s.chapterHistoryList || []);
     });
     card.querySelector('.delete-archive-btn')?.addEventListener('click', () => deleteNamedSave(s.id));
 
@@ -6305,6 +6312,7 @@ async function handleRegenerateTurn() {
         state.saveState.status = {};
       }
       applyChapterStateChanges(regeneratedChapter, profile, 1);
+      safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
       regeneratedChapter.stateSnapshot = JSON.parse(JSON.stringify(state.saveState || {}));
       state.chapterData = regeneratedChapter;
       state.chapterHistoryList = [regeneratedChapter];
@@ -6349,14 +6357,8 @@ function restorePreviousTurnForRetry() {
 }
 
 function handleUndoTurn() {
-  if (state.previousStateSnapshot) {
-    state.saveState = JSON.parse(JSON.stringify(state.previousStateSnapshot.saveState));
-    state.chapterData = JSON.parse(JSON.stringify(state.previousStateSnapshot.chapterData));
-    if (state.chapterHistoryList.length > 1) {
-      state.chapterHistoryList.pop();
-    }
-    safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
-    persistChapterHistory(state.chapterHistoryList);
+  if (state.isGenerating) return notifyUser('生成進行中，請先完成或中止本回。', 'info');
+  if (restorePreviousTurnForRetry()) {
     state.previousStateSnapshot = null;
     state.lastChoicePayload = null;
     renderStoryStream(state.chapterData);
@@ -6369,6 +6371,7 @@ function handleUndoTurn() {
 }
 
 function handleRetryLastTurn() {
+  if (state.isGenerating) return notifyUser('生成進行中，請先完成或中止本回。', 'info');
   if (state.lastChoicePayload) {
     if (!restorePreviousTurnForRetry()) return;
     makeChoice(state.lastChoicePayload.choiceId, state.lastChoicePayload.customInput, true);

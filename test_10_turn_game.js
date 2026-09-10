@@ -14,7 +14,10 @@ const TURN_COUNT = Math.max(1, Number(process.env.TJPR_TURN_COUNT) || 10);
 const LITERARY_GATE = process.env.TJPR_LITERARY_GATE === '1';
 // 專案上游限制為 5 RPM；採 16 秒間隔降至約 3.75 RPM，避開共享額度與滾動窗口邊界。
 const MIN_REQUEST_INTERVAL_MS = 16_000;
-const REQUEST_TIMEOUT_MS = 120_000;
+// The production primary model can legitimately take close to two minutes.
+// Leave enough headroom for a healthy but slow response; the browser separately
+// uses a first-byte timeout and a shorter between-chunk stall timeout.
+const REQUEST_TIMEOUT_MS = 180_000;
 const REPORT_PATH = process.env.TJPR_TEST_REPORT || '/tmp/tjpr-10-turn-live-report.json';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));

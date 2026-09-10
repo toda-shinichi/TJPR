@@ -143,6 +143,32 @@ async function authenticateRequest(request, env, viaSharedKey) {
   }
 }
 
+// Bound bytes while reading, including chunked requests without Content-Length.
+async function readBoundedBody(request) {
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let text = '';
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > MAX_BODY_BYTES) {
+        await reader.cancel();
+        const error = new Error('Request body too large.');
+        error.status = 413;
+        throw error;
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 function validateAndNormalizeBody(raw) {
   if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
     return { error: 'Request body too large.', status: 413 };
@@ -226,11 +252,13 @@ export class RpmQueue {
   constructor(state) {
     this.state = state;
     this.nextSlotTs = 0;
+    this.lastGrantTs = 0;
     this.reservations = [];
     // 從儲存還原，避免 DO 被回收後重置導致瞬間放行過多請求
     this.state.blockConcurrencyWhile(async () => {
-      const stored = await this.state.storage.get(['nextSlotTs', 'reservations']);
+      const stored = await this.state.storage.get(['nextSlotTs', 'lastGrantTs', 'reservations']);
       this.nextSlotTs = stored.get('nextSlotTs') || 0;
+      this.lastGrantTs = stored.get('lastGrantTs') || 0;
       this.reservations = stored.get('reservations') || [];
     });
   }
@@ -279,8 +307,16 @@ export class RpmQueue {
         return Response.json({ proceed: false, ticket: presentedTicket, waitMs,
           etaSeconds: Math.ceil(waitMs / 1000), position: Math.max(1, Math.ceil(waitMs / QUEUE_MIN_INTERVAL_MS)) });
       }
+      // A browser may wake long after its reserved slot. Several expired slots can
+      // therefore arrive together; gate the actual grants as well as reservations.
+      const grantWaitMs = Math.max(0, this.lastGrantTs + QUEUE_MIN_INTERVAL_MS - now);
+      if (grantWaitMs > 0) {
+        return Response.json({ proceed: false, ticket: presentedTicket, waitMs: grantWaitMs,
+          etaSeconds: Math.ceil(grantWaitMs / 1000), position: 1 });
+      }
       this.reservations = this.reservations.filter(item => item.ticket !== presentedTicket);
-      await this.state.storage.put('reservations', this.reservations);
+      this.lastGrantTs = now;
+      await this.state.storage.put({ lastGrantTs: this.lastGrantTs, reservations: this.reservations });
       return Response.json({ proceed: true });
     }
 
@@ -318,7 +354,8 @@ export class RpmQueue {
 
     // 輪到了：佔用這一格並往後推
     this.nextSlotTs = slot + QUEUE_MIN_INTERVAL_MS;
-    await this.state.storage.put('nextSlotTs', this.nextSlotTs);
+    this.lastGrantTs = now;
+    await this.state.storage.put({ nextSlotTs: this.nextSlotTs, lastGrantTs: this.lastGrantTs });
     return Response.json({ proceed: true });
   }
 }
@@ -400,9 +437,9 @@ export default {
 
     let raw;
     try {
-      raw = await request.text();
+      raw = await readBoundedBody(request);
     } catch (error) {
-      return json({ error: { message: 'Unable to read request body.' } }, 400, origin);
+      return json({ error: { message: error.status === 413 ? error.message : 'Unable to read request body.' } }, error.status || 400, origin);
     }
     const normalized = validateAndNormalizeBody(raw);
     if (normalized.error) return json({ error: { message: normalized.error } }, normalized.status, origin);

@@ -17,7 +17,12 @@ async function gas(payload) {
     body: JSON.stringify(payload)
   });
   const data = await response.json();
-  if (!data.success) throw new Error(data.error?.message || `GAS HTTP ${response.status}`);
+  if (!data.success) {
+    const detail = typeof data.error === 'string'
+      ? data.error
+      : data.error?.message || data.message || JSON.stringify(data).slice(0, 500);
+    throw new Error(`GAS ${detail || `HTTP ${response.status}`}`);
+  }
   return data.data;
 }
 
@@ -103,7 +108,25 @@ async function runThreePlayerQueue(token) {
   })));
 }
 
+async function runStorageContract(token) {
+  const verified = await gas({ action: 'auth/verify', token });
+  assert.ok(verified.valid && verified.userId, '登入權杖驗證失敗');
+  const empty = await gas({ action: 'novel/load-state', token });
+  assert.equal(empty.saveState, null, '新帳號不應讀到其他玩家的存檔');
+  const chapter = {turn: 1, chapterTitle: '自動測試', prose: '這是一次性測試章節，測試後清除。', choices: []};
+  const saveState = {turnCount: 1, meta: {currentAct: 1, playerProfile: {name: '測試玩家'}},
+    summaryPool: '測試摘要', protagonist: {hp: 100, sanity: 100}, relationships: {}, questFlags: {}, turnHistory: []};
+  const saved = await gas({ action: 'novel/save-state', token, saveState, chapter, chapterHistory: [chapter] });
+  assert.equal(saved.saved, true);
+  const loaded = await gas({ action: 'novel/load-state', token });
+  assert.equal(loaded.saveState.summaryPool, '測試摘要');
+  assert.equal(loaded.chapter.prose, chapter.prose);
+  assert.equal(loaded.chapterHistory.length, 1);
+  console.log('正式帳號驗證、空存檔隔離與雲端存讀往返通過。');
+}
+
 async function main() {
+  const storageOnly = process.argv.includes('--storage-only');
   const queueOnly = process.argv.includes('--queue-only');
   const literaryOnly = process.argv.includes('--literary-only');
   const marker = `${Date.now()}-${randomUUID().slice(0, 8)}`;
@@ -115,6 +138,10 @@ async function main() {
     const account = await gas({ action: 'auth/register', email, password });
     token = account.token;
     assert.match(token, /^epi_[A-Za-z0-9_-]{20,2048}={0,2}$/);
+    if (storageOnly) {
+      await runStorageContract(token);
+      return;
+    }
     if (literaryOnly) {
       await runTenTurns(token, { turnCount: Number(process.env.TJPR_LITERARY_TURNS) || 3, literaryGate: true });
     } else {

@@ -252,7 +252,7 @@ assert.match(rootApp, /if \(state\.generationAbortRequested\) throw createGenera
 assert.match(rootApp, /signal: controller\.signal/, 'Worker 串流未連接 AbortController');
 assert.match(rootApp, /chapterHistoryLength: \(state\.chapterHistoryList \|\| \[\]\)\.length/, '回合交易快照未以輕量長度保存章節歷史');
 assert.match(rootApp, /stateSnapshot: JSON\.parse\(JSON\.stringify\(state\.saveState \|\| \{\}\)\)/, '新回合未保存可供精確回溯的狀態快照');
-assert.match(rootApp, /createCurrentStoryFork\(\);[\s\S]*state\.saveState = JSON\.parse\(JSON\.stringify\(target\.stateSnapshot\)\)/, '歷史回溯沒有先建立分歧或還原狀態快照');
+assert.match(rootApp, /createCurrentStoryFork\(\)\) return;[\s\S]*state\.saveState = JSON\.parse\(JSON\.stringify\(target\.stateSnapshot\)\)/, '歷史回溯沒有先建立分歧或還原狀態快照');
 assert.match(rootApp, /customActionInput\.dataset\.choiceId[\s\S]*已帶入建議行動/, '選項未改為先帶入自由行動欄');
 assert.match(rootApp, /const previousGameSnapshot = \{/, '新開局中止前未保存舊遊戲狀態');
 assert.match(rootApp, /state\.playerProfile = target\.playerProfile \|\| target\.saveState\?\.meta\?\.playerProfile \|\| null/, '載入命名存檔後仍可能沿用上一局玩家人設');

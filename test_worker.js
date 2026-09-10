@@ -84,6 +84,20 @@ async function runOfflineTests() {
   res = await worker.fetch(post({ ...validPayload, messages: [{ role: 'user', content: '界'.repeat(44000) }] }), baseEnv);
   assert.strictEqual(res.status, 413, '多位元組超大請求未依實際 bytes 拒絕');
 
+  let cancelled = false;
+  let chunksRead = 0;
+  const oversizedStream = new ReadableStream({
+    pull(controller) { chunksRead++; controller.enqueue(new Uint8Array(65536)); },
+    cancel() { cancelled = true; }
+  });
+  res = await worker.fetch(new Request('https://worker.test/', {
+    method: 'POST', duplex: 'half',
+    headers: {Origin: ALLOWED_ORIGIN, 'X-Undercurrent-Token': VALID_TOKEN},
+    body: oversizedStream
+  }), baseEnv);
+  assert.equal(res.status, 413, 'chunked body must stop at the byte limit');
+  assert.ok(cancelled && chunksRead <= 4, 'oversized stream must be cancelled without buffering all content');
+
   let forwardedBody = null;
   globalThis.fetch = withAuth(async (_url, options) => {
     forwardedBody = JSON.parse(options.body);
@@ -175,6 +189,43 @@ async function runOfflineTests() {
   }))).json();
   assert.strictEqual(q2Early.ticket, q2.ticket, '排隊輪詢未保留原票號');
   assert.ok(q2Early.waitMs > deferred.waitMs, '既有等待者未在全域退避後依序平移');
+
+  // Multiple clients can wake after all reservations are overdue. Actual grants
+  // must still be spaced, otherwise they hit the upstream at the same instant.
+  storageData.set('lastGrantTs', 0);
+  const overdueNow = Date.now();
+  const overdueData = new Map([
+    ['nextSlotTs', overdueNow - 500],
+    ['lastGrantTs', 0],
+    ['reservations', [
+      { ticket: 'late-a', readyAt: overdueNow - 1000 },
+      { ticket: 'late-b', readyAt: overdueNow - 500 }
+    ]]
+  ]);
+  const overdueState = {
+    storage: {
+      async get(key) {
+        if (Array.isArray(key)) return new Map(key.map(k => [k, overdueData.get(k)]));
+        return overdueData.get(key);
+      },
+      async put(key, value) {
+        if (typeof key === 'object') Object.entries(key).forEach(([k, v]) => overdueData.set(k, v));
+        else overdueData.set(key, value);
+      }
+    },
+    blockConcurrencyWhile(promiseFactory) { return promiseFactory(); }
+  };
+  const overdueQueue = new workerModule.RpmQueue(overdueState);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const lateA = await (await overdueQueue.fetch(new Request('https://queue/acquire', {
+    headers: { 'X-Queue-Ticket': 'late-a' }
+  }))).json();
+  const lateB = await (await overdueQueue.fetch(new Request('https://queue/acquire', {
+    headers: { 'X-Queue-Ticket': 'late-b' }
+  }))).json();
+  assert.strictEqual(lateA.proceed, true, '第一張逾期票未放行');
+  assert.strictEqual(lateB.proceed, false, '兩張逾期票被同時放行');
+  assert.ok(lateB.waitMs > 15000 && lateB.ticket === 'late-b', '第二張逾期票未保留並延後');
 
   globalThis.fetch = nativeFetch;
   console.log('Worker 離線契約測試全部通過。');
