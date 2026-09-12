@@ -13,10 +13,10 @@ const CONFIG = {
 
   // API 伺服器設定 (OpenAI 兼容端點)
   API: {
-    BASE_URL: 'https://api.banana2556.com/v1/chat/completions',
+    BASE_URL: 'https://openrouter.ai/api/v1/chat/completions',
     API_KEY: '', // 已安全轉移至 GAS 環境變數
     RPM_LIMIT: 5,                   // 每分鐘最多 5 次請求 (Rate Limit: 5 RPM)
-    MIN_REQUEST_INTERVAL_MS: 16000, // 約 3.75 RPM，保留共享額度與滾動窗口緩衝
+    MIN_REQUEST_INTERVAL_MS: 1500, // OpenRouter 依額度計費、無 5 RPM 上限，此處僅防瞬間湧入
     TIMEOUT_MS: 55000,              // Apps Script UrlFetchApp 55 秒逾時保護
     MAX_RETRIES: 3,                 // 最大重試次數
     RETRY_DELAY_MS: 3000            // 重試基礎延遲
@@ -24,22 +24,26 @@ const CONFIG = {
 
   // 雙模型配置
   MODELS: {
+    // 與 worker/index.js 的 ALLOWED_MODELS 保持一致
     ALLOWED_MODELS: [
-      'aion-3.0',
-      'qwen/qwen3-vl-235b-a22b-instruct',
-      'mistral-large-3',
-      'aion-3.0-mini',
-      'mistral-nemo'
+      'deepseek/deepseek-v4-flash-0731',
+      'google/gemma-4-26b-a4b-it',
+      'minimax/minimax-m3',
+      'cognitivecomputations/dolphin-mistral-24b-venice-edition'
     ],
-    // 主要敘事模型：aion-3.0（文學性與設定遵循最強），備援 qwen3-vl-235b（快近三倍）。
-    // 兩者實測皆不會自我審查。gemini 系列已全數移出 —— 實測會擋掉情慾內容，
-    // 且 3.7-flash 有 60% 機率被靜默降級為 3.5 Flash-Lite。
-    // 前端會偵測拒絕／供應商錯誤並依固定順序切換（見 app.js 的 buildAttemptPlan）。
+    // 主要敘事模型：gemini-3.8-flash，備援 grok-4.6 → gemini-3.5-flash-lite
+    // → minimaxai/minimax-m3。gemini 家族實測會自我審查、擋掉情慾內容，
+    // 因此備援 1 刻意換成非同家族的 grok —— 同家族的備援未必能突破審查。
+    // 前端會偵測拒絕／供應商錯誤並依序切換（見 app.js 的 buildAttemptPlan）。
     NARRATOR: {
-      PRIMARY: 'aion-3.0',
+      // 一般敘事鏈（與前端 GENERATION_MODES.normal 對齊）
+      PRIMARY: 'deepseek/deepseek-v4-flash-0731',
       PRIMARY_ATTEMPTS: 2,
-      FALLBACK: 'qwen/qwen3-vl-235b-a22b-instruct',
-      FALLBACK_2: 'mistral-large-3',
+      FALLBACK: 'google/gemma-4-26b-a4b-it',
+      FALLBACK_ATTEMPTS: 2,
+      // 情慾章節鏈（與前端 GENERATION_MODES.spicy 對齊）
+      SPICY_PRIMARY: 'minimax/minimax-m3',
+      SPICY_FALLBACK: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
       TEMPERATURE: 0.88,
       // 硬性截斷上限，不是用來控字數（字數由提示詞決定）。
       // 它的作用是防止無限擴寫並設成本上限。必須留足餘裕：
@@ -61,7 +65,7 @@ const CONFIG = {
   
   // 管理員通訊與通知設定
   ADMIN: {
-    EMAIL: 'auto', // 自動讀取 Session.getEffectiveUser().getEmail()
+    EMAIL: 'todashinchi@gmail.com', // 生成連續失敗與玩家回饋的通知收件者
     NOTIFY_ON_ERROR: true,
     NOTIFY_ON_FEEDBACK: true
   },

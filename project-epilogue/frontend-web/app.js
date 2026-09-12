@@ -380,6 +380,9 @@ const state = {
   skipTypewriterTriggered: false,
   typewriterTimer: null,
   lastChoicePayload: null,
+  // 本回合生成模式（'normal' 一般 ／ 'spicy' 開車），由玩家按下的送出鍵決定。
+  // 這裡刻意寫字面值：state 宣告在 DEFAULT_GENERATION_MODE 之前，引用會踩到暫時性死區。
+  generationMode: 'normal',
   previousStateSnapshot: null,
   currentAbortController: null,
   generationAbortRequested: false,
@@ -959,7 +962,7 @@ function initializeUxControls() {
 function setGenerationBusy(isBusy) {
   state.isGenerating = isBusy;
   if (isBusy) showStreamingAbortControl(); else hideStreamingAbortControl();
-  document.querySelectorAll('.game-action-control, #submit-custom-btn, #gameplay-quick-save-btn, #rebase-act-btn').forEach(el => {
+  document.querySelectorAll('.game-action-control, #submit-custom-btn, #submit-spicy-btn, #gameplay-quick-save-btn, #rebase-act-btn').forEach(el => {
     el.disabled = isBusy;
     el.setAttribute('aria-disabled', String(isBusy));
   });
@@ -1158,13 +1161,15 @@ function setupEventListeners() {
     on('search-roster-input', 'input', renderRosterGallery);
 
     // 自由行動提交
-    on('submit-custom-btn', 'click', handleCustomActionSubmit);
+    on('submit-custom-btn', 'click', () => handleCustomActionSubmit('normal'));
+    on('submit-spicy-btn', 'click', () => handleCustomActionSubmit('spicy'));
     const customInputEl = document.getElementById('custom-action-input');
     if (customInputEl) {
       customInputEl.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
           e.preventDefault();
-          handleCustomActionSubmit();
+          // Enter 走一般鏈；情慾章節需明確按「開車」，避免誤觸昂貴／露骨模型。
+          handleCustomActionSubmit('normal');
         }
       });
     }
@@ -1185,6 +1190,7 @@ function setupEventListeners() {
     on('minimize-generation-btn', 'click', minimizeGenerationOverlay);
     on('restore-generation-btn', 'click', restoreGenerationOverlay);
     on('retry-turn-btn', 'click', handleRetryLastTurn);
+    on('report-error-btn', 'click', reportGenerationFailure);
     on('dismiss-error-btn', 'click', dismissError);
     on('rebase-act-btn', 'click', handleActRebase);
 
@@ -1878,11 +1884,33 @@ function updateUserBadgeUI(status = 'active') {
 // 經 tools/probe-model-latitude.js 與 22k tokens 真實條件測試後留下的模型。
 // 已淘汰：gemini 系列（會自我審查、且 3.7-flash 有 60% 機率被靜默降級）、
 // dolphin-venice（長上下文下語意崩壞）、minimax/glm（拒絕 R-18 或輸出簡體）。
-const NARRATIVE_MODELS = [
-  'aion-3.0',
-  'qwen/qwen3-vl-235b-a22b-instruct',
-  'mistral-large-3'
-];
+/**
+ * 生成模式。玩家在輸入列上以兩顆按鍵明確指定本回合要走哪條鏈：
+ *  - normal：一般敘事。成本極低、上下文極長，負責絕大多數回合。
+ *  - spicy ：情慾章節。走不自我審查的模型，避免被拒生成。
+ * 之所以由玩家指定而非自動偵測：自動偵測一旦誤判，玩家看到的是
+ * 「文風忽然變保守」或「白白多花一次請求」，兩者都比多按一顆鍵糟。
+ */
+const GENERATION_MODES = {
+  normal: {
+    label: '一般',
+    PRIMARY_MODEL: 'deepseek/deepseek-v4-flash-0731',
+    PRIMARY_MAX_ATTEMPTS: 2,
+    FALLBACK_MAX_ATTEMPTS: 2,
+    FALLBACK_MODELS: ['google/gemma-4-26b-a4b-it']
+  },
+  spicy: {
+    label: '開車',
+    PRIMARY_MODEL: 'minimax/minimax-m3',
+    PRIMARY_MAX_ATTEMPTS: 2,
+    FALLBACK_MAX_ATTEMPTS: 2,
+    FALLBACK_MODELS: ['cognitivecomputations/dolphin-mistral-24b-venice-edition']
+  }
+};
+const DEFAULT_GENERATION_MODE = 'normal';
+
+const NARRATIVE_MODELS = Object.values(GENERATION_MODES)
+  .flatMap(m => [m.PRIMARY_MODEL, ...m.FALLBACK_MODELS]);
 
 const LLM_CONFIG = {
   WORKER_URL: 'https://tjpr-llm-proxy.todashinchi.workers.dev/',
@@ -1890,31 +1918,25 @@ const LLM_CONFIG = {
   // 這是「停滯」門檻，不是總時長上限 —— 正在正常吐字的串流不會被中斷。
   FIRST_BYTE_TIMEOUT_MS: 120000,
   STALL_TIMEOUT_MS: 25000,
-  API_URL: 'https://api.banana2556.com/v1/chat/completions',
-  API_KEY: '', // 安全起見，已轉移至 GAS Proxy
-  // 主力：aion-3.0
-  // 22k tokens 真實條件實測：前情銜接 3/3、人設細節 3/4（會自行推理出
-  // 「圓眼鏡沾了水霧，顯然不是社交場合的裝束」這類延伸），四項尺度全通過，
-  // 設定遵循 6/6 零遺漏 —— 文學性與邏輯是候選中最強的。
-  // 代價：首字約 56 秒、總計約 76 秒。串流逐字顯示會有較長的等待，
-  // 這是刻意接受的取捨（showLoading 在 15 秒後會顯示已等待秒數）。
-  PRIMARY_MODEL: 'aion-3.0',
-  // 備援：qwen3-vl-235b
-  // 首字 5 秒、總計 26.6 秒，是主力的近三倍速；前情銜接同樣 3/3、
-  // 四項尺度全通過且是候選中最露骨的，因此情慾章節不需要再往下切。
-  FALLBACK_MODEL: 'qwen/qwen3-vl-235b-a22b-instruct',
-  // 目前主力與備援都不會自我審查，此清單僅供 warnIfCensoringModel 判斷用。
-  // gemini 系列實測會擋掉情慾內容，已全數移出生成鏈。
-  CENSORING_MODELS: ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.1-pro'],
-  // 主模型嘗試次數。aion 實測不會拒絕 R-18，重試主要是為了容忍供應商的
-  // 偶發 5xx（mistral 就實測到過連續 503 的高負載狀況）。
-  // 2 次主力 + 1 次備援 = 3 次請求，在上游每分鐘 5 次的共用額度內。
-  PRIMARY_MAX_ATTEMPTS: 2,
-  // 主模型連續失敗後依序嘗試。
-  UNCENSORED_FALLBACK_MODELS: [
-    'qwen/qwen3-vl-235b-a22b-instruct'
-  ],
+  API_URL: 'https://openrouter.ai/api/v1/chat/completions',
+  API_KEY: '', // 安全起見，金鑰只存在 Worker secret 與 GAS Proxy
+  MODES: GENERATION_MODES,
+  // 相容欄位：未指定模式時視同一般敘事。
+  PRIMARY_MODEL: GENERATION_MODES[DEFAULT_GENERATION_MODE].PRIMARY_MODEL,
+  FALLBACK_MODEL: GENERATION_MODES[DEFAULT_GENERATION_MODE].FALLBACK_MODELS[0],
+  PRIMARY_MAX_ATTEMPTS: GENERATION_MODES[DEFAULT_GENERATION_MODE].PRIMARY_MAX_ATTEMPTS,
+  FALLBACK_MODELS: GENERATION_MODES[DEFAULT_GENERATION_MODE].FALLBACK_MODELS,
+  // 會自我審查的模型（供 warnIfCensoringModel 判斷）。
+  // 目前鏈上四顆實測皆能寫出 L4 露骨描寫，故此清單為空。
+  //  - gemma-4-26b：原本預期它會與 gemini 同源而自我審查，實測 L1–L4 全過，
+  //    因此不列入 —— 誤列會讓玩家每次落備援都看到不實的「文風變保守」警告。
+  //  - minimax-m3：約半數機率拒絕，但那是「不穩定」而非「必定審查」，
+  //    由 detectRefusal 當場接手切換即可，不需事前警告。
+  CENSORING_MODELS: [],
   MODELS: NARRATIVE_MODELS,
+  // 檢索用嵌入模型（走 Worker 的 /embed，由 Cloudflare Workers AI 提供）。
+  // OpenRouter 型錄內沒有任何 embedding 模型，因此嵌入不與生成同源。
+  EMBEDDING_MODEL: '@cf/baai/bge-m3',
   TEMPERATURE: 0.88
 };
 
@@ -2188,7 +2210,7 @@ function stripTrailingCommas(text) {
 
 let lastRequestTimestamp = 0;
 // 上游限制是跨模型共享 5 RPM；16 秒約為 3.75 RPM，避開滾動窗口與共享流量邊界。
-const MIN_REQUEST_GAP_MS = 16000;
+const MIN_REQUEST_GAP_MS = 1500;
 
 /**
  * ⚡ 伺服器頻率守衛（Rate Limit Cooldown Protector）
@@ -2219,7 +2241,7 @@ async function waitForRpmCooldown() {
 async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt, onStreamUpdate) {
   // 主模型重試 PRIMARY_MAX_ATTEMPTS 次後依序切換未審查模型（見 buildAttemptPlan）
   const modelsToTry = buildAttemptPlan();
-  const primaryModel = LLM_CONFIG.PRIMARY_MODEL;
+  const primaryModel = getModeConfig().PRIMARY_MODEL;
   const unavailableModels = new Set();
   let attemptNo = 0;
   // 排隊相關：排隊不是失敗，不計入模型嘗試次數
@@ -2711,13 +2733,26 @@ function getNarrativeValidationError(chapter) {
  * 建立這一回的模型嘗試計畫：
  *   Gemini × 2 → Mistral → Dolphin。Worker 與 GAS 共用這一份固定計畫。
  */
-function buildAttemptPlan() {
-  const primary = LLM_CONFIG.PRIMARY_MODEL;
-  const maxPrimary = Math.max(1, LLM_CONFIG.PRIMARY_MAX_ATTEMPTS || 1);
-  const plan = new Array(maxPrimary).fill(primary);
+function resolveGenerationMode(mode) {
+  const key = mode || state.generationMode || DEFAULT_GENERATION_MODE;
+  return LLM_CONFIG.MODES[key] ? key : DEFAULT_GENERATION_MODE;
+}
 
-  const pool = (LLM_CONFIG.UNCENSORED_FALLBACK_MODELS || []).filter(Boolean);
-  plan.push(...pool);
+function getModeConfig(mode) {
+  return LLM_CONFIG.MODES[resolveGenerationMode(mode)];
+}
+
+function buildAttemptPlan(mode) {
+  const cfg = getModeConfig(mode);
+  const maxPrimary = Math.max(1, cfg.PRIMARY_MAX_ATTEMPTS || 1);
+  const plan = new Array(maxPrimary).fill(cfg.PRIMARY_MODEL);
+
+  // 備援與主力一樣重試 FALLBACK_MAX_ATTEMPTS 次。
+  // 每個模型在 Worker 端已經會跨供應商輪替，這裡的重試是針對「模型自身拒絕生成」。
+  const fallbackAttempts = Math.max(1, cfg.FALLBACK_MAX_ATTEMPTS || 1);
+  for (const model of (cfg.FALLBACK_MODELS || []).filter(Boolean)) {
+    for (let i = 0; i < fallbackAttempts; i++) plan.push(model);
+  }
   return plan;
 }
 
@@ -2730,7 +2765,7 @@ function warnIfCensoringModel(model) {
   if (!(LLM_CONFIG.CENSORING_MODELS || []).includes(model)) return;
   // 主模型本身就是會審查的（刻意選擇：快又便宜），被拒時有輪替機制接手。
   // 這種情況每回都提示只會變成雜訊 —— 只有「落到非主模型的審查模型」才值得警告。
-  if (model === LLM_CONFIG.PRIMARY_MODEL) return;
+  if (model === getModeConfig().PRIMARY_MODEL) return;
   if (censoringModelWarned) return;
   censoringModelWarned = true;
   notifyUser(
@@ -3425,6 +3460,109 @@ function buildLiveStateBlock(saveState, profile) {
   return clampBlock(lines.join('\n'), CONTEXT_BUDGET.liveStateChars);
 }
 
+// ==========================================
+// 4.6 語意檢索記憶（bge-m3 嵌入）
+// ==========================================
+/**
+ * 摘要池是「壓縮」，會把細節磨平；近期全文是「窗口」，只看得到最後 5 回。
+ * 兩者之間有一個缺口：三十回前提過一次的物件、承諾或人物，模型完全看不到。
+ * 這裡用嵌入向量把玩家這一回的行動當成查詢，從所有舊回合裡撈回最相關的幾則，
+ * 補進上下文信封 —— 這是避免長線劇情失憶與 OOC 最直接的手段。
+ */
+const RETRIEVAL = {
+  topK: 3,                 // 撈回幾則。太多會擠壓近期全文的份量。
+  minScore: 0.42,          // 低於此分數視為不相關，寧可不補也不要餵雜訊。
+  perMemoryChars: 420,
+  maxIndexed: 200,         // 最多索引幾則舊回合（由新到舊）
+  batchSize: 64            // 與 Worker 的 EMBED_MAX_BATCH 一致
+};
+
+/** turn -> {text, vec}，僅存在於本次工作階段；重載後重新嵌入（成本極低）。 */
+let memoryIndex = [];
+let memoryIndexSignature = '';
+
+async function embedTexts(texts) {
+  if (!LLM_CONFIG.WORKER_URL || !texts.length) return [];
+  const res = await fetch(LLM_CONFIG.WORKER_URL.replace(/\/$/, '') + '/embed', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Undercurrent-Token': state.token || ''
+    },
+    body: JSON.stringify({ text: texts })
+  });
+  if (!res.ok) throw new Error('嵌入服務回應 ' + res.status);
+  const data = await res.json();
+  return (data?.data || []).map(v => Array.isArray(v) ? v : (v?.embedding || []));
+}
+
+function cosineSimilarity(a, b) {
+  if (!a?.length || !b?.length || a.length !== b.length) return 0;
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  if (!na || !nb) return 0;
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
+
+/** 取出可供檢索的舊回合 —— 近期 N 回已經全文在信封裡，重複撈回只是浪費預算。 */
+function collectRetrievableTurns() {
+  const list = state.chapterHistoryList || [];
+  const older = list.slice(0, Math.max(0, list.length - CONTEXT_BUDGET.recentTurns));
+  return older
+    .slice(-RETRIEVAL.maxIndexed)
+    .map((h, i) => ({
+      turn: i + 1,
+      text: clampBlock(String(h.prose || '').replace(/\s+/g, ' ').trim(), RETRIEVAL.perMemoryChars)
+    }))
+    .filter(m => m.text.length >= 40);
+}
+
+async function ensureMemoryIndex() {
+  const entries = collectRetrievableTurns();
+  const signature = entries.length + ':' + (entries[entries.length - 1]?.text.slice(0, 32) || '');
+  if (signature === memoryIndexSignature && memoryIndex.length === entries.length) return;
+
+  const vectors = [];
+  for (let i = 0; i < entries.length; i += RETRIEVAL.batchSize) {
+    const slice = entries.slice(i, i + RETRIEVAL.batchSize);
+    vectors.push(...await embedTexts(slice.map(e => e.text)));
+  }
+  memoryIndex = entries.map((e, i) => ({ ...e, vec: vectors[i] || [] })).filter(e => e.vec.length);
+  memoryIndexSignature = signature;
+}
+
+/**
+ * 依本回行動撈回最相關的舊回合片段。
+ * 檢索失敗一律回空字串 —— 少了補充記憶只是劇情略平，
+ * 但若讓它拋出例外中斷生成，玩家會直接失去這一回。
+ */
+async function buildRetrievedMemoryBlock(queryText) {
+  const query = String(queryText || '').trim();
+  if (!query) return '';
+  try {
+    await ensureMemoryIndex();
+    if (!memoryIndex.length) return '';
+    const [queryVec] = await embedTexts([clampBlock(query, RETRIEVAL.perMemoryChars)]);
+    if (!queryVec?.length) return '';
+
+    const ranked = memoryIndex
+      .map(m => ({ ...m, score: cosineSimilarity(queryVec, m.vec) }))
+      .filter(m => m.score >= RETRIEVAL.minScore)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, RETRIEVAL.topK);
+    if (!ranked.length) return '';
+
+    const body = ranked
+      .sort((a, b) => a.turn - b.turn)
+      .map(m => `── 第 ${m.turn} 回（相關度 ${m.score.toFixed(2)}）──\n${m.text}`)
+      .join('\n');
+    return `【語意檢索補充記憶（與本回行動高度相關的早期劇情，務必保持一致）】\n${body}\n`;
+  } catch (err) {
+    console.warn('[Retrieval] 檢索失敗，本回改用既有上下文：', err);
+    return '';
+  }
+}
+
 // =========================================================================
 // 4.5 三層角色動態注入引擎與長期滾動摘要池 (Tiered Lore & Memory Pipeline)
 // =========================================================================
@@ -3896,7 +4034,7 @@ ${characterPromptBlock}
   return { systemPrompt, userPrompt };
 }
 
-function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyList, summaryPool, saveState = state.saveState) {
+function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyList, summaryPool, saveState = state.saveState, retrievedMemoryBlock = '') {
   const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
   const leadKey = profile.targetLead || '01_徐令謙';
   
@@ -3990,6 +4128,7 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     '',
     dossierBlock,
     summaryBlock,
+    retrievedMemoryBlock,
     pinnedMemoryBlock,
     recentHistory,
     '',
@@ -4264,8 +4403,12 @@ async function startNewGameWithProfile(profile) {
   startServerCooldown(10);
 }
 
-async function makeChoice(choiceId, customInput, isRegenerating = false) {
+async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
   if (state.isGenerating) return notifyUser('本回合正在生成，請稍候。');
+  // 重試時沿用原本那一回合的模式，否則「開車」重試會掉回一般鏈而被審查擋下。
+  state.generationMode = resolveGenerationMode(
+    mode || (isRegenerating ? state.lastChoicePayload?.mode : null)
+  );
   setGenerationBusy(true);
   state.generationAbortRequested = false;
   const selectedChoice = (state.chapterData?.choices || []).find(choice => choice.id === choiceId);
@@ -4276,7 +4419,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
       saveState: JSON.parse(JSON.stringify(state.saveState || {})),
       chapterData: JSON.parse(JSON.stringify(state.chapterData || {}))
     };
-    state.lastChoicePayload = { choiceId, customInput };
+    state.lastChoicePayload = { choiceId, customInput, mode: state.generationMode };
   }
 
   showLoading(
@@ -4304,13 +4447,17 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     let nextChapter = null;
 
     try {
+      // 先做語意檢索再組提示詞。失敗會回空字串，不會中斷這一回。
+      const retrievedMemoryBlock = await buildRetrievedMemoryBlock(choiceLabel);
       const { systemPrompt, userPrompt } = buildNextTurnPrompt(
         state.saveState.turnCount,
         choiceId,
         customInput,
         profile,
         state.chapterHistoryList || [],
-        state.saveState.summaryPool || ''
+        state.saveState.summaryPool || '',
+        state.saveState,
+        retrievedMemoryBlock
       );
       
       // 將等待畫面縮成常駐狀態列，玩家仍可閱讀前文或隨時展開查看進度。
@@ -4389,7 +4536,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
     } else {
       renderStoryStream(state.chapterData);
       renderSaveState();
-      showErrorRecovery('本回生成失敗，進度未變更，可重試：' + err.message);
+      showErrorRecovery('本回四次生成皆失敗，進度未變更。可重試此回，或暫停遊戲回報作者：' + err.message);
     }
   } finally {
     hideLoading();
@@ -4397,7 +4544,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false) {
   }
 }
 
-function handleCustomActionSubmit() {
+function handleCustomActionSubmit(mode) {
   const input = dom.customActionInput;
   if (!input) return;
   const val = input.value.trim();
@@ -4409,7 +4556,7 @@ function handleCustomActionSubmit() {
   const selectedSummary = document.getElementById('selected-action-summary');
   if (selectedSummary) { selectedSummary.classList.add('hidden'); selectedSummary.textContent = ''; }
   autoGrowActionInput();
-  makeChoice(sourceChoiceId, val, false);
+  makeChoice(sourceChoiceId, val, false, mode);
 }
 
 function appendChapterToHistory(chapter, chosenLabel) {
@@ -6666,6 +6813,31 @@ function showErrorRecovery(message, options = {}) {
   }
 }
 
+/**
+ * 生成連續失敗後，把「當下發生什麼事」直接填進回饋表單送交作者信箱。
+ * 玩家在這個當下最不想做的事就是自己描述錯誤，所以模式、模型鏈、回合數
+ * 與失敗訊息全部由程式帶入，玩家只要按送出。
+ */
+function reportGenerationFailure() {
+  const modeKey = resolveGenerationMode();
+  const modeCfg = getModeConfig(modeKey);
+  const failureText = document.getElementById('error-message-text')?.textContent || '（未取得失敗訊息）';
+  const lines = [
+    '【自動帶入：生成失敗回報】',
+    `生成模式：${modeCfg.label}（${modeKey}）`,
+    `模型鏈：${buildAttemptPlan(modeKey).join(' → ')}`,
+    `回合數：${state.chapterHistoryList?.length ?? '未知'}`,
+    `失敗訊息：${failureText}`,
+    `發生時間：${new Date().toISOString()}`,
+    '',
+    '（可在此補充當時的操作或期待的劇情走向）'
+  ];
+  openFeedbackModal({
+    category: 'Bug / 系統異常報錯',
+    content: lines.join('\n')
+  });
+}
+
 function dismissError() {
   const banner = document.getElementById('error-recovery-banner');
   if (banner) banner.style.display = 'none';
@@ -6706,7 +6878,7 @@ async function sendTelemetryError(category, message, details = {}) {
       action: 'telemetry/log-error',
       category: category || 'GENERAL_ERROR',
       message: String(message || '未知錯誤'),
-      model: LLM_CONFIG.PRIMARY_MODEL || 'aion-3.0',
+      model: LLM_CONFIG.PRIMARY_MODEL || 'gemini-3.8-flash',
       userId: state.username || state.userId || localStorage.getItem('undercurrent_user_name') || 'guest',
       act: state.saveState?.meta?.currentAct || 1,
       turn: state.saveState?.turnCount || 1,
@@ -6797,7 +6969,7 @@ async function handleFeedbackSubmit(e) {
     turn: state.saveState?.turnCount || 1,
     targetLead: state.saveState?.meta?.targetLeadName || '未指定',
     playerProfile: state.saveState?.meta?.playerProfile || null,
-    model: LLM_CONFIG.PRIMARY_MODEL || 'aion-3.0',
+    model: LLM_CONFIG.PRIMARY_MODEL || 'gemini-3.8-flash',
     status: state.saveState?.protagonist || null
   } : null;
 

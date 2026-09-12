@@ -2,8 +2,8 @@
  * Project Epilogue - AI 服務模組
  * 檔案：AIService.js
  * 
- * 透過相容 OpenAI 的 API 端點（https://api.banana2556.com/v1）驅動雙模型管線：
- * 1. 主要敘事模型 (Narrator: aion-3.0，備援 qwen3-vl-235b)
+ * 透過相容 OpenAI 的 API 端點（https://openrouter.ai/api/v1）驅動雙模型管線：
+ * 1. 主要敘事模型 (Narrator: gemini-3.8-flash，備援 grok-4.6 / gemini-3.5-flash-lite / minimax-m3)
  * 2. 快速稽核模型 (Fast Auditor: aion-3.0-mini / 備用 mistral-nemo)
  */
 
@@ -228,9 +228,9 @@ var AIService = (function() {
   }
 
   /**
-   * 主要敘事模型 (Narrator: aion-3.0)：
+   * 主要敘事模型 (Narrator: gemini-3.8-flash)：
    * 生成 1,200~1,500 字的精緻章節內文、3 個互動選項以及存檔狀態更新（Delta）。
-   * 順位：aion-3.0 -> aion-3.0 -> qwen3-vl-235b -> mistral-large-3
+   * 順位：gemini-3.8-flash ×2 -> grok-4.6 -> gemini-3.5-flash-lite -> minimaxai/minimax-m3
    * @param {Object} promptContext - 包含 System Prompt, 角色 Markdown, 摘要池與近期對話歷史
    * @returns {Object} 章節物件 { chapterTitle, prose, choices, stateDelta, narrativeSummaryDelta }
    */
@@ -240,14 +240,21 @@ var AIService = (function() {
       { role: 'user', content: promptContext.userPrompt }
     ];
 
-    // 保留第二次 Gemini，不做去重；順序必須和前端 Worker/GAS 路徑完全一致。
+    // 依生成模式選鏈；順序必須和前端 buildAttemptPlan 完全一致（主力 x2 → 備援 x2）。
+    var narratorCfg = CONFIG.MODELS.NARRATOR;
+    var isSpicy = (promptContext.mode === 'spicy');
+    var chainPrimary = isSpicy ? narratorCfg.SPICY_PRIMARY : narratorCfg.PRIMARY;
+    var chainFallback = isSpicy ? narratorCfg.SPICY_FALLBACK : narratorCfg.FALLBACK;
+
     var narratorModels = [];
-    var primaryAttempts = Math.max(1, CONFIG.MODELS.NARRATOR.PRIMARY_ATTEMPTS || 2);
+    var primaryAttempts = Math.max(1, narratorCfg.PRIMARY_ATTEMPTS || 2);
     for (var primaryNo = 0; primaryNo < primaryAttempts; primaryNo++) {
-      narratorModels.push(CONFIG.MODELS.NARRATOR.PRIMARY);
+      narratorModels.push(chainPrimary);
     }
-    narratorModels.push(CONFIG.MODELS.NARRATOR.FALLBACK);
-    narratorModels.push(CONFIG.MODELS.NARRATOR.FALLBACK_2);
+    var fallbackAttempts = Math.max(1, narratorCfg.FALLBACK_ATTEMPTS || 2);
+    for (var fbNo = 0; fbNo < fallbackAttempts; fbNo++) {
+      narratorModels.push(chainFallback);
+    }
     narratorModels = narratorModels.filter(function(model) { return !!model; });
 
     var lastError = null;

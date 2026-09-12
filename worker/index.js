@@ -10,7 +10,13 @@
  * Variables and Secrets（務必選 Secret，不要選 Text）。
  */
 
-const UPSTREAM = 'https://api.banana2556.com/v1/chat/completions';
+const UPSTREAM = 'https://openrouter.ai/api/v1/chat/completions';
+
+/** 檢索用嵌入模型。多語言、對中文檢索有效，1024 維。 */
+const EMBEDDING_MODEL = '@cf/baai/bge-m3';
+/** 單次嵌入的最大筆數與每筆字元上限（避免一次請求塞爆邊緣運算配額）。 */
+const EMBED_MAX_BATCH = 64;
+const EMBED_MAX_CHARS = 3000;
 
 /**
  * 允許的來源。前端部署到新網域時務必一起更新，否則會全面 403。
@@ -28,13 +34,12 @@ const RATE_LIMIT = { windowSeconds: 60, maxRequests: 12 };
 
 /** 允許前端指定的模型白名單。避免有人拿這個端點去跑任意昂貴模型。 */
 const ALLOWED_MODELS = [
-  // 生成鏈實際使用的三個模型（主力 / 備援 / 保留）
-  'aion-3.0',
-  'qwen/qwen3-vl-235b-a22b-instruct',
-  'mistral-large-3',
-  // 稽核與摘要用的輕量模型
-  'aion-3.0-mini',
-  'mistral-nemo'
+  // 一般敘事鏈：主力 → 備援
+  'deepseek/deepseek-v4-flash-0731',
+  'google/gemma-4-26b-a4b-it',
+  // 情慾章節鏈：主力 → 備援（皆不自我審查）
+  'minimax/minimax-m3',
+  'cognitivecomputations/dolphin-mistral-24b-venice-edition'
 ];
 
 // 已移除的模型與原因（保留紀錄以免日後重蹈）：
@@ -360,8 +365,13 @@ export class RpmQueue {
   }
 }
 
-/** 兩次上游請求的最小間隔。16 秒約 3.75 RPM，為 5 RPM 的滾動窗口保留緩衝。 */
-const QUEUE_MIN_INTERVAL_MS = 16000;
+/**
+ * 兩次上游請求的最小間隔。
+ * 舊上游是全域共用 5 RPM，所以必須拉到 16 秒；OpenRouter 改為依額度計費、
+ * 速率上限高出兩個數量級，佇列的作用退化為「避免瞬間湧入」的節流閥，
+ * 因此縮到 1.5 秒 —— 再高只是白白讓玩家空等。
+ */
+const QUEUE_MIN_INTERVAL_MS = 1500;
 /** 上游仍回 429 時的預設全域退避，退避完成後仍維持每格 16 秒。 */
 const QUEUE_UPSTREAM_BACKOFF_MS = 30000;
 /** 佇列超過這個長度就請玩家稍後再試，而不是無限等下去。 */
@@ -415,6 +425,40 @@ export default {
     }
     if (request.method !== 'POST') {
       return json({ error: { message: 'Method Not Allowed' } }, 405, origin);
+    }
+
+    // 檢索用嵌入。與生成走同一組驗證，但不佔用生成佇列 ——
+    // 嵌入跑在 Cloudflare 邊緣、不碰 OpenRouter 額度，排隊只會拖慢檢索。
+    if (new URL(request.url).pathname === '/embed') {
+      const auth = await authenticateRequest(request, env, viaSharedKey);
+      if (!auth.ok) {
+        return json({ error: { message: 'Valid login token required.' } },
+          auth.serverError ? 500 : 401, origin);
+      }
+      if (!env.AI) {
+        return json({ error: { message: 'Worker 未綁定 Workers AI。' } }, 500, origin);
+      }
+      let payload;
+      try { payload = await request.json(); }
+      catch (ignore) { return json({ error: { message: 'Invalid JSON body.' } }, 400, origin); }
+
+      const texts = Array.isArray(payload?.text) ? payload.text
+        : (typeof payload?.text === 'string' ? [payload.text] : null);
+      if (!texts || !texts.length) {
+        return json({ error: { message: '缺少 text（字串或字串陣列）。' } }, 400, origin);
+      }
+      if (texts.length > EMBED_MAX_BATCH) {
+        return json({ error: { message: `一次最多 ${EMBED_MAX_BATCH} 筆。` } }, 400, origin);
+      }
+      // 超長輸入會被模型截斷；先自行裁切，讓「餵進去的」與「算出來的」一致。
+      const clipped = texts.map(t => String(t == null ? '' : t).slice(0, EMBED_MAX_CHARS));
+
+      try {
+        const out = await env.AI.run(EMBEDDING_MODEL, { text: clipped });
+        return json({ model: EMBEDDING_MODEL, data: out?.data || [] }, 200, origin);
+      } catch (err) {
+        return json({ error: { message: '嵌入失敗：' + (err?.message || String(err)) } }, 502, origin);
+      }
     }
     if (!originOk) {
       return json({
@@ -516,9 +560,17 @@ export default {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${env.API_KEY}`
+          'Authorization': `Bearer ${env.API_KEY}`,
+          // OpenRouter 用這兩個標頭在排行榜標示來源應用；缺了不會失敗，但會被歸為匿名流量。
+          'HTTP-Referer': 'https://toda-shinichi.github.io',
+          'X-Title': 'Undercurrent'
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify({
+          ...body,
+          // 同一個模型在 OpenRouter 上常有多家供應商。以價格排序並允許自動輪替，
+          // 前一家失敗或限流時由下一家接手，不必在前端多花一次模型嘗試次數。
+          provider: { sort: 'price', allow_fallbacks: true }
+        })
       });
 
       if (upstream.status === 429) {

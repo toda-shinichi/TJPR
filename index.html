@@ -15,8 +15,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./tailwind.generated.css?v=d30704bb6f">
-  <link rel="stylesheet" href="./style.css?v=d30704bb6f">
+  <link rel="stylesheet" href="./tailwind.generated.css?v=a2578ffb02">
+  <link rel="stylesheet" href="./style.css?v=a2578ffb02">
 </head>
 <body class="bg-brand-dark text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-white">
 
@@ -315,12 +315,15 @@
             <label for="custom-action-input" class="text-xs text-slate-300 font-bold flex items-center gap-1.5">
               <span>⚡ 自由行動／說話／肢體互動：</span>
             </label>
-            <span class="text-[10px] text-slate-500 font-mono hidden sm:inline">Enter 送出 · Shift+Enter 換行</span>
+            <span class="text-[10px] text-slate-500 font-mono hidden sm:inline">Enter＝一般 · Shift+Enter 換行</span>
           </div>
           <div class="flex gap-2 items-end">
             <textarea id="custom-action-input" rows="1" placeholder="例如：傾身靠近他耳畔低語、抽出手提包裡的密錄筆、轉身走向大門……" class="flex-1 resize-none bg-brand-dark border border-brand-border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none leading-relaxed max-h-40 overflow-y-auto"></textarea>
-            <button id="submit-custom-btn" class="game-action-control px-4 py-2.5 rounded-xl bg-brand-gold hover:bg-yellow-500 text-slate-950 font-bold text-xs sm:text-sm transition shrink-0 shadow-lg shadow-brand-gold/10 cursor-pointer">
-              執行行動
+            <button id="submit-custom-btn" class="game-action-control px-4 py-2.5 rounded-xl bg-brand-gold hover:bg-yellow-500 text-slate-950 font-bold text-xs sm:text-sm transition shrink-0 shadow-lg shadow-brand-gold/10 cursor-pointer" title="一般敘事（Enter 亦可送出）">
+              一般
+            </button>
+            <button id="submit-spicy-btn" class="game-action-control px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs sm:text-sm transition shrink-0 shadow-lg shadow-rose-600/20 cursor-pointer" title="情慾章節：改用不自我審查的模型生成">
+              開車
             </button>
           </div>
         </div>
@@ -1148,6 +1151,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=d30704bb6f" defer></script>
+    <script src="app.js?v=a2578ffb02" defer></script>
 </body>
 </html>

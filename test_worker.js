@@ -25,7 +25,7 @@ function post(body, headers = {}) {
 }
 
 const validPayload = {
-  model: 'aion-3.0',
+  model: 'deepseek/deepseek-v4-flash-0731',
   messages: [{ role: 'user', content: 'test' }],
   max_tokens: 100,
   stream: false

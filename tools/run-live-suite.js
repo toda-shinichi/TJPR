@@ -64,7 +64,7 @@ async function concurrentPlayer(player, token, startedAt) {
         ...(ticket ? { 'X-Queue-Ticket': ticket } : {})
       },
       body: JSON.stringify({
-        model: 'aion-3.0',
+        model: 'deepseek/deepseek-v4-flash-0731',
         messages: [{ role: 'user', content: `你是排隊測試玩家 ${player}。只回覆「玩家 ${player} 已完成」。` }],
         temperature: 0,
         max_tokens: 64,

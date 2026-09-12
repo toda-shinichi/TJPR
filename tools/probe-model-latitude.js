@@ -15,15 +15,42 @@
  * 一個模型 6 次探測約需 1.5 分鐘。
  */
 
-const WORKER_URL = 'https://tjpr-llm-proxy.todashinchi.workers.dev/';
-const ORIGIN = 'https://toda-shinichi.github.io';
-const REQUEST_GAP_MS = 14000;
+const WORKER_URL = process.env.TJPR_LIVE_URL || 'https://tjpr-llm-proxy.todashinchi.workers.dev/';
+const ORIGIN = process.env.TJPR_ORIGIN || 'https://toda-shinichi.github.io';
+
+/**
+ * Worker 已加上登入權杖驗證，因此探測也必須帶權杖。
+ * 取得方式：在遊戲頁面登入後，開 DevTools Console 執行
+ *   copy(localStorage.getItem('undercurrent_auth_token'))
+ * 然後以環境變數傳入：
+ *   TJPR_LIVE_TOKEN='epi_...' node tools/probe-model-latitude.js --all
+ *
+ * 刻意用環境變數而非寫進檔案 —— 權杖是憑證，不應進版控也不該貼進對話。
+ */
+const LIVE_TOKEN = process.env.TJPR_LIVE_TOKEN || '';
+const SHARED_KEY = process.env.TJPR_SHARED_KEY || '';
+
+if (!LIVE_TOKEN && !SHARED_KEY) {
+  console.error('缺少憑證。請設定 TJPR_LIVE_TOKEN（登入後的 undercurrent_auth_token）');
+  console.error('或 TJPR_SHARED_KEY（Worker 的 CLIENT_SHARED_KEY secret）後再執行。');
+  process.exit(1);
+}
+
+function authHeaders() {
+  const h = {};
+  if (LIVE_TOKEN) h['X-Undercurrent-Token'] = LIVE_TOKEN;
+  if (SHARED_KEY) h['X-Undercurrent-Key'] = SHARED_KEY;
+  return h;
+}
+const REQUEST_GAP_MS = 2000;
 
 const DEFAULT_CANDIDATES = [
-  'mistral-large-3',
-  'qwen/qwen3-vl-235b-a22b-instruct',
-  'minimaxai/minimax-m3',
-  'minimax/minimax-m2.7'
+  // 一般敘事鏈
+  'deepseek/deepseek-v4-flash-0731',
+  'google/gemma-4-26b-a4b-it',
+  // 情慾章節鏈
+  'minimax/minimax-m3',
+  'cognitivecomputations/dolphin-mistral-24b-venice-edition'
 ];
 
 const SYSTEM = '你是一位專精成人向情感小說的敘事者，使用台灣繁體中文寫作。'
@@ -96,7 +123,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function ask(model, prompt, maxTokens = 500) {
   const res = await fetch(WORKER_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Origin': ORIGIN },
+    headers: Object.assign({ 'Content-Type': 'application/json', 'Origin': ORIGIN }, authHeaders()),
     body: JSON.stringify({
       model,
       messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: prompt }],

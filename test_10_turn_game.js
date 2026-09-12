@@ -3,12 +3,13 @@ const fs = require('node:fs');
 
 const LIVE_URL = process.env.TJPR_LIVE_URL || 'https://tjpr-llm-proxy.todashinchi.workers.dev/';
 const ORIGIN = 'http://localhost:8731';
-const MODEL = process.env.TJPR_TEST_MODEL || 'aion-3.0';
+const MODEL = process.env.TJPR_TEST_MODEL || 'deepseek/deepseek-v4-flash-0731';
 const LIVE_TOKEN = process.env.TJPR_LIVE_TOKEN || '';
 const MODEL_ATTEMPT_PLAN = [
   MODEL,
   MODEL,
-  'qwen/qwen3-vl-235b-a22b-instruct'
+  'google/gemma-4-26b-a4b-it',
+  'google/gemma-4-26b-a4b-it'
 ];
 const TURN_COUNT = Math.max(1, Number(process.env.TJPR_TURN_COUNT) || 10);
 const LITERARY_GATE = process.env.TJPR_LITERARY_GATE === '1';

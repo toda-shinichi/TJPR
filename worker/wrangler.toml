@@ -31,3 +31,8 @@ class_name = "RpmQueue"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RpmQueue"]
+
+# 檢索用嵌入模型（@cf/baai/bge-m3）。OpenRouter 型錄內沒有任何 embedding 模型，
+# 所以嵌入不與生成同源，改由 Cloudflare Workers AI 就地提供 —— 不需要第二把金鑰。
+[ai]
+binding = "AI"
