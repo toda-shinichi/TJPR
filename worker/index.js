@@ -90,7 +90,10 @@ const ALLOWED_MODELS = [
   'google/gemma-4-26b-a4b-it',
   // 情慾章節鏈：主力 → 備援（皆不自我審查）
   'minimax/minimax-m3',
-  'cognitivecomputations/dolphin-mistral-24b-venice-edition'
+  'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+  // 評估中的候選（確定去留後移除或轉正）。
+  // gemma-3-27b 已實測四家供應商全數拒絕 L4，不列入。
+  'google/gemma-4-31b-it'
 ];
 
 // 已移除的模型與原因（保留紀錄以免日後重蹈）：
