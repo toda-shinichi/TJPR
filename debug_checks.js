@@ -298,7 +298,10 @@ assert.match(workerCode, /'deepseek\/deepseek-v4-flash-0731'/, 'Worker 白名單
 assert.match(workerCode, /'minimax\/minimax-m3'/, 'Worker 白名單缺少開車鏈主力');
 assert.match(workerCode, /openrouter\.ai/, 'Worker 上游未切到 OpenRouter');
 assert.match(workerCode, /sort: 'price'/, 'Worker 未依價格排序供應商');
-assert.match(workerCode, /'cognitivecomputations\/dolphin-mistral-24b-venice-edition'/, 'Worker 白名單缺少開車鏈備援');
+assert.match(workerCode, /'google\/gemma-4-31b-it'/, 'Worker 白名單缺少露骨鏈備援 1');
+assert.match(workerCode, /'cognitivecomputations\/dolphin-mistral-24b-venice-edition'/, 'Worker 白名單缺少最後防線');
+// 實測四家供應商全數拒絕 L4，留在白名單只會讓玩家白等一輪
+assert.doesNotMatch(workerCode, /'google\/gemma-3-27b-it'/, 'gemma-3-27b 不應留在白名單');
 assert.match(gasConfig, /PRIMARY: 'deepseek\/deepseek-v4-flash-0731'/, 'GAS 一般鏈主力不是 deepseek-v4-flash');
 
 // 已淘汰的模型不得留在 Worker 白名單 —— 留著等於讓任何拿到 Worker URL 的人
@@ -316,7 +319,9 @@ assert.match(gasConfig, /PRIMARY: 'deepseek\/deepseek-v4-flash-0731'/, 'GAS 一�
 assert.match(rootApp, /PRIMARY_MAX_ATTEMPTS: 2/, '主模型重試次數不是 2 次');
 assert.match(rootApp, /FALLBACK_MAX_ATTEMPTS: 2/, '備援重試次數不是 2 次');
 assert.match(rootApp, /FALLBACK_MODELS: \['minimax\/minimax-m3'\]/, '一般鏈備援不是 minimax-m3');
-assert.match(rootApp, /FALLBACK_MODELS: \['cognitivecomputations\/dolphin-mistral-24b-venice-edition'\]/, '露骨鏈備援不是 dolphin-venice');
+assert.match(rootApp, /'google\/gemma-4-31b-it',/, '露骨鏈備援 1 不是 gemma-4-31b');
+// dolphin 在地知識實測 7/10（會把台中七期寫成新北），只作最後防線且僅一次
+assert.match(rootApp, /\{ model: 'cognitivecomputations\/dolphin-mistral-24b-venice-edition', attempts: 1 \}/, 'dolphin 未降為單次的最後防線');
 // 舊名 UNCENSORED_FALLBACK_MODELS 會誤導：鏈上並非全是未審查模型
 assert.doesNotMatch(rootApp, /UNCENSORED_FALLBACK_MODELS/, '仍殘留會誤導的舊變數名');
 assert.doesNotMatch(rootApp, /banana2556/, '前端仍指向已停用的舊上游');
@@ -364,16 +369,22 @@ const spicyPlan = vm.runInContext('buildAttemptPlan("spicy")', frontendContext);
 assert.deepStrictEqual(
   Array.from(spicyPlan),
   ['google/gemma-4-26b-a4b-it', 'google/gemma-4-26b-a4b-it',
-   'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+   'google/gemma-4-31b-it', 'google/gemma-4-31b-it',
    'cognitivecomputations/dolphin-mistral-24b-venice-edition'],
   '露骨鏈嘗試計畫順序錯誤'
 );
 // 玩家在四次之後才會看到失敗提示；超過這個數字等於讓玩家多等一輪無謂的重試
 assert.strictEqual(plan.length, 4, '一般鏈嘗試次數不是 4 次');
-assert.strictEqual(spicyPlan.length, 4, '露骨鏈嘗試次數不是 4 次');
+assert.strictEqual(spicyPlan.length, 5, '露骨鏈嘗試次數不是 5 次');
 // 供應商釘選：只寫 sort:'price' 會落到實測會拒絕生成的供應商（如 minimax 的 coreweave）
 assert.match(workerCode, /const PINNED_PROVIDERS = \{[\s\S]*?'minimax\/minimax-m3': \[/, 'Worker 未釘選已驗證的供應商');
-assert.doesNotMatch(workerCode, /'coreweave\/fp4'/, '釘選名單含實測會拒絕的 coreweave');
+// coreweave 對 minimax 實測會拒絕生成，但對 gemma-4-31b 正常 —— 斷言必須收斂到
+// minimax 自己的釘選區塊，否則會誤擋其他模型的合法供應商。
+const minimaxPinned = (workerCode.match(/'minimax\/minimax-m3': \[([^\]]*)\]/) || [])[1] || '';
+assert.ok(minimaxPinned, '找不到 minimax 的釘選名單');
+for (const banned of ['coreweave', 'streamlake', 'venice', "'minimax/fp8'"]) {
+  assert.ok(!minimaxPinned.includes(banned), `minimax 釘選名單含實測會拒絕的 ${banned}`);
+}
 assert.match(workerCode, /REASONING_DISABLED_MODELS[\s\S]*?'minimax\/minimax-m3'/, 'minimax 未關閉思考鏈');
 assert.match(gasFnBody, /const models = buildAttemptPlan\(\);/, 'GAS 路徑沒有直接沿用完整嘗試計畫');
 // 限速的歸屬：Worker 路徑交給 Durable Object 全域排隊器，前端不得再等一次
@@ -489,12 +500,14 @@ assert.match(workerStreamBody, /err\.isQueueRetry/, '排隊重試未與真正的
 assert.match(workerStreamBody, /err\.isQueueUnavailable/, '排隊器故障時仍可能改走 GAS 繞過共用額度');
 assert.match(
   gasConfig,
-  /PRIMARY:\s*'deepseek\/deepseek-v4-flash-0731',[\s\S]*?FALLBACK:\s*'minimax\/minimax-m3',[\s\S]*?SPICY_PRIMARY:\s*'google\/gemma-4-26b-a4b-it',[\s\S]*?SPICY_FALLBACK:\s*'cognitivecomputations\/dolphin-mistral-24b-venice-edition'/,
+  /PRIMARY:\s*'deepseek\/deepseek-v4-flash-0731',[\s\S]*?FALLBACK:\s*'minimax\/minimax-m3',[\s\S]*?SPICY_PRIMARY:\s*'google\/gemma-4-26b-a4b-it',[\s\S]*?SPICY_FALLBACK:\s*'google\/gemma-4-31b-it'/,
   'GAS 模型設定未依指定順序排列'
 );
 assert.match(aiServiceCode, /maxRetries:\s*1/, 'GAS 敘事模型鏈仍會在每個節點內額外重試');
 // GAS 鏈擴為四個模型以對齊前端
 assert.match(aiServiceCode, /SPICY_PRIMARY/, 'GAS 敘事鏈未依生成模式分流');
+assert.match(aiServiceCode, /SPICY_FALLBACK_2/, 'GAS 露骨鏈缺少最後防線');
+assert.match(gasConfig, /SPICY_FALLBACK_2:\s*'cognitivecomputations\/dolphin/, 'GAS 最後防線設定錯誤');
 assert.doesNotMatch(aiServiceCode, /NARRATOR\.FALLBACK_4/, 'GAS 敘事鏈殘留未定義的第四備援');
 const liveGameTestCode = fs.readFileSync('test_10_turn_game.js', 'utf8');
 assert.match(liveGameTestCode, /const MIN_REQUEST_INTERVAL_MS = 16_000;/, '10 回合 live 測試未遵守 16 秒安全間隔');

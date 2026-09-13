@@ -255,6 +255,10 @@ var AIService = (function() {
     for (var fbNo = 0; fbNo < fallbackAttempts; fbNo++) {
       narratorModels.push(chainFallback);
     }
+    // 露骨鏈的最後防線只給一次機會（品質最差，不值得讓玩家多等一輪）
+    if (isSpicy && narratorCfg.SPICY_FALLBACK_2) {
+      narratorModels.push(narratorCfg.SPICY_FALLBACK_2);
+    }
     narratorModels = narratorModels.filter(function(model) { return !!model; });
 
     var lastError = null;

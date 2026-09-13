@@ -1904,13 +1904,22 @@ const GENERATION_MODES = {
     PRIMARY_MODEL: 'google/gemma-4-26b-a4b-it',
     PRIMARY_MAX_ATTEMPTS: 2,
     FALLBACK_MAX_ATTEMPTS: 2,
-    FALLBACK_MODELS: ['cognitivecomputations/dolphin-mistral-24b-venice-edition']
+    // dolphin 排在最後且只給一次機會：它在地知識實測 7/10，而且錯的正是
+    // 「七期重劃區在新北」這類會直接砸壞既定設定的題目（七期在台中，
+    // 是榮南營造的所在地）。它同時篇幅最短、上下文最短、只有一家供應商。
+    // 留著是因為它 7/7 露骨測試全過、最不會拒絕 —— 當最後一道防線剛好。
+    FALLBACK_MODELS: [
+      'google/gemma-4-31b-it',
+      { model: 'cognitivecomputations/dolphin-mistral-24b-venice-edition', attempts: 1 }
+    ]
   }
 };
 const DEFAULT_GENERATION_MODE = 'normal';
 
-const NARRATIVE_MODELS = Object.values(GENERATION_MODES)
-  .flatMap(m => [m.PRIMARY_MODEL, ...m.FALLBACK_MODELS]);
+const NARRATIVE_MODELS = Object.values(GENERATION_MODES).flatMap(m => [
+  m.PRIMARY_MODEL,
+  ...m.FALLBACK_MODELS.map(e => (typeof e === 'string' ? e : e.model))
+]);
 
 const LLM_CONFIG = {
   WORKER_URL: 'https://tjpr-llm-proxy.todashinchi.workers.dev/',
@@ -1923,7 +1932,10 @@ const LLM_CONFIG = {
   MODES: GENERATION_MODES,
   // 相容欄位：未指定模式時視同一般敘事。
   PRIMARY_MODEL: GENERATION_MODES[DEFAULT_GENERATION_MODE].PRIMARY_MODEL,
-  FALLBACK_MODEL: GENERATION_MODES[DEFAULT_GENERATION_MODE].FALLBACK_MODELS[0],
+  FALLBACK_MODEL: (() => {
+    const first = GENERATION_MODES[DEFAULT_GENERATION_MODE].FALLBACK_MODELS[0];
+    return typeof first === 'string' ? first : first.model;
+  })(),
   PRIMARY_MAX_ATTEMPTS: GENERATION_MODES[DEFAULT_GENERATION_MODE].PRIMARY_MAX_ATTEMPTS,
   FALLBACK_MODELS: GENERATION_MODES[DEFAULT_GENERATION_MODE].FALLBACK_MODELS,
   // 會自我審查的模型（供 warnIfCensoringModel 判斷）。
@@ -2752,11 +2764,18 @@ function buildAttemptPlan(mode) {
   const maxPrimary = Math.max(1, cfg.PRIMARY_MAX_ATTEMPTS || 1);
   const plan = new Array(maxPrimary).fill(cfg.PRIMARY_MODEL);
 
-  // 備援與主力一樣重試 FALLBACK_MAX_ATTEMPTS 次。
+  // 備援預設與主力一樣重試 FALLBACK_MAX_ATTEMPTS 次。
   // 每個模型在 Worker 端已經會跨供應商輪替，這裡的重試是針對「模型自身拒絕生成」。
-  const fallbackAttempts = Math.max(1, cfg.FALLBACK_MAX_ATTEMPTS || 1);
-  for (const model of (cfg.FALLBACK_MODELS || []).filter(Boolean)) {
-    for (let i = 0; i < fallbackAttempts; i++) plan.push(model);
+  // 個別備援可用 { model, attempts } 覆寫次數 —— 品質較差的最後防線只給一次，
+  // 免得玩家為了一顆本來就不該常用的模型多等一輪。
+  const defaultAttempts = Math.max(1, cfg.FALLBACK_MAX_ATTEMPTS || 1);
+  for (const entry of (cfg.FALLBACK_MODELS || []).filter(Boolean)) {
+    const model = typeof entry === 'string' ? entry : entry.model;
+    if (!model) continue;
+    const attempts = typeof entry === 'string'
+      ? defaultAttempts
+      : Math.max(1, entry.attempts || defaultAttempts);
+    for (let i = 0; i < attempts; i++) plan.push(model);
   }
   return plan;
 }
@@ -4553,7 +4572,10 @@ async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
     } else {
       renderStoryStream(state.chapterData);
       renderSaveState();
-      showErrorRecovery('本回四次生成皆失敗，進度未變更。可重試此回，或暫停遊戲回報作者：' + err.message);
+      const attemptCount = buildAttemptPlan().length;
+      showErrorRecovery(
+        `本回 ${attemptCount} 次生成皆失敗，進度未變更。可重試此回，或暫停遊戲回報作者：` + err.message
+      );
     }
   } finally {
     hideLoading();

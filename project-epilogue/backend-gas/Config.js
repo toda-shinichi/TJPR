@@ -29,6 +29,7 @@ const CONFIG = {
       'deepseek/deepseek-v4-flash-0731',
       'google/gemma-4-26b-a4b-it',
       'minimax/minimax-m3',
+      'google/gemma-4-31b-it',
       'cognitivecomputations/dolphin-mistral-24b-venice-edition'
     ],
     // 主要敘事模型：gemini-3.8-flash，備援 grok-4.6 → gemini-3.5-flash-lite
@@ -43,7 +44,9 @@ const CONFIG = {
       FALLBACK_ATTEMPTS: 2,
       // 露骨章節鏈（與前端 GENERATION_MODES.spicy 對齊）
       SPICY_PRIMARY: 'google/gemma-4-26b-a4b-it',
-      SPICY_FALLBACK: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+      SPICY_FALLBACK: 'google/gemma-4-31b-it',
+      // 最後防線：在地知識實測 7/10，只在前面全滅時才用，故僅給一次機會。
+      SPICY_FALLBACK_2: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
       TEMPERATURE: 0.88,
       // 硬性截斷上限，不是用來控字數（字數由提示詞決定）。
       // 它的作用是防止無限擴寫並設成本上限。必須留足餘裕：

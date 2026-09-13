@@ -45,6 +45,11 @@ const PINNED_PROVIDERS = {
   'minimax/minimax-m3': [
     'gmicloud/fp8', 'deepinfra/fp8', 'novita/fp8', 'together'
   ],
+  // 實測 7/7 供應商通過，依價格排序；deepinfra/turbo 於白名單放行前測失敗，
+  // 其餘皆可用。稠密 31B 明顯較慢（約 48 秒），故僅作備援。
+  'google/gemma-4-31b-it': [
+    'coreweave/fp4', 'venice/bf16', 'chutes/fp4', 'deepinfra/fp8', 'friendli'
+  ],
   // 僅此一家提供，無從挑選。
   'cognitivecomputations/dolphin-mistral-24b-venice-edition': ['venice/fp16']
 };
@@ -91,8 +96,8 @@ const ALLOWED_MODELS = [
   // 情慾章節鏈：主力 → 備援（皆不自我審查）
   'minimax/minimax-m3',
   'cognitivecomputations/dolphin-mistral-24b-venice-edition',
-  // 評估中的候選（確定去留後移除或轉正）。
-  // gemma-3-27b 已實測四家供應商全數拒絕 L4，不列入。
+  // 露骨鏈備援 1（實測 7/7 供應商通過、在地知識 10/10）。
+  // gemma-3-27b 實測四家供應商全數拒絕 L4，不列入。
   'google/gemma-4-31b-it'
 ];
 
