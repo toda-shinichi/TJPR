@@ -39,10 +39,10 @@ const CONFIG = {
       // 一般敘事鏈（與前端 GENERATION_MODES.normal 對齊）
       PRIMARY: 'deepseek/deepseek-v4-flash-0731',
       PRIMARY_ATTEMPTS: 2,
-      FALLBACK: 'google/gemma-4-26b-a4b-it',
+      FALLBACK: 'minimax/minimax-m3',
       FALLBACK_ATTEMPTS: 2,
-      // 情慾章節鏈（與前端 GENERATION_MODES.spicy 對齊）
-      SPICY_PRIMARY: 'minimax/minimax-m3',
+      // 露骨章節鏈（與前端 GENERATION_MODES.spicy 對齊）
+      SPICY_PRIMARY: 'google/gemma-4-26b-a4b-it',
       SPICY_FALLBACK: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
       TEMPERATURE: 0.88,
       // 硬性截斷上限，不是用來控字數（字數由提示詞決定）。

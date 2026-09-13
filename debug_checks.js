@@ -282,7 +282,7 @@ assert.match(
 assert.doesNotMatch(rootApp, /text-\[#d8dbe6\]/, '最新回合仍使用深色主題遺留的低對比淺字');
 assert.match(css, /#stream-prose-content\s*\{[\s\S]*?color:\s*#3e363a\s*!important/, '最新回合正文缺少高對比色保護');
 assert.match(rootApp, /PRIMARY_MODEL: 'deepseek\/deepseek-v4-flash-0731'/, '一般鏈主力不是 deepseek-v4-flash');
-assert.match(rootApp, /PRIMARY_MODEL: 'minimax\/minimax-m3'/, '開車鏈主力不是 minimax-m3');
+assert.match(rootApp, /PRIMARY_MODEL: 'google\/gemma-4-26b-a4b-it'/, '露骨鏈主力不是 gemma-4-26b');
 assert.strictEqual((rootApp.match(/800–1200 個中文字/g) || []).length, 4, '開局與續回的文學篇幅目標未完整更新');
 assert.doesNotMatch(rootApp, /字數上限強制執行|600~800 個中文字/, '前端提示詞仍殘留硬性字數上限');
 assert.match(rootApp, /完成一個實質改變局勢或關係的戲劇節拍[\s\S]*不截斷、不灌水、不套固定模板/, '開局提示詞缺少戲劇節拍與避免灌水規則');
@@ -315,15 +315,16 @@ assert.match(gasConfig, /PRIMARY: 'deepseek\/deepseek-v4-flash-0731'/, 'GAS 一�
 // 每條鏈固定四段：主力 ×2 → 備援 ×2。四次皆失敗才向玩家顯示重試／回報。
 assert.match(rootApp, /PRIMARY_MAX_ATTEMPTS: 2/, '主模型重試次數不是 2 次');
 assert.match(rootApp, /FALLBACK_MAX_ATTEMPTS: 2/, '備援重試次數不是 2 次');
-assert.match(rootApp, /FALLBACK_MODELS: \['google\/gemma-4-26b-a4b-it'\]/, '一般鏈備援不是 gemma-4-26b');
-assert.match(rootApp, /FALLBACK_MODELS: \['cognitivecomputations\/dolphin-mistral-24b-venice-edition'\]/, '開車鏈備援不是 dolphin-venice');
+assert.match(rootApp, /FALLBACK_MODELS: \['minimax\/minimax-m3'\]/, '一般鏈備援不是 minimax-m3');
+assert.match(rootApp, /FALLBACK_MODELS: \['cognitivecomputations\/dolphin-mistral-24b-venice-edition'\]/, '露骨鏈備援不是 dolphin-venice');
 // 舊名 UNCENSORED_FALLBACK_MODELS 會誤導：鏈上並非全是未審查模型
 assert.doesNotMatch(rootApp, /UNCENSORED_FALLBACK_MODELS/, '仍殘留會誤導的舊變數名');
 assert.doesNotMatch(rootApp, /banana2556/, '前端仍指向已停用的舊上游');
 // 兩顆送出鍵必須各自綁定，否則「開車」會靜默走一般鏈而被審查擋下
-assert.match(rootApp, /handleCustomActionSubmit\('spicy'\)/, '開車鍵未綁定情慾鏈');
+assert.match(rootApp, /handleCustomActionSubmit\('spicy'\)/, '露骨鍵未綁定露骨鏈');
 assert.match(rootApp, /handleCustomActionSubmit\('normal'\)/, '一般鍵未綁定一般鏈');
-assert.match(html, /id="submit-spicy-btn"/, '介面缺少「開車」送出鍵');
+assert.match(html, /id="submit-spicy-btn"/, '介面缺少「露骨」送出鍵');
+assert.match(html, /想要<span[^>]*>超露骨<\/span>的直白描寫時按「露骨」/, '露骨鍵缺少用途提示');
 // 生成連續失敗的回報入口先前存在於 HTML 卻從未被綁定，回歸時要擋住
 assert.match(rootApp, /on\('report-error-btn', 'click', reportGenerationFailure\)/, '回報作者按鍵未綁定');
 assert.match(gasConfig, /EMAIL: 'todashinchi@gmail\.com'/, '回報通知收件者未設定');
@@ -356,20 +357,24 @@ const plan = vm.runInContext('buildAttemptPlan()', frontendContext);
 assert.deepStrictEqual(
   Array.from(plan),
   ['deepseek/deepseek-v4-flash-0731', 'deepseek/deepseek-v4-flash-0731',
-   'google/gemma-4-26b-a4b-it', 'google/gemma-4-26b-a4b-it'],
+   'minimax/minimax-m3', 'minimax/minimax-m3'],
   '一般鏈嘗試計畫順序錯誤'
 );
 const spicyPlan = vm.runInContext('buildAttemptPlan("spicy")', frontendContext);
 assert.deepStrictEqual(
   Array.from(spicyPlan),
-  ['minimax/minimax-m3', 'minimax/minimax-m3',
+  ['google/gemma-4-26b-a4b-it', 'google/gemma-4-26b-a4b-it',
    'cognitivecomputations/dolphin-mistral-24b-venice-edition',
    'cognitivecomputations/dolphin-mistral-24b-venice-edition'],
-  '開車鏈嘗試計畫順序錯誤'
+  '露骨鏈嘗試計畫順序錯誤'
 );
 // 玩家在四次之後才會看到失敗提示；超過這個數字等於讓玩家多等一輪無謂的重試
 assert.strictEqual(plan.length, 4, '一般鏈嘗試次數不是 4 次');
-assert.strictEqual(spicyPlan.length, 4, '開車鏈嘗試次數不是 4 次');
+assert.strictEqual(spicyPlan.length, 4, '露骨鏈嘗試次數不是 4 次');
+// 供應商釘選：只寫 sort:'price' 會落到實測會拒絕生成的供應商（如 minimax 的 coreweave）
+assert.match(workerCode, /const PINNED_PROVIDERS = \{[\s\S]*?'minimax\/minimax-m3': \[/, 'Worker 未釘選已驗證的供應商');
+assert.doesNotMatch(workerCode, /'coreweave\/fp4'/, '釘選名單含實測會拒絕的 coreweave');
+assert.match(workerCode, /REASONING_DISABLED_MODELS[\s\S]*?'minimax\/minimax-m3'/, 'minimax 未關閉思考鏈');
 assert.match(gasFnBody, /const models = buildAttemptPlan\(\);/, 'GAS 路徑沒有直接沿用完整嘗試計畫');
 // 限速的歸屬：Worker 路徑交給 Durable Object 全域排隊器，前端不得再等一次
 // （重複計算實測會讓三次嘗試白等 32 秒，而前端冷卻只管自己這個瀏覽器、
@@ -416,6 +421,16 @@ assert.strictEqual(vm.runInContext("countLiterarySimiles('監視影像、圖像�
 assert.strictEqual(vm.runInContext("countLiterarySimiles('好像下雨，彷彿隔世，像一把傘')", frontendContext), 3, '真正的比喻訊號計數錯誤');
 assert.strictEqual(vm.runInContext("countRepeatedLiterarySentences('你沒動。燈熄了。你沒動。你沒動。')", frontendContext), 2, '重複句子計數錯誤');
 assert.strictEqual(vm.runInContext("countSimplifiedChineseMarkers('這不是试探，是確認。')", frontendContext), 1, '簡體字混入計數錯誤');
+// 少量簡體字不該讓整章退回重試：重試的代價（一次模型額度＋數十秒）遠高於瑕疵本身
+assert.match(rootApp, /const SIMPLIFIED_CHINESE_TOLERANCE = 5;/, '簡體字容許值不是 5');
+const simpTolerated = vm.runInContext(
+  "getLiteraryValidationError({ prose: '這不是试探，是确認，他说的话没错，问题在这里。'.repeat(1) + 'x'.repeat(300), statusPanel: { timeLocation: '夜·倉庫' }, choices: [{id:'A',label:'甲'},{id:'B',label:'乙'},{id:'C',label:'丙'}] }, [])",
+  frontendContext);
+assert.doesNotMatch(String(simpTolerated), /簡體/, '容許額度內的簡體字仍被退回');
+const simpRejected = vm.runInContext(
+  "getLiteraryValidationError({ prose: '这说话问题没见对发红时间实点经国个'.repeat(3) + 'x'.repeat(300), statusPanel: { timeLocation: '夜·倉庫' }, choices: [{id:'A',label:'甲'},{id:'B',label:'乙'},{id:'C',label:'丙'}] }, [])",
+  frontendContext);
+assert.match(String(simpRejected), /簡體/, '大量簡體字未被退回');
 assert.ok(vm.runInContext("getLongestRecentLiteraryEcho('你沒動，他從公事包取出一張紙。', [{prose:'你沒動。他從公事包取出一張照片。'}])", frontendContext) >= 12, '跨回合近似段落未被偵測');
 frontendContext.clicheChapter = {
   prose: '空氣瞬間凝滯。他的唇角勾起，眼底閃過一絲幽光，像蟄伏的獸，彷彿一張無形的網。'.repeat(8),
@@ -474,7 +489,7 @@ assert.match(workerStreamBody, /err\.isQueueRetry/, '排隊重試未與真正的
 assert.match(workerStreamBody, /err\.isQueueUnavailable/, '排隊器故障時仍可能改走 GAS 繞過共用額度');
 assert.match(
   gasConfig,
-  /PRIMARY:\s*'deepseek\/deepseek-v4-flash-0731',[\s\S]*?FALLBACK:\s*'google\/gemma-4-26b-a4b-it',[\s\S]*?SPICY_PRIMARY:\s*'minimax\/minimax-m3',[\s\S]*?SPICY_FALLBACK:\s*'cognitivecomputations\/dolphin-mistral-24b-venice-edition'/,
+  /PRIMARY:\s*'deepseek\/deepseek-v4-flash-0731',[\s\S]*?FALLBACK:\s*'minimax\/minimax-m3',[\s\S]*?SPICY_PRIMARY:\s*'google\/gemma-4-26b-a4b-it',[\s\S]*?SPICY_FALLBACK:\s*'cognitivecomputations\/dolphin-mistral-24b-venice-edition'/,
   'GAS 模型設定未依指定順序排列'
 );
 assert.match(aiServiceCode, /maxRetries:\s*1/, 'GAS 敘事模型鏈仍會在每個節點內額外重試');

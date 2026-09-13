@@ -14,6 +14,57 @@ const UPSTREAM = 'https://openrouter.ai/api/v1/chat/completions';
 
 /** 檢索用嵌入模型。多語言、對中文檢索有效，1024 維。 */
 const EMBEDDING_MODEL = '@cf/baai/bge-m3';
+
+/**
+ * 每個模型釘選的供應商順序（由便宜到貴，且皆為實測不自我審查者）。
+ *
+ * 為什麼要釘選：gemma 與 dolphin 是開放權重模型，由第三方各自部署，
+ * 不同供應商會套不同的內容過濾器。若只寫 sort:'price'，某天最便宜的那家
+ * 換成會審查的版本，玩家就會無預警地看到模型開始拒絕生成，而我們毫無所覺。
+ * deepseek 與 minimax 是官方託管、行為一致，釘選的目的單純是鎖成本。
+ *
+ * allow_fallbacks: false —— 寧可這一次失敗、由模型鏈換下一顆，
+ * 也不要靜默掉到未驗證的供應商上。
+ */
+const PINNED_PROVIDERS = {
+  // 由便宜排到貴，全部經過 L4 露骨實測。
+  // 排除 baidu（只寫得出文學化程度）與 digitalocean（回空回應）。
+  'deepseek/deepseek-v4-flash-0731': [
+    'open-inference/fp8', 'relace/fp4', 'deepinfra/fp8',
+    'streamlake/fp8', 'sail-research/fp4'
+  ],
+  // 實測 10 家全數通過（含 Google 自家 Vertex），故純粹依價格與延遲取捨。
+  // deepinfra(36.7s) 與 makora(19.7s) 明顯偏慢，排在後面。
+  'google/gemma-4-26b-a4b-it': [
+    'darkbloom', 'dekallm/bf16', 'nextbit/bf16',
+    'cloudflare', 'novita/bf16'
+  ],
+  // 此模型的供應商差異最大：最便宜的 coreweave 以及 streamlake／venice／minimax
+  // 四家都會拒絕生成，必須明確排除 —— 這正是不能只寫 sort:'price' 的理由。
+  // 名單內四家經三輪測試全數通過（需搭配 REASONING_DISABLED_MODELS）。
+  'minimax/minimax-m3': [
+    'gmicloud/fp8', 'deepinfra/fp8', 'novita/fp8', 'together'
+  ],
+  // 僅此一家提供，無從挑選。
+  'cognitivecomputations/dolphin-mistral-24b-venice-edition': ['venice/fp16']
+};
+
+/**
+ * 需要關閉思考鏈的模型。
+ * minimax-m3 開著思考時會先寫一段內部推理再決定要不要生成，
+ * 實測那段推理正是它頻繁自我否決、最後拒絕的地方；關掉可提高成功率，
+ * 同時省下可觀的 completion token（思考也是照字數計費的）。
+ */
+const REASONING_DISABLED_MODELS = new Set([
+  'minimax/minimax-m3'
+]);
+
+function resolveReasoning(model, requestedReasoning, viaSharedKey) {
+  if (viaSharedKey && requestedReasoning && typeof requestedReasoning === 'object') {
+    return requestedReasoning;
+  }
+  return REASONING_DISABLED_MODELS.has(model) ? { enabled: false } : undefined;
+}
 /** 單次嵌入的最大筆數與每筆字元上限（避免一次請求塞爆邊緣運算配額）。 */
 const EMBED_MAX_BATCH = 64;
 const EMBED_MAX_CHARS = 3000;
@@ -80,6 +131,22 @@ function json(body, status, origin) {
  * 所以「缺 Origin」代表這不是從網頁來的請求（curl、腳本），正是要擋的情況。
  * 伺服器端或測試用途請帶 X-Undercurrent-Key 搭配 CLIENT_SHARED_KEY secret。
  */
+/**
+ * 決定這次請求要送哪些供應商。
+ * 帶測試金鑰時允許用 body.provider 直接指定 —— 逐家探測審查行為要靠它。
+ */
+function resolveProviderRouting(model, requestedProvider, viaSharedKey) {
+  if (viaSharedKey && requestedProvider && typeof requestedProvider === 'object') {
+    return requestedProvider;
+  }
+  const pinned = PINNED_PROVIDERS[model];
+  if (pinned && pinned.length) {
+    return { order: pinned, allow_fallbacks: false };
+  }
+  // 尚未釘選的模型仍以價格排序，並允許輪替，避免單一供應商故障就整條鏈失敗。
+  return { sort: 'price', allow_fallbacks: true };
+}
+
 function resolveOrigin(request, env) {
   const origin = request.headers.get('Origin');
   const sharedKey = request.headers.get('X-Undercurrent-Key');
@@ -212,7 +279,11 @@ function validateAndNormalizeBody(raw) {
         ? Math.max(1, Math.min(Math.floor(requestedMaxTokens), MAX_TOKENS_CEILING))
         : MAX_TOKENS_CEILING,
       stream: true
-    }
+    },
+    // 白名單之外但需要轉送的兩個欄位。它們不放進 body 是因為只有帶測試金鑰的
+    // 請求才准許覆寫 —— 一般玩家不該能指定供應商或自行開關思考。
+    requestedProvider: input.provider,
+    requestedReasoning: input.reasoning
   };
 }
 
@@ -567,9 +638,8 @@ export default {
         },
         body: JSON.stringify({
           ...body,
-          // 同一個模型在 OpenRouter 上常有多家供應商。以價格排序並允許自動輪替，
-          // 前一家失敗或限流時由下一家接手，不必在前端多花一次模型嘗試次數。
-          provider: { sort: 'price', allow_fallbacks: true }
+          provider: resolveProviderRouting(body.model, normalized.requestedProvider, viaSharedKey),
+          reasoning: resolveReasoning(body.model, normalized.requestedReasoning, viaSharedKey)
         })
       });
 

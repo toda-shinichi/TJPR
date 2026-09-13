@@ -1897,11 +1897,11 @@ const GENERATION_MODES = {
     PRIMARY_MODEL: 'deepseek/deepseek-v4-flash-0731',
     PRIMARY_MAX_ATTEMPTS: 2,
     FALLBACK_MAX_ATTEMPTS: 2,
-    FALLBACK_MODELS: ['google/gemma-4-26b-a4b-it']
+    FALLBACK_MODELS: ['minimax/minimax-m3']
   },
   spicy: {
-    label: '開車',
-    PRIMARY_MODEL: 'minimax/minimax-m3',
+    label: '露骨',
+    PRIMARY_MODEL: 'google/gemma-4-26b-a4b-it',
     PRIMARY_MAX_ATTEMPTS: 2,
     FALLBACK_MAX_ATTEMPTS: 2,
     FALLBACK_MODELS: ['cognitivecomputations/dolphin-mistral-24b-venice-edition']
@@ -3861,6 +3861,14 @@ function countRepeatedLiterarySentences(prose) {
     .forEach(sentence => counts.set(sentence, (counts.get(sentence) || 0) + 1));
   return Array.from(counts.values()).reduce((total, count) => total + Math.max(0, count - 1), 0);
 }
+/**
+ * 容許的簡體字數上限。
+ * 原本只要出現一個就整章退回重試 —— 那過於嚴苛：偶爾一兩個簡體字
+ * 讀者幾乎不會察覺，但重試要多花一次模型額度與數十秒等待，
+ * 代價遠高於瑕疵本身。超過這個數量才視為「模型整段切換成簡體」。
+ */
+const SIMPLIFIED_CHINESE_TOLERANCE = 5;
+
 
 function countSimplifiedChineseMarkers(prose) {
   return (String(prose || '').match(/[这为后发会门问见与东个来时说车书里边应过还从对将无现开关经处实试]/g) || []).length;
@@ -3901,7 +3909,9 @@ function assessLiteraryQuality(chapter, historyList = []) {
   if (repeatedSentenceCount) warnings.push(`完整句子重複（${repeatedSentenceCount} 次）`);
 
   const simplifiedChineseCount = countSimplifiedChineseMarkers(prose);
-  if (simplifiedChineseCount) warnings.push(`混入簡體字（${simplifiedChineseCount} 字）`);
+  if (simplifiedChineseCount > SIMPLIFIED_CHINESE_TOLERANCE) {
+    warnings.push(`混入簡體字（${simplifiedChineseCount} 字）`);
+  }
 
   const recentEchoLength = getLongestRecentLiteraryEcho(prose, historyList);
   if (recentEchoLength >= 12) warnings.push(`沿用近期回合措辭（連續 ${recentEchoLength} 字）`);
@@ -3932,7 +3942,7 @@ function assessLiteraryQuality(chapter, historyList = []) {
   if (formulaicClosure) warnings.push('結尾使用判詞式總結，缺少具體餘韻');
 
   return {
-    score: Math.max(0, 100 - clichéHits.length * 8 - Math.max(0, simileCount - 2) * 5 - repeatedSentenceCount * 8 - simplifiedChineseCount * 12 - Math.max(0, recentEchoLength - 11) * 3 - longChoices * 5 - (formulaicClosure ? 12 : 0) - warnings.length * 4),
+    score: Math.max(0, 100 - clichéHits.length * 8 - Math.max(0, simileCount - 2) * 5 - repeatedSentenceCount * 8 - Math.max(0, simplifiedChineseCount - SIMPLIFIED_CHINESE_TOLERANCE) * 12 - Math.max(0, recentEchoLength - 11) * 3 - longChoices * 5 - (formulaicClosure ? 12 : 0) - warnings.length * 4),
     warnings,
     metrics: { clichéHits, simileCount, repeatedSentenceCount, simplifiedChineseCount, recentEchoLength, sentenceCount: sentences.length, longChoices, formulaicClosure }
   };
@@ -3942,7 +3952,9 @@ function getLiteraryValidationError(chapter, historyList = []) {
   const quality = assessLiteraryQuality(chapter, historyList);
   if (quality.metrics.clichéHits.length >= 3) return `套路語過多（${quality.metrics.clichéHits.length} 項）`;
   if (quality.metrics.simileCount > 4) return `比喻訊號過密（${quality.metrics.simileCount} 次）`;
-  if (quality.metrics.simplifiedChineseCount) return `混入簡體字（${quality.metrics.simplifiedChineseCount} 字）`;
+  if (quality.metrics.simplifiedChineseCount > SIMPLIFIED_CHINESE_TOLERANCE) {
+    return `混入簡體字（${quality.metrics.simplifiedChineseCount} 字）`;
+  }
   if (quality.metrics.formulaicClosure) return '使用判詞式模板收尾';
   if (quality.metrics.repeatedSentenceCount >= 2) return `完整句子重複（${quality.metrics.repeatedSentenceCount} 次）`;
   if (quality.metrics.recentEchoLength >= 12) return `沿用近期回合措辭（連續 ${quality.metrics.recentEchoLength} 字）`;
