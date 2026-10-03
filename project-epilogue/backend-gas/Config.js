@@ -27,10 +27,9 @@ const CONFIG = {
     // 與 worker/index.js 的 ALLOWED_MODELS 保持一致
     ALLOWED_MODELS: [
       'deepseek/deepseek-v4-flash-0731',
-      'google/gemma-4-26b-a4b-it',
-      'minimax/minimax-m3',
-      'google/gemma-4-31b-it',
-      'cognitivecomputations/dolphin-mistral-24b-venice-edition'
+      'qwen/qwen3-235b-a22b-2507',
+      'qwen/qwen3-30b-a3b-instruct-2507',
+      'tencent/hy3'
     ],
     // 主要敘事模型：gemini-3.8-flash，備援 grok-4.6 → gemini-3.5-flash-lite
     // → minimaxai/minimax-m3。gemini 家族實測會自我審查、擋掉情慾內容，
@@ -40,13 +39,11 @@ const CONFIG = {
       // 一般敘事鏈（與前端 GENERATION_MODES.normal 對齊）
       PRIMARY: 'deepseek/deepseek-v4-flash-0731',
       PRIMARY_ATTEMPTS: 2,
-      FALLBACK: 'minimax/minimax-m3',
+      FALLBACK: 'qwen/qwen3-235b-a22b-2507',
       FALLBACK_ATTEMPTS: 2,
       // 露骨章節鏈（與前端 GENERATION_MODES.spicy 對齊）
-      SPICY_PRIMARY: 'google/gemma-4-26b-a4b-it',
-      SPICY_FALLBACK: 'google/gemma-4-31b-it',
-      // 最後防線：在地知識實測 7/10，只在前面全滅時才用，故僅給一次機會。
-      SPICY_FALLBACK_2: 'cognitivecomputations/dolphin-mistral-24b-venice-edition',
+      SPICY_PRIMARY: 'qwen/qwen3-30b-a3b-instruct-2507',
+      SPICY_FALLBACK: 'tencent/hy3',
       TEMPERATURE: 0.88,
       // 硬性截斷上限，不是用來控字數（字數由提示詞決定）。
       // 它的作用是防止無限擴寫並設成本上限。必須留足餘裕：
@@ -55,11 +52,13 @@ const CONFIG = {
       MAX_TOKENS: 6144,
       TOP_P: 0.95
     },
-    // 快速稽核模型 (Fast Auditor: aion-3.0-mini 首選，mistral-nemo 備援)
+    // 稽核與摘要模型。舊設定的 aion-3.0-mini／mistral-nemo 是前一家供應商的 ID，
+    // 在 OpenRouter 上不存在，遷移後這兩條管線都會直接失敗。
+    // 改用敘事鏈中實測最穩、最便宜的兩顆（台灣在地知識 10/10、設定遵循 6/6）。
     AUDITOR: {
-      PRIMARY: 'aion-3.0-mini',
-      FALLBACK_1: 'mistral-nemo',
-      FALLBACK: 'mistral-nemo',
+      PRIMARY: 'deepseek/deepseek-v4-flash-0731',
+      FALLBACK_1: 'qwen/qwen3-30b-a3b-instruct-2507',
+      FALLBACK: 'qwen/qwen3-30b-a3b-instruct-2507',
       TEMPERATURE: 0.2,
       MAX_TOKENS: 1500,
       TOP_P: 0.9

@@ -787,10 +787,15 @@ function handleLLMProxy(userSession, payload) {
       ? Math.max(1, Math.min(Math.floor(requestedTokens), CONFIG.MODELS.NARRATOR.MAX_TOKENS))
       : CONFIG.MODELS.NARRATOR.MAX_TOKENS;
     var temperature = Number(payload.temperature);
-    var result = AIService.callAPI(payload.model, safeMessages, {
+    var proxyOptions = {
       temperature: isFinite(temperature) ? Math.max(0, Math.min(2, temperature)) : CONFIG.MODELS.NARRATOR.TEMPERATURE,
       max_tokens: safeTokens
-    });
+    };
+    // 只放行 json_object：敘事回合要合法 JSON，摘要等純文字請求不帶此欄位
+    if (payload.response_format && payload.response_format.type === 'json_object') {
+      proxyOptions.response_format = { type: 'json_object' };
+    }
+    var result = AIService.callAPI(payload.model, safeMessages, proxyOptions);
     return createSuccessResponse(result);
   } catch (e) {
     return createErrorResponse('LLM Proxy failed: ' + e.message, 502);

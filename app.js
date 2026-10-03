@@ -1897,21 +1897,14 @@ const GENERATION_MODES = {
     PRIMARY_MODEL: 'deepseek/deepseek-v4-flash-0731',
     PRIMARY_MAX_ATTEMPTS: 2,
     FALLBACK_MAX_ATTEMPTS: 2,
-    FALLBACK_MODELS: ['minimax/minimax-m3']
+    FALLBACK_MODELS: ['qwen/qwen3-235b-a22b-2507']
   },
   spicy: {
     label: '露骨',
-    PRIMARY_MODEL: 'google/gemma-4-26b-a4b-it',
+    PRIMARY_MODEL: 'qwen/qwen3-30b-a3b-instruct-2507',
     PRIMARY_MAX_ATTEMPTS: 2,
     FALLBACK_MAX_ATTEMPTS: 2,
-    // dolphin 排在最後且只給一次機會：它在地知識實測 7/10，而且錯的正是
-    // 「七期重劃區在新北」這類會直接砸壞既定設定的題目（七期在台中，
-    // 是榮南營造的所在地）。它同時篇幅最短、上下文最短、只有一家供應商。
-    // 留著是因為它 7/7 露骨測試全過、最不會拒絕 —— 當最後一道防線剛好。
-    FALLBACK_MODELS: [
-      'google/gemma-4-31b-it',
-      { model: 'cognitivecomputations/dolphin-mistral-24b-venice-edition', attempts: 1 }
-    ]
+    FALLBACK_MODELS: ['tencent/hy3']
   }
 };
 const DEFAULT_GENERATION_MODE = 'normal';
@@ -1946,6 +1939,10 @@ const LLM_CONFIG = {
   //    由 detectRefusal 當場接手切換即可，不需事前警告。
   CENSORING_MODELS: [],
   MODELS: NARRATIVE_MODELS,
+  // 摘要池（長期記憶）用的模型。必須在 Worker 與 GAS 白名單內 ——
+  // 先前寫死的 aion-3.0-mini 在遷移到 OpenRouter 後不在白名單，摘要每次都被拒，
+  // 而錯誤被靜默吞掉，長期記憶因此停止更新。
+  SUMMARY_MODEL: 'deepseek/deepseek-v4-flash-0731',
   // 檢索用嵌入模型（走 Worker 的 /embed，由 Cloudflare Workers AI 提供）。
   // OpenRouter 型錄內沒有任何 embedding 模型，因此嵌入不與生成同源。
   EMBEDDING_MODEL: '@cf/baai/bge-m3',
@@ -2318,7 +2315,10 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
           ],
           temperature: LLM_CONFIG.TEMPERATURE,
           max_tokens: 6144,
-          stream: true
+          stream: true,
+          // 要求供應商在解碼層就只能產出合法 JSON。這是減少格式錯誤最根本的手段：
+          // 事後的寬鬆解析只能「救」，這裡是讓錯誤一開始就不會發生。
+          response_format: { type: 'json_object' }
         }),
         ...(controller ? { signal: controller.signal } : {})
       });
@@ -2433,16 +2433,8 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         }
         
         if (finalParsed && finalParsed.prose) {
-          // 會審查的模型是回 200 加拒絕語，不是回錯誤 —— 必須主動判定
-          const verdict = detectRefusal(finalParsed);
-          if (verdict.refused) throw createRefusalError(model, verdict.reason);
-          const validationError = getNarrativeValidationError(finalParsed);
-          if (validationError) throw new Error(`模型章節結構不完整：${validationError}`);
-          const literaryError = getLiteraryValidationError(finalParsed, state.chapterHistoryList);
-          if (literaryError && planIdx < modelsToTry.length - 1) {
-            throw new Error(`模型文學品質未達門檻：${literaryError}`);
-          }
-          if (literaryError) console.warn(`[Literary Quality] 最終備援仍有警告，保留可遊玩章節：${literaryError}`);
+          // 拒絕與正文過短才重跑；其餘就地修補或交給下一回修正（見 finalizeChapter）
+          await finalizeChapter(finalParsed, model);
           console.log(`[Worker] ${model} 成功（第 ${attemptNo} 次嘗試），正文 ${finalParsed.prose.length} 字、選項 ${(finalParsed.choices||[]).length} 個`);
           if (model !== primaryModel) noteUncensoredFallbackUsed(model, attemptNo);
           warnIfCensoringModel(model);
@@ -2747,6 +2739,127 @@ function getNarrativeValidationError(chapter) {
 }
 
 /**
+ * 生成結果的分流處理 —— 只有真正無法挽救的才重新生成。
+ *
+ * 先前的做法是任何品質問題都整章丟掉換模型重跑：混入幾個簡體字、選項少一個、
+ * 比喻多用一次，都要再付一次完整生成（數十秒＋費用）。這裡改成三類分流：
+ *
+ *   硬失敗（重跑）：拒絕生成、正文過短 —— 內容本身不存在，只能重來
+ *   可修補（就地修）：簡體字、非台灣用語、半形標點、缺時空欄位、選項數量不對
+ *   風格瑕疵（照收）：比喻過密、套路語、AI 腔 —— 交給下一回提示詞點名修正
+ *
+ * 選項修補是唯一需要呼叫模型的修補，但只請它補三個選項（數百 token），
+ * 成本約為重寫整章的十分之一。
+ */
+async function finalizeChapter(chapter, model) {
+  const verdict = detectRefusal(chapter);
+  if (verdict.refused) throw createRefusalError(model, verdict.reason);
+
+  const polished = normalizeChapterChinese(chapter);
+  if (polished) console.info(`[Polish] ${model}：就地修正 ${polished} 個字（簡繁／台灣用語／標點），未重新生成。`);
+
+  await repairChapterStructure(chapter, model);
+  const structureError = getNarrativeValidationError(chapter);
+  if (structureError) throw new Error(`模型章節結構不完整：${structureError}`);
+
+  const literaryError = getLiteraryValidationError(chapter, state.chapterHistoryList);
+  if (literaryError) {
+    console.info(`[Literary Quality] ${model}：${literaryError} —— 保留本章，將於下一回提示詞中點名修正。`);
+  }
+  return chapter;
+}
+
+/** 補齊可推斷的結構欄位；只有正文過短這類無法推斷的問題才留給上層重跑。 */
+async function repairChapterStructure(chapter, model) {
+  if (!chapter.statusPanel || typeof chapter.statusPanel !== 'object') chapter.statusPanel = {};
+  if (!String(chapter.statusPanel.timeLocation || '').trim()) {
+    // 時空欄位缺漏時沿用上一回 —— 同一場景的連續回合本來就常是同一時地
+    chapter.statusPanel.timeLocation = state.chapterData?.statusPanel?.timeLocation || '延續上一場景';
+  }
+
+  const validChoices = (Array.isArray(chapter.choices) ? chapter.choices : [])
+    .filter(c => c && typeof c === 'object' && String(c.label || '').trim());
+  if (validChoices.length > 3) validChoices.length = 3;
+  if (validChoices.length < 3 && String(chapter.prose || '').trim().length >= 220) {
+    const extra = await requestChoicesRepair(chapter.prose, validChoices, model);
+    validChoices.push(...extra.slice(0, 3 - validChoices.length));
+  }
+  const ids = ['A', 'B', 'C'];
+  const risks = ['low', 'mid', 'high'];
+  chapter.choices = validChoices.map((c, i) => ({
+    ...c,
+    id: ids[i],
+    risk: c.risk || risks[i],
+    hint: String(c.hint || '')
+  }));
+}
+
+/**
+ * 只請模型補選項，不重寫正文。
+ * 失敗時回傳空陣列，由 getNarrativeValidationError 判定為硬失敗 —— 這時才真的重跑。
+ */
+async function requestChoicesRepair(prose, existing, model) {
+  const need = 3 - existing.length;
+  if (need <= 0 || !LLM_CONFIG.WORKER_URL) return [];
+  const systemPrompt = '你是《暗流》的選項設計師，使用台灣繁體中文。只輸出一個 JSON 物件：'
+    + '{"choices":[{"label":"25–60 字，一個明確行動＋必要的一句話","risk":"low|mid|high","hint":"10–24 字"}]}';
+  const userPrompt = `--- 本回正文 ---\n${clampBlock(prose, 2400)}\n\n`
+    + (existing.length ? `--- 已有選項（不要重複）---\n${existing.map(c => c.label).join('\n')}\n\n` : '')
+    + `請補上 ${need} 個接續正文、彼此方向不同的選項。`;
+  try {
+    let ticket = '';
+    for (let attempt = 0; attempt < 6; attempt++) {
+      throwIfGenerationAborted();
+      const headers = { 'Content-Type': 'application/json', 'X-Undercurrent-Token': state.token || '' };
+      if (ticket) headers['X-Queue-Ticket'] = ticket;
+      const res = await fetch(LLM_CONFIG.WORKER_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+          temperature: 0.7,
+          max_tokens: 600,
+          stream: true,
+          response_format: { type: 'json_object' }
+        })
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        const q = parseQueueResponse(text);
+        if (q && q.queued && q.ticket) {
+          ticket = q.ticket;
+          await new Promise(r => setTimeout(r, q.waitMs));
+          continue;
+        }
+        return [];
+      }
+      let buf = '';
+      text.split('\n').forEach(line => {
+        if (!line.startsWith('data: ')) return;
+        const payload = line.slice(6).trim();
+        if (!payload || payload === '[DONE]') return;
+        try {
+          const o = JSON.parse(payload);
+          (o.choices || []).forEach(c => { buf += (c.delta && c.delta.content) || ''; });
+        } catch (e) { /* 不完整片段 */ }
+      });
+      const parsed = parseJsonSafely(buf);
+      const list = (parsed && Array.isArray(parsed.choices)) ? parsed.choices : [];
+      const cleaned = list
+        .filter(c => c && String(c.label || '').trim())
+        .map(c => ({ label: polishTaiwaneseText(c.label), risk: c.risk, hint: polishTaiwaneseText(c.hint || '') }));
+      console.info(`[Repair] ${model}：只補 ${cleaned.length} 個選項，未重寫正文。`);
+      return cleaned;
+    }
+  } catch (err) {
+    if (isGenerationAbortError(err)) throw err;
+    console.warn('[Repair] 選項修補失敗，交由模型鏈重試：', err);
+  }
+  return [];
+}
+
+/**
  * 建立這一回的模型嘗試計畫：
  *   Gemini × 2 → Mistral → Dolphin。Worker 與 GAS 共用這一份固定計畫。
  */
@@ -2842,6 +2955,7 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
           ],
           temperature: LLM_CONFIG.TEMPERATURE,
           max_tokens: 6144,
+          response_format: { type: 'json_object' },
           token: state.token,
           userId: state.userId
         }),
@@ -2874,25 +2988,14 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
       const rawContent = data.data.content;
       const parsed = parseJsonSafely(rawContent);
       if (parsed && parsed.prose) {
-        const verdict = detectRefusal(parsed);
-        if (verdict.refused) {
-          console.warn(`[Pure AI] ${model} 被判定為拒絕／審查（${verdict.reason}），改試下一個。`);
-          reportGenerationProgress(model, mIdx + 1, models.length, '被拒絕，改試下一個');
+        try {
+          await finalizeChapter(parsed, model);
+        } catch (finalizeErr) {
+          if (isGenerationAbortError(finalizeErr)) throw finalizeErr;
+          console.warn(`[Pure AI] ${model} 無法使用（${finalizeErr.message}），改試下一個。`);
+          reportGenerationProgress(model, mIdx + 1, models.length, '無法使用，改試下一個');
           continue;
         }
-        const validationError = getNarrativeValidationError(parsed);
-        if (validationError) {
-          console.warn(`[Pure AI] ${model} 章節結構不完整（${validationError}），改試下一個。`);
-          reportGenerationProgress(model, mIdx + 1, models.length, '結構不完整，改試下一個');
-          continue;
-        }
-        const literaryError = getLiteraryValidationError(parsed, state.chapterHistoryList);
-        if (literaryError && mIdx < models.length - 1) {
-          console.warn(`[Pure AI] ${model} 文學品質未達門檻（${literaryError}），改試下一個。`);
-          reportGenerationProgress(model, mIdx + 1, models.length, '文學品質不足，改試下一個');
-          continue;
-        }
-        if (literaryError) console.warn(`[Literary Quality] 最終 GAS 備援仍有警告，保留可遊玩章節：${literaryError}`);
         console.log(`[Pure AI] Successfully generated with model: ${model} via proxy (${parsed.prose.length} chars)`);
         if (model !== LLM_CONFIG.PRIMARY_MODEL) noteUncensoredFallbackUsed(model, mIdx + 1);
         warnIfCensoringModel(model);
@@ -3850,9 +3953,82 @@ function collectRecentStyleEchoes(historyList) {
   return LITERARY_CLICHE_PATTERNS.filter(phrase => prose.includes(phrase)).slice(0, 8);
 }
 
+/**
+ * AI 腔偵測（取自「去 AI 感與台灣用語」守則，改寫為小說適用版）。
+ *
+ * 偵測結果「不」觸發重新生成 —— 重跑一次要數十秒與一次完整費用，
+ * 而這些都是可以靠下一回提醒修正的文風習慣。它們會被寫進下一回的
+ * 提示詞，點名要模型避開，讓文風逐回收斂。
+ *
+ * 與通用文章規則的差異：驚嘆號與破折號只限制旁白，對白不受限 ——
+ * 角色講話本來就需要「！」與「——」表現情緒與被打斷。
+ */
+const AI_FLAVOR_CONTRAST_PATTERNS = [
+  /不是[^。！？\n]{1,20}[，,]?\s*而是/g,
+  /並非[^。！？\n]{1,20}而是/g,
+  /與其說[^。！？\n]{1,24}不如說/g,
+  /看似[^。！？\n]{1,20}(?:實則|其實)/g,
+  /你以為[^。！？\n]{1,24}其實/g,
+  /不只是[^。！？\n]{1,20}更是/g
+];
+const AI_FLAVOR_OBSCURE_WORDS = [
+  '氤氳', '繾綣', '闌珊', '旖旎', '婆娑', '蹁躚', '嫋嫋', '踽踽', '惘然', '悵惘', '喟嘆',
+  '翩然', '澄澈', '清冽', '靜謐', '恬淡', '嫣然', '潸然', '泫然', '罅隙', '漫漶', '熨貼',
+  '熨帖', '淬鍊', '滌盪', '蘊藉', '雋永', '邈遠', '杳然', '寂寥', '蕭索', '迤邐'
+];
+const AI_FLAVOR_THERAPY_WORDS = [
+  '被看見', '被聽見', '接住了', '安放', '允許自己', '溫柔以待', '療癒', '精神內耗',
+  '鬆弛感', '松弛感', '儀式感', '情緒價值', '與自己和解', '做自己的光', '歲月靜好', '煙火氣'
+];
+const AI_FLAVOR_SUBLIMATION_WORDS = [
+  '命運的齒輪', '靈魂深處', '宿命般', '這就是人生', '某種救贖', '生命的意義', '時間彷彿靜止'
+];
+
+function stripDialogue(prose) {
+  return String(prose || '').replace(/「[^」]*」|『[^』]*』/g, '');
+}
+
+function detectAiFlavor(prose) {
+  const text = String(prose || '');
+  const narration = stripDialogue(text);
+  const issues = [];
+  const contrast = AI_FLAVOR_CONTRAST_PATTERNS
+    .reduce((n, re) => n + (text.match(re) || []).length, 0);
+  if (contrast > 1) issues.push(`「不是…而是／與其說…不如說」這類對比翻轉句出現 ${contrast} 次（上限 1 次）`);
+  const obscure = AI_FLAVOR_OBSCURE_WORDS.filter(w => text.includes(w));
+  if (obscure.length) issues.push(`生冷文藝詞：${obscure.slice(0, 5).join('、')}`);
+  const therapy = AI_FLAVOR_THERAPY_WORDS.filter(w => text.includes(w));
+  if (therapy.length) issues.push(`心理勵志腔：${therapy.slice(0, 5).join('、')}`);
+  const sublimation = AI_FLAVOR_SUBLIMATION_WORDS.filter(w => text.includes(w));
+  if (sublimation.length) issues.push(`昇華句：${sublimation.slice(0, 3).join('、')}`);
+  const narrationExclaim = (narration.match(/[！!]/g) || []).length;
+  if (narrationExclaim) issues.push(`旁白用了 ${narrationExclaim} 個驚嘆號（旁白不用驚嘆號，只留給對白）`);
+  const narrationDash = (narration.match(/——/g) || []).length;
+  if (narrationDash > 2) issues.push(`旁白破折號 ${narrationDash} 處（上限 2 處）`);
+  return issues;
+}
+
+/**
+ * 從上一回正文算出需要修正的文風瑕疵，交給本回提示詞。
+ * 這是「不重跑也能提升品質」的核心：瑕疵不會被丟棄重寫，而是成為下一回的具體指示。
+ */
+function buildPreviousTurnStyleNote(historyList) {
+  const last = (Array.isArray(historyList) ? historyList : []).slice(-1)[0];
+  const prose = String(last?.prose || '');
+  if (!prose) return '';
+  const issues = detectAiFlavor(prose);
+  const simileCount = countLiterarySimiles(prose);
+  if (simileCount > 3) issues.push(`比喻詞「像、彷彿、如同、宛如」用了 ${simileCount} 次（上限 3 次）`);
+  const cliches = LITERARY_CLICHE_PATTERNS.filter(phrase => prose.includes(phrase));
+  if (cliches.length) issues.push(`套路語：${cliches.slice(0, 4).join('、')}`);
+  if (!issues.length) return '';
+  return `- 上一回已出現以下文風瑕疵，本回務必改掉：\n${issues.map(i => `  · ${i}`).join('\n')}`;
+}
+
 function buildLiteraryCraftBlock(turnCount, historyList) {
   const rhythm = getSceneRhythm(turnCount);
   const echoes = collectRecentStyleEchoes(historyList);
+  const previousStyleNote = buildPreviousTurnStyleNote(historyList);
   return `【本回文學敘事規格（優先於氣氛口號，僅次於人物設定與事實連續性）】
 - 敘事視角：貼近玩家感官的限知第二人稱；只寫當下可察覺或合理推斷之事，不替其他角色解說內心。
 - 文體：台灣當代都會黑色小說。用精準名詞、動詞與可驗證細節形成質感；克制形容詞，避免把「高級、危險、壓迫、性感」當成結論反覆宣告。
@@ -3867,6 +4043,10 @@ function buildLiteraryCraftBlock(turnCount, historyList) {
 - 本回節奏角色：${rhythm.name}——${rhythm.brief}
 - 通用反套路：避免使用「${LITERARY_CLICHE_PATTERNS.join('、')}」及其近義改寫；若確有必要，整回最多只能出現其中一項。
 - 近期三回已出現、尤其不可再用：${echoes.length ? echoes.join('、') : '無；仍須遵守通用反套路'}。
+- 去 AI 腔：「不是…而是／與其說…不如說／看似…實則／你以為…其實」這類對比翻轉句整回最多 1 次；不寫把具體物件接到人生、命運、靈魂、救贖的昇華句與金句；三個詞或三個短句同構連排最多 1 次。
+- 用字：國中生看得懂。不用生冷文藝詞（氤氳、繾綣、旖旎、婆娑、靜謐、澄澈、寂寥等），重的情緒用輕的字；不用心理勵志腔（被看見、接住、安放、療癒、與自己和解）。
+- 台灣用語與字形：捷運、計程車、影片、訊息、品質、立刻；裡、著、為、溫；標點一律全形，引號用「」，刪節號用……。
+- 驚嘆號與破折號只用在對白裡：旁白不用驚嘆號，旁白破折號整回最多 2 處。${previousStyleNote ? '\n' + previousStyleNote : ''}
 - 三個選項各自只寫「一個明確行動＋必要的一句話」，label 建議 25–60 字，hint 建議 10–24 字；不要把選項寫成另一段正文。`;
 }
 
@@ -3885,6 +4065,166 @@ function countRepeatedLiterarySentences(prose) {
     .forEach(sentence => counts.set(sentence, (counts.get(sentence) || 0) + 1));
   return Array.from(counts.values()).reduce((total, count) => total + Math.max(0, count - 1), 0);
 }
+/**
+ * 簡體字就地轉繁體。
+ *
+ * 為什麼不是「退回重跑」：模型偶爾混入簡體字是用字瑕疵，不是內容錯誤。
+ * 先前一章混入 48 個簡體字就整章丟掉換模型，等於花一次完整生成
+ * （數十秒＋費用）去修一個查表就能修好的問題。
+ *
+ * 只收錄「繁體中文不存在或極罕用」的簡體字。后、里、发、干、只、面、台、
+ * 余、系、制、复、冲、划、脏、准、斗 這類在繁體中本身就是合法字
+ * （皇后、公里、若干、只有、台灣），盲目替換會把正確的字改錯，
+ * 因此只透過下方的詞組表、在明確語境中轉換。
+ */
+const S2T_CHAR_MAP = (() => {
+  const pairs = '这這为為会會门門问問见見与與东東个個来來时時说說车車书書边邊应應过過还還从從对對将將无無现現开開关關经經处處实實试試'
+    + '们們么麼样樣让讓认認识識话話语語请請谁誰记記讲講设設该該读讀调調谈談论論证證议議诉訴词詞译譯访訪订訂计計许許讨討评評诗詩误誤课課谢謝谓謂谜謎谎謊诱誘诺諾'
+    + '给給结結绝絕统統维維线線练練组組细細终終红紅纸紙级級约約纪紀织織绕繞绪緒续續绳繩编編缓緩缘緣绑綁绿綠继繼缠纏网網纳納纷紛纯純绍紹'
+    + '钱錢银銀铁鐵锁鎖错錯键鍵镜鏡针針钥鑰链鏈锐銳钢鋼铺鋪锋鋒钻鑽间間闻聞闭閉闪閃闲閒阅閱阔闊闯闖'
+    + '头頭买買卖賣气氣爱愛听聽声聲觉覺学學体體动動场場战戰难難鸡雞鸟鳥马馬驾駕驶駛验驗骑騎驱驅'
+    + '带帶帮幫师師归歸当當录錄国國图圖园園围圍岁歲压壓厅廳厨廚产產亲親众眾传傳伤傷价價优優侦偵侧側俩倆债債儿兒农農'
+    + '决決况況净淨冻凍凤鳳击擊则則刚剛创創删刪别別办辦务務劳勞势勢单單卫衛厉厲双雙变變叙敘号號叹嘆吗嗎吓嚇启啟员員呜嗚响響哑啞唤喚团團'
+    + '坏壞块塊坚堅坛壇坟墳尘塵备備夺奪奋奮妈媽妇婦宁寧宝寶宽寬审審宫宮寻尋导導尔爾尝嘗层層屡屢岛島岭嶺币幣帅帥帐帳'
+    + '庆慶库庫废廢广廣张張弹彈强強彻徹忆憶忧憂怀懷态態总總恋戀恼惱悬懸惊驚惧懼惨慘愿願户戶'
+    + '扑撲执執扩擴扫掃扬揚抚撫抢搶护護报報担擔拥擁择擇挂掛挡擋挣掙挤擠挥揮损損捡撿换換据據掷擲揽攬搂摟携攜摄攝摆擺'
+    + '数數敌敵断斷旧舊显顯晓曉晕暈暂暫术術杀殺杂雜权權条條杨楊极極构構枪槍柜櫃标標栏欄树樹桥橋梦夢检檢楼樓欢歡残殘毕畢'
+    + '汇匯汉漢没沒沟溝泪淚泽澤洁潔浅淺测測济濟浓濃涌湧润潤涨漲渐漸温溫湿濕满滿滚滾灭滅灯燈灵靈灾災炉爐烟煙热熱焕煥爷爺'
+    + '牵牽犹猶狱獄独獨猎獵环環玛瑪电電画畫畅暢疗療痒癢皱皺盏盞盘盤睁睜确確礼禮祸禍离離种種积積称稱稳穩穷窮'
+    + '笔筆笼籠筑築签簽简簡类類紧緊罗羅罚罰职職联聯聪聰肃肅胁脅脉脈脑腦脸臉腾騰节節苏蘇荣榮药藥获獲虽雖'
+    + '补補衬襯袜襪装裝视視览覽触觸贝貝负負贡貢财財责責贤賢败敗货貨质質贩販贪貪购購贯貫贴貼贵貴费費贺賀资資赌賭赏賞赔賠赖賴'
+    + '赶趕赵趙跃躍践踐轨軌转轉轮輪软軟轻輕载載较較辆輛输輸辽遼达達迁遷运運进進远遠违違连連迟遲选選适適递遞逻邏遗遺'
+    + '邻鄰郑鄭酱醬释釋长長队隊阳陽阴陰阵陣阶階际際陆陸陈陳险險随隨隐隱雾霧顶頂项項顺順须須顾顧顿頓预預领領频頻题題颜顏额額'
+    + '风風飞飛饭飯饮飲饱飽饿餓馆館鱼魚鲜鮮龙龍着著尽盡叶葉历歷'
+    // 動作、身體與情慾描寫的高頻字（露骨章節最常出現的漏網之魚）
+    + '拨撥抛拋摇搖撑撐拦攔搅攪颤顫骤驟喷噴啧嘖颈頸肤膚肠腸胀脹腻膩凉涼烫燙渗滲'
+    + '缝縫绷繃缩縮绵綿缕縷纤纖络絡纠糾纵縱绣繡颗顆颊頰齿齒龄齡侣侶惩懲恳懇愤憤'
+    + '婴嬰娇嬌妩嫵妆妝艳艷浑渾浊濁闷悶闹鬧阁閣窃竊宾賓诞誕诡詭谋謀谨謹谐諧谊誼'
+    + '讯訊讶訝讽諷询詢详詳诚誠诊診嘱囑呛嗆咙嚨饶饒馋饞鬓鬢铃鈴锦錦镯鐲钮鈕铜銅'
+    + '窝窩帘簾灿燦烂爛炼煉烁爍烧燒迹跡逊遜遥遙邮郵鸣鳴齐齊颅顱挠撓挞撻搀攙'
+    // 港式與異體字形：繁體但非台灣慣用寫法
+    + '裏裡綫線衞衛爲為説說麪麵啓啟峯峰羣群温溫';
+  const map = new Map();
+  for (let i = 0; i + 1 < pairs.length; i += 2) map.set(pairs[i], pairs[i + 1]);
+  return map;
+})();
+
+/** 一字多義的簡體字：只在明確詞組中轉換，其餘保持原樣（它們在繁體中也是合法字）。 */
+const S2T_PHRASES = [
+  // 后 → 後（皇后、王后、太后、后羿 等保持不變）
+  ['之后', '之後'], ['然后', '然後'], ['最后', '最後'], ['以后', '以後'], ['后来', '後來'],
+  ['后面', '後面'], ['后悔', '後悔'], ['背后', '背後'], ['身后', '身後'], ['随后', '隨後'],
+  ['前后', '前後'], ['后头', '後頭'], ['后退', '後退'], ['后果', '後果'], ['后方', '後方'],
+  ['落后', '落後'], ['后宫', '後宮'], ['事后', '事後'], ['午后', '午後'], ['今后', '今後'], ['后颈', '後頸'], ['后背', '後背'],
+  // 里 → 裡（公里、里長、鄰里 等保持不變）
+  ['这里', '這裡'], ['那里', '那裡'], ['哪里', '哪裡'], ['里面', '裡面'], ['心里', '心裡'],
+  ['家里', '家裡'], ['屋里', '屋裡'], ['眼里', '眼裡'], ['手里', '手裡'], ['怀里', '懷裡'],
+  ['夜里', '夜裡'], ['话里', '話裡'], ['房里', '房裡'], ['车里', '車裡'], ['口袋里', '口袋裡'],
+  // 发 → 髮（頭髮相關），其餘一律 → 發
+  ['头发', '頭髮'], ['頭发', '頭髮'], ['发丝', '髮絲'], ['发梢', '髮梢'], ['发型', '髮型'],
+  ['长发', '長髮'], ['短发', '短髮'], ['黑发', '黑髮'], ['白发', '白髮'], ['秀发', '秀髮'],
+  ['毛发', '毛髮'], ['发际', '髮際'], ['发尾', '髮尾'], ['湿发', '濕髮'], ['乱发', '亂髮'],
+  // 只 → 隻（量詞）
+  ['一只手', '一隻手'], ['两只手', '兩隻手'], ['一只眼', '一隻眼'],
+  // 干 → 乾／幹
+  ['干净', '乾淨'], ['干燥', '乾燥'], ['干脆', '乾脆'], ['干嘛', '幹嘛'], ['干什么', '幹什麼'],
+  // 其他高頻詞
+  ['日历', '日曆'], ['钟表', '鐘錶'], ['手表', '手錶'], ['面条', '麵條'], ['出租车', '計程車'],
+  ['准备', '準備'], ['标准', '標準'], ['复杂', '複雜'], ['重复', '重複'], ['恢复', '恢復'], ['回复', '回覆']
+];
+
+function convertSimplifiedToTraditional(text) {
+  let out = String(text == null ? '' : text);
+  if (!out) return out;
+  // 先處理詞組，再處理單字 —— 順序反過來的話「头发」會先變成「頭发」而錯過髮
+  for (const [s, t] of S2T_PHRASES) {
+    if (out.includes(s)) out = out.split(s).join(t);
+  }
+  let converted = '';
+  for (const ch of out) converted += S2T_CHAR_MAP.get(ch) || ch;
+  // 詞組處理完後仍殘留的「发」一律視為「發」（髮的情境已在詞組表中處理）
+  return converted.replace(/发/g, '發');
+}
+
+/**
+ * 非台灣用語 → 台灣用語。
+ * 只收「一對一、在小說語境中不會誤傷」的詞。刻意排除的例子：
+ *  - 酒店：在台灣指有陪侍的場所，黑幫背景的故事裡很可能是刻意用的
+ *  - 土豆：台灣指花生，不能換成馬鈴薯
+ *  - 領導、顏值、內卷：台灣口語也在用，換掉反而不自然
+ * 取自「去 AI 感與台灣用語」守則的非台灣用語表。
+ */
+const TAIWAN_TERM_REPLACEMENTS = [
+  ['出租車', '計程車'], ['的士', '計程車'], ['打車', '叫車'], ['地鐵', '捷運'], ['公交車', '公車'],
+  ['視頻', '影片'], ['短信', '簡訊'], ['信息', '訊息'], ['手機號', '手機號碼'], ['郵箱', '電子信箱'],
+  ['屏幕', '螢幕'], ['網絡', '網路'], ['軟件', '軟體'], ['賬號', '帳號'], ['搜索', '搜尋'],
+  ['質量', '品質'], ['身份證', '身分證'], ['身份', '身分'], ['公佈', '公布'],
+  ['立馬', '立刻'], ['靠譜', '可靠'], ['小區', '社區'], ['服務員', '服務生'],
+  ['盒飯', '便當'], ['方便麵', '泡麵'], ['西紅柿', '番茄'], ['酸奶', '優格'],
+  ['冰激凌', '冰淇淋'], ['菠蘿', '鳳梨'], ['獼猴桃', '奇異果'], ['三文魚', '鮭魚'],
+  ['充電寶', '行動電源'], ['U盤', '隨身碟'], ['點贊', '按讚'], ['反饋', '回饋'],
+  ['水平很高', '水準很高'], ['性價比', 'CP 值'], ['咱們', '我們'], ['啥', '什麼'], ['咋', '怎麼']
+];
+
+/**
+ * 標點正規化：半形 → 全形、引號 → 「」、刪節號 → ……
+ * 只轉換「夾在中文之間」的半形標點，避免破壞 BMW X6、M60i、3.5 這類英數。
+ */
+function normalizeChinesePunctuation(text) {
+  let out = String(text == null ? '' : text);
+  if (!out) return out;
+  // 先轉引號：後面判斷「標點是否夾在中文之間」時，引號必須已經是全形
+  // 成對的彎引號才轉換；落單的不動，以免錯配
+  out = out.replace(/“([^“”]*)”/g, '「$1」').replace(/‘([^‘’]*)’/g, '『$1』');
+  out = out.replace(/\.{3,}|。{3,}|…(?!…)/g, '……').replace(/…{3,}/g, '……');
+  const cjk = '\u3400-\u9fff\uff00-\uffef「」『』';
+  const map = { ',': '，', '.': '。', '?': '？', '!': '！', ':': '：', ';': '；' };
+  out = out.replace(new RegExp(`([${cjk}])([,.?!:;])(?=[${cjk}\\s]|$)`, 'g'), (m, a, p) => a + map[p]);
+  return out;
+}
+
+function applyTaiwanTerms(text) {
+  let out = String(text == null ? '' : text);
+  for (const [from, to] of TAIWAN_TERM_REPLACEMENTS) {
+    if (out.includes(from)) out = out.split(from).join(to);
+  }
+  return out;
+}
+
+/** 單一欄位的完整潤飾：簡繁 → 台灣用語 → 標點。 */
+function polishTaiwaneseText(text) {
+  return normalizeChinesePunctuation(applyTaiwanTerms(convertSimplifiedToTraditional(text)));
+}
+
+/** 把章節中所有玩家看得到的文字欄位轉為繁體，回傳轉換了幾個字。 */
+function normalizeChapterChinese(chapter) {
+  if (!chapter || typeof chapter !== 'object') return 0;
+  let changed = 0;
+  const fix = value => {
+    if (typeof value !== 'string' || !value) return value;
+    const next = polishTaiwaneseText(value);
+    if (next !== value) {
+      for (let i = 0; i < value.length; i += 1) if (value[i] !== next[i]) changed += 1;
+    }
+    return next;
+  };
+  chapter.prose = fix(chapter.prose);
+  chapter.chapterTitle = fix(chapter.chapterTitle);
+  if (chapter.statusPanel && typeof chapter.statusPanel === 'object') {
+    for (const key of Object.keys(chapter.statusPanel)) {
+      chapter.statusPanel[key] = fix(chapter.statusPanel[key]);
+    }
+  }
+  if (Array.isArray(chapter.choices)) {
+    chapter.choices.forEach(choice => {
+      if (!choice || typeof choice !== 'object') return;
+      choice.label = fix(choice.label);
+      choice.hint = fix(choice.hint);
+    });
+  }
+  return changed;
+}
+
 /**
  * 容許的簡體字數上限。
  * 原本只要出現一個就整章退回重試 —— 那過於嚴苛：偶爾一兩個簡體字
@@ -4209,7 +4549,7 @@ async function triggerRollingSummaryUpdate(turnCount) {
       },
       body: JSON.stringify({
         action: 'llm/proxy',
-        model: 'aion-3.0-mini',
+        model: LLM_CONFIG.SUMMARY_MODEL,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -4223,9 +4563,18 @@ async function triggerRollingSummaryUpdate(turnCount) {
       signal: AbortSignal.timeout(90000)
     });
 
+    if (!response.ok) {
+      // 先前這裡沒有任何記錄 —— 摘要池壞了三週都沒人發現。
+      console.warn(`[MemoryPipeline] 摘要池更新失敗（HTTP ${response.status}），長期記憶本回未更新。`);
+    }
     if (response.ok) {
       const data = await response.json();
-      const newSummary = data.success && data.data?.content?.trim();
+      if (!data.success) {
+        console.warn('[MemoryPipeline] 摘要池更新被拒：', data.error || data.message || data);
+      }
+      const rawSummary = data.success && data.data?.content?.trim();
+      // 摘要同樣會被注入每一回的提示詞，簡體字與非台灣用語要在這裡就清掉
+      const newSummary = rawSummary ? polishTaiwaneseText(rawSummary) : rawSummary;
       const stillCurrent = state.saveState === sourceState && state.token === sourceToken
         && state.saveState.turnCount === turnCount
         && (state.saveState.summaryPool || '') === sourceSummary

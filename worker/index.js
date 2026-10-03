@@ -27,31 +27,12 @@ const EMBEDDING_MODEL = '@cf/baai/bge-m3';
  * 也不要靜默掉到未驗證的供應商上。
  */
 const PINNED_PROVIDERS = {
-  // 由便宜排到貴，全部經過 L4 露骨實測。
-  // 排除 baidu（只寫得出文學化程度）與 digitalocean（回空回應）。
-  'deepseek/deepseek-v4-flash-0731': [
-    'open-inference/fp8', 'relace/fp4', 'deepinfra/fp8',
-    'streamlake/fp8', 'sail-research/fp4'
-  ],
-  // 實測 10 家全數通過（含 Google 自家 Vertex），故純粹依價格與延遲取捨。
-  // deepinfra(36.7s) 與 makora(19.7s) 明顯偏慢，排在後面。
-  'google/gemma-4-26b-a4b-it': [
-    'darkbloom', 'dekallm/bf16', 'nextbit/bf16',
-    'cloudflare', 'novita/bf16'
-  ],
-  // 此模型的供應商差異最大：最便宜的 coreweave 以及 streamlake／venice／minimax
-  // 四家都會拒絕生成，必須明確排除 —— 這正是不能只寫 sort:'price' 的理由。
-  // 名單內四家經三輪測試全數通過（需搭配 REASONING_DISABLED_MODELS）。
-  'minimax/minimax-m3': [
-    'gmicloud/fp8', 'deepinfra/fp8', 'novita/fp8', 'together'
-  ],
-  // 實測 7/7 供應商通過，依價格排序；deepinfra/turbo 於白名單放行前測失敗，
-  // 其餘皆可用。稠密 31B 明顯較慢（約 48 秒），故僅作備援。
-  'google/gemma-4-31b-it': [
-    'coreweave/fp4', 'venice/bf16', 'chutes/fp4', 'deepinfra/fp8', 'friendli'
-  ],
-  // 僅此一家提供，無從挑選。
-  'cognitivecomputations/dolphin-mistral-24b-venice-edition': ['venice/fp16']
+  // 2026-10-03 實測（強制 JSON＋關思考）：parasail 平均 5–7 秒、111 字／秒、3/3 完整可用，
+  // 比 streamlake／sail-research 快 2.5 倍以上；novita 次之但曾只寫 128 字。
+  'deepseek/deepseek-v4-flash-0731': ['parasail/fp8', 'novita/fp8', 'streamlake/fp8'],
+  // 實測 streamlake 2/2 完整可用、分數 100、11.6 秒
+  'qwen/qwen3-30b-a3b-instruct-2507': ['streamlake', 'dekallm', 'siliconflow/fp8']
+  // qwen3-235b 與 hy3 尚未逐家實測完畢，暫依價格排序並允許輪替
 };
 
 /**
@@ -61,7 +42,10 @@ const PINNED_PROVIDERS = {
  * 同時省下可觀的 completion token（思考也是照字數計費的）。
  */
 const REASONING_DISABLED_MODELS = new Set([
-  'minimax/minimax-m3'
+  'deepseek/deepseek-v4-flash-0731',
+  'tencent/hy3'
+  // qwen 的 -2507 instruct 版本不帶 reasoning 參數（思考版是獨立的 model ID），
+  // 列進來只會送出一個供應商看不懂的欄位。
 ]);
 
 function resolveReasoning(model, requestedReasoning, viaSharedKey) {
@@ -92,13 +76,10 @@ const RATE_LIMIT = { windowSeconds: 60, maxRequests: 12 };
 const ALLOWED_MODELS = [
   // 一般敘事鏈：主力 → 備援
   'deepseek/deepseek-v4-flash-0731',
-  'google/gemma-4-26b-a4b-it',
-  // 情慾章節鏈：主力 → 備援（皆不自我審查）
-  'minimax/minimax-m3',
-  'cognitivecomputations/dolphin-mistral-24b-venice-edition',
-  // 露骨鏈備援 1（實測 7/7 供應商通過、在地知識 10/10）。
-  // gemma-3-27b 實測四家供應商全數拒絕 L4，不列入。
-  'google/gemma-4-31b-it'
+  'qwen/qwen3-235b-a22b-2507',
+  // 露骨鏈：主力 → 備援
+  'qwen/qwen3-30b-a3b-instruct-2507',
+  'tencent/hy3'
 ];
 
 // 已移除的模型與原因（保留紀錄以免日後重蹈）：
@@ -291,7 +272,12 @@ function validateAndNormalizeBody(raw) {
     // 白名單之外但需要轉送的兩個欄位。它們不放進 body 是因為只有帶測試金鑰的
     // 請求才准許覆寫 —— 一般玩家不該能指定供應商或自行開關思考。
     requestedProvider: input.provider,
-    requestedReasoning: input.reasoning
+    requestedReasoning: input.reasoning,
+    // 只接受 json_object：敘事回合要求合法 JSON，摘要池等純文字請求則不帶這個欄位。
+    // 不做全域強制，否則會把摘要池的純文字輸出逼成 JSON 而整個壞掉。
+    responseFormat: (input.response_format && input.response_format.type === 'json_object')
+      ? { type: 'json_object' }
+      : undefined
   };
 }
 
@@ -647,7 +633,8 @@ export default {
         body: JSON.stringify({
           ...body,
           provider: resolveProviderRouting(body.model, normalized.requestedProvider, viaSharedKey),
-          reasoning: resolveReasoning(body.model, normalized.requestedReasoning, viaSharedKey)
+          reasoning: resolveReasoning(body.model, normalized.requestedReasoning, viaSharedKey),
+          response_format: normalized.responseFormat
         })
       });
 

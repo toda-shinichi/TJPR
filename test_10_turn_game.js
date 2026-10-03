@@ -8,8 +8,8 @@ const LIVE_TOKEN = process.env.TJPR_LIVE_TOKEN || '';
 const MODEL_ATTEMPT_PLAN = [
   MODEL,
   MODEL,
-  'google/gemma-4-26b-a4b-it',
-  'google/gemma-4-26b-a4b-it'
+  'qwen/qwen3-235b-a22b-2507',
+  'qwen/qwen3-235b-a22b-2507'
 ];
 const TURN_COUNT = Math.max(1, Number(process.env.TJPR_TURN_COUNT) || 10);
 const LITERARY_GATE = process.env.TJPR_LITERARY_GATE === '1';

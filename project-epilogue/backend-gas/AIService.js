@@ -4,7 +4,7 @@
  * 
  * 透過相容 OpenAI 的 API 端點（https://openrouter.ai/api/v1）驅動雙模型管線：
  * 1. 主要敘事模型 (Narrator: gemini-3.8-flash，備援 grok-4.6 / gemini-3.5-flash-lite / minimax-m3)
- * 2. 快速稽核模型 (Fast Auditor: aion-3.0-mini / 備用 mistral-nemo)
+ * 2. 快速稽核模型 (Fast Auditor: deepseek-v4-flash / 備用 qwen3-30b-a3b)
  */
 
 var AIService = (function() {
@@ -80,6 +80,17 @@ var AIService = (function() {
 
     if (options.response_format) {
       payload.response_format = options.response_format;
+    }
+    // 與 Worker 一致：釘選實測可用的供應商、關閉思考鏈。
+    // 少了這兩項，GAS 備援會落到最便宜（未必可用）的供應商，並白付思考的 token。
+    var pinned = (CONFIG.MODELS.PROVIDERS || {})[targetModel];
+    if (pinned && pinned.length) {
+      payload.provider = { order: pinned, allow_fallbacks: false };
+    } else {
+      payload.provider = { sort: 'price', allow_fallbacks: true };
+    }
+    if ((CONFIG.MODELS.REASONING_OFF || []).indexOf(targetModel) !== -1) {
+      payload.reasoning = { enabled: false };
     }
 
     var requestHeaders = {
@@ -294,7 +305,7 @@ var AIService = (function() {
 
   /**
    * 快速稽核與記憶模型 (Fast Auditor: gemini-3.6-flash)：
-   * 順位：aion-3.0-mini -> mistral-nemo (備援)
+   * 順位：deepseek-v4-flash -> qwen3-30b-a3b (備援)
    * 每 5 回合壓縮更新滾動摘要池，嚴格維持在 2,000 字元以內。
    * @param {string} existingSummary - 現有摘要池文字
    * @param {Array<Object>} newTurns - 最新幾回合的故事摘記
@@ -324,8 +335,8 @@ var AIService = (function() {
     ];
 
     var auditorModels = [
-      CONFIG.MODELS.AUDITOR.PRIMARY || 'aion-3.0-mini',
-      CONFIG.MODELS.AUDITOR.FALLBACK_1 || 'mistral-nemo'
+      CONFIG.MODELS.AUDITOR.PRIMARY || 'deepseek/deepseek-v4-flash-0731',
+      CONFIG.MODELS.AUDITOR.FALLBACK_1 || 'qwen/qwen3-30b-a3b-instruct-2507'
     ];
 
     var lastError = null;
