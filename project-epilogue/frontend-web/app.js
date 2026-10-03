@@ -8,7 +8,7 @@ function getKinshipAndSpecialTiesPrompt(playerProfile, primaryLeadKey, activeNPC
   const hasShaoChen = leadKeys.some(k => String(k).includes('楊紹宸') || String(k).includes('04_'));
 
   if (isPlayerMuLi && hasShaoChen) {
-    ties.push(`【🔥 絕對不可撼動之血緣與既定羈絆防火牆：楊慕璃 × 楊紹宸】
+    ties.push(`【絕對不可撼動之血緣與既定羈絆防火牆：楊慕璃 × 楊紹宸】
 1. 【親屬與豪門位階與稱謂】：楊慕璃（弘楊集團三房千金兼瑾和文教基金會執行長，24歲）是 楊紹宸（大房次子 · 弘楊集團副總兼執行董事，28歲）同父異母的「親妹妹」。楊紹宸在集團職銜為「副總 / 楊副總」，【絕非少東】。
 2. 【同住既定事實】：兩人自幼同住在陽明山腰的楊家大宅多年，【絕對不是初次見面的陌生人】！絕不可出現「初次見面自我介紹」、「客套遞名片」、「請問您是哪位」等嚴重破壞沉浸感的失誤！
 3. 【稱謂與互動默契】：楊慕璃私下稱其為「二哥」或「紹宸哥」；楊紹宸稱其為「慕璃」或「小妹」。
@@ -21,7 +21,7 @@ function getKinshipAndSpecialTiesPrompt(playerProfile, primaryLeadKey, activeNPC
   const hasLingQian = leadKeys.some(k => String(k).includes('徐令謙') || String(k).includes('01_'));
   const hasYuNing = leadKeys.some(k => String(k).includes('徐宇寧') || String(k).includes('05_'));
   if (hasLingQian && hasYuNing) {
-    ties.push(`【🔥 既定親屬關係：徐令謙 × 徐宇寧】
+    ties.push(`【既定親屬關係：徐令謙 × 徐宇寧】
 - 徐令謙是徐宇寧的遠房堂哥。少年時期徐令謙曾啟發宇寧練習射擊（「找出你的優勢，有效率地變強」）。
 - 徐宇寧為徐令謙的主治牙醫，兩人在天母與永康街偶有往來，非陌生人。`);
   }
@@ -34,11 +34,11 @@ function getKinshipAndSpecialTiesPrompt(playerProfile, primaryLeadKey, activeNPC
  * 版本: v20260816_v50
  * 
  * 核心特性：
- * 1. 🚀 純 AI 即時零範本生成架構（大模型現場實時創作長篇小說與分支選項）
- * 2. 👑 100% 同步 Google Drive 官方 13 位男主人物設定檔案
- * 3. 📝 完整人物與劇情設定庫 (Profile Manager)：支援編輯、重新命名、刪除、匯出匯入與一鍵開局
- * 4. 💾 完整存檔庫 (Save Archives)：支援自訂命名、搜尋、重新命名、刪除、跨設備匯出匯入
- * 5. 📱 App 風格頂部返回導航列、歷史章節瀑布流、打字機動畫與微醺/張力即時面板
+ * 1. 純 AI 即時零範本生成架構（大模型現場實時創作長篇小說與分支選項）
+ * 2. 100% 同步 Google Drive 官方 13 位男主人物設定檔案
+ * 3. 完整人物與劇情設定庫 (Profile Manager)：支援編輯、重新命名、刪除、匯出匯入與一鍵開局
+ * 4. 完整存檔庫 (Save Archives)：支援自訂命名、搜尋、重新命名、刪除、跨設備匯出匯入
+ * 5. App 風格頂部返回導航列、歷史章節瀑布流、打字機動畫與微醺/張力即時面板
  */
 
 // 官方 13 位男主資料庫
@@ -54,7 +54,7 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "watch": "Omega De Ville Prestige 41 mm 黃金皮帶腕錶；復古圓眼鏡（工作與正式場合佩戴）",
     "residence": "台北市士林區天母一帶（低調靜謐宅邸）",
     "perfume": "冷冽雪松、微苦煙草與高山茶香",
-    "identityRole": "亞洲前三大黑幫「玄辰幫」二把手暨中樞堂口「天裕會」首領，黑白兩道地下秩序真正操盤人。【絕對身分防火牆】：冷靜自持的秩序操盤者，【絕對不是檢察官或法官】！",
+    "identityRole": "亞洲前三大黑幫「玄辰幫」二把手暨中樞堂口「天裕會」首領，黑白兩道地下秩序真正操盤人，冷靜自持的秩序操盤者。",
     "personality": "冷靜、自持、紳士，喜怒不形於色卻充滿份量與吸引力。不油條、不浮誇、不逞兇鬥狠；對有興趣的女性維持風度、尊重自主，以克制形成張力。愛到深處極其專一深情，給她自由並默默備妥保險、退路與守護，力量永遠朝向外部風險而非她。",
     "speechExamples": [
       "「妳可以拒絕。我只希望妳知道全部代價後，再做決定。」",
@@ -71,10 +71,10 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "士林地檢署重大刑案專組主任檢察官 · 白日判官（全劇唯一檢察官）",
     "mbti": "ISTJ（紫微破軍 / 摩羯座）",
     "cars": "公私皆用白色 Škoda Enyaq Coupe（低調嚴謹、不收受任何財閥配車）",
-    "watch": "Seiko Presage 無釉有田燒限量工藝錶；Cerruti 1881 黑色皮帶；【無配戴眼鏡】",
+    "watch": "Seiko Presage 無釉有田燒限量工藝錶；Cerruti 1881 黑色皮帶",
     "residence": "台北市大安區（極簡無多餘雜物的單身公寓）",
     "perfume": "乾淨皂香、薄荷與法袍剛熨燙過的味道",
-    "identityRole": "士林地檢署重大刑案專組主任檢察官，司法界正義最後一道防線。【絕對身分防火牆】：【全劇唯一主任檢察官】，代表國家司法公權力，【絕對不是警察、律師或黑道】！",
+    "identityRole": "士林地檢署重大刑案專組主任檢察官，司法界正義最後一道防線，代表國家司法公權力。",
     "personality": "鋼鐵原則、油鹽不進、不畏強權。私下壓抑內斂，情慾極度深沉克制，動情時兼具司法審問般的壓迫感與近乎奉獻的偏執保護慾。",
     "speechExamples": [
       "「在我的偵查庭裡，只有證據和偽證，沒有灰色地帶。」",
@@ -91,7 +91,7 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "昱合策略創辦人暨執行長 · 政媒幕後操盤者 · 頂級輿情顧問 · 智庫政策顧問",
     "mbti": "INTJ（七殺坐命 / 天蠍座）",
     "cars": "私人車：黑曜金屬色 Porsche 911 Carrera 4 GTS；公務車：黑色 Audi A8（智庫配車，前國防部隨扈駕駛）",
-    "watch": "Jaeger-LeCoultre 超薄大師系列腕錶；【配戴暗銀色細方框眼鏡】",
+    "watch": "Jaeger-LeCoultre 超薄大師系列腕錶；暗銀色細方框眼鏡",
     "residence": "台北市松山區敦化北路巷內頂樓 Penthouse；其他房產：內湖山上獨棟別墅",
     "perfume": "沉穩木質調；喜好無糖黑咖啡與 Macallan Enigma / Hibiki 21",
     "identityRole": "政商黑白兩道頂級輿情顧問與危機處理操盤手。表面是風度翩翩的策士，實為操弄人心、控制風向的無聲支配者。",
@@ -111,10 +111,10 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "弘楊集團副總 · 執行董事 · 物流貿易事業群總經理",
     "mbti": "INTP（天機坐命，對宮太陰 / 處女座）",
     "cars": "私人車：鐵灰色 Audi RS7；公務車：黑色 Benz S680 配專屬司機（絕非邁巴赫）",
-    "watch": "Blancpain Air Command 飛行員腕錶；【無配戴眼鏡】",
+    "watch": "Blancpain Air Command 飛行員腕錶",
     "residence": "台北市士林區陽明山腰楊家大宅（與慕璃同住）；私人秘密公寓位於大直",
     "perfume": "冷冽柑橘、杜松子與高級皮革香",
-    "identityRole": "弘楊集團副總裁、執行董事兼物流貿易總經理（【職銜：副總/二哥，絕非少東】），楊家次子，楊慕璃二哥。商場狠辣決絕、行事雷厲風行。",
+    "identityRole": "弘楊集團副總裁、執行董事兼物流貿易總經理，楊家次子，楊慕璃二哥。商場狠辣決絕、行事雷厲風行。",
     "personality": "表面毒舌刻薄、挑剔難搞，實則對慕璃護短至極。極致的智力優越感，情慾佔有慾極度熾烈強勢，擅長用言語羞辱推拉掩飾深沉慾望。",
     "speechExamples": [
       "「楊慕璃，妳是不是忘了整個弘楊的物流網是誰在掌控的？」",
@@ -132,10 +132,10 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "明隱牙醫診所院長 · 專職牙醫師 · 全國空氣手槍射擊高手",
     "mbti": "ISFP（太陰坐命 / 天秤座）",
     "cars": "淺灰藍色 Volvo XC60（低調沈穩高安全，車上常備手工香氛噴霧）",
-    "watch": "Nomos Glashütte Tangente Neomatik 39 Midnight Blue；【無配戴眼鏡！單眼皮笑起來眼尾微彎】",
+    "watch": "Nomos Glashütte Tangente Neomatik 39 Midnight Blue；單眼皮，笑起來眼尾微彎",
     "residence": "台北市大安區永康街一帶靜巷公寓（出身松山區）",
     "perfume": "Diptyque Philosykos（無花果木）與 Jo Malone 苦橙葉",
-    "identityRole": "自營《明隱牙醫》診所院長兼主治牙醫師，徐令謙遠房堂弟，徐令謙、楊紹宸、沈湛然的牙醫，楊紹宸薇閣中學六年同窗。【絕對身分防火牆】：【專職牙醫師】，【絕非全科醫生/內科外科/密醫，嚴禁提醫藥箱出外急救量血壓】！【絕非白袍掌控狂，無戴眼鏡，穿著淺灰深藍制服或私服亞麻襯衫】！",
+    "identityRole": "自營《明隱牙醫》診所院長兼主治牙醫師，徐令謙遠房堂弟，徐令謙、楊紹宸、沈湛然的牙醫，楊紹宸薇閣中學六年同窗。平日穿淺灰或深藍制服，私下穿亞麻襯衫。",
     "personality": "冷靜自在、放鬆很 Chill、情緒穩定、爽朗陽光、溫柔細膩、氣質出眾。非常幽默且帶點調皮，撩人無形型＋情慾技巧型。擅長觀察情緒，在潛移默化中建立親密感。",
     "speechExamples": [
       "「放鬆，牙齒咬合稍微合上一點點就好……對，妳做得很好。」",
@@ -152,7 +152,7 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "法務部政務次長（林次）",
     "mbti": "ESTJ / ENTJ（鹿港世家出身 / 處女座）",
     "cars": "曜石黑 Mercedes-Benz S-Class L 350d（公務配車）",
-    "watch": "低調頂級瑞士機械錶；【無配戴眼鏡】",
+    "watch": "低調頂級瑞士機械錶",
     "residence": "台北市中正區高樓層華廈（老家彰化鹿港）",
     "perfume": "沉香、菸草、老墨水香氣",
     "identityRole": "法務部政務次長，人稱「林次」，政壇頂層權力核心掌舵者。舉手投足皆是國家機器級別的絕對權力壓迫感。",
@@ -171,10 +171,10 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "台大醫院精神醫學部主治醫師 · 司法精神醫學權威（全劇唯一精神科主治醫師）",
     "mbti": "INFJ（巨蟹座）",
     "cars": "私人車：極光鈦 Lexus ES 300h（車齡七年，維護極佳，車內乾淨沈靜）",
-    "watch": "Grand Seiko 經典機械錶；【無配戴眼鏡】",
+    "watch": "Grand Seiko 經典機械錶",
     "residence": "台北市中山區行天宮站附近三房老公寓",
     "perfume": "雪松、乾淨棉麻與極淡白茶香",
-    "identityRole": "台大醫院精神醫學部主治醫師、司法精神鑑定權威（全劇唯一合法大型醫學中心精神科醫師，【在台大醫院上班，無個人診所，非院長非外科】）。",
+    "identityRole": "台大醫院精神醫學部主治醫師、司法精神鑑定權威。",
     "personality": "溫和內斂、極具共情力與洞察力。能一眼看穿人心深處的創傷與慾望，用最溫柔的言語進行精神層面的極限解構與救贖式愛撫。",
     "speechExamples": [
       "「妳現在的防衛機制，是在害怕我，還是在害怕看清妳自己？」",
@@ -190,7 +190,7 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "鼎曜媒體集團執行長 · 娛樂影視帝國掌門人",
     "mbti": "ENTJ（獅子座）",
     "cars": "私人車：銀灰色 Aston Martin DBS；商務車：Benz Maybach",
-    "watch": "Audemars Piguet 皇家橡樹離岸型；【無配戴眼鏡】",
+    "watch": "Audemars Piguet 皇家橡樹離岸型",
     "residence": "台北市中山區大直挑高河景頂級公寓",
     "perfume": "Tom Ford 烏木與琥珀奢華調",
     "identityRole": "鼎曜媒體集團執行長，操縱全台娛樂媒體、公關風向與影視資源的頂級資本家。風流倜儻、極具魅力與審美品味。",
@@ -209,10 +209,10 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "最大在野黨立法委員（台北市舊城區/萬華）· 國會喬王",
     "mbti": "ESTP（萬華在地派系出身 / 白羊座）",
     "cars": "公務車：黑色 Toyota Alphard（極黑隔熱紙）；私人車：Mercedes-Benz E-Class Sedan",
-    "watch": "Rolex Submariner 黑水鬼；【無配戴眼鏡】",
+    "watch": "Rolex Submariner 黑水鬼",
     "residence": "台北市萬華區地方透天厝頂樓加蓋",
     "perfume": "淡淡菸草味、薄荷爽身水與熱炒店的草莽男人味",
-    "identityRole": "最大在野黨立法委員、立法院司法及法制委員會委員、國會喬王。【全劇唯一許可草莽粗話與台語交織的角色】。",
+    "identityRole": "最大在野黨立法委員、立法院司法及法制委員會委員、國會喬王，說話草莽、台語夾雜。",
     "personality": "豪爽講義氣、接地氣、深諳基層人心與利益交換。看似粗獷實則心思縝密，對認定的人無條件護短、敢為其提刀擋槍。",
     "speechExamples": [
       "「幹，誰敢動妳一根寒毛，林北讓他走不出萬華！」",
@@ -228,7 +228,7 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "中華民國副總統 · 科技經濟巨擘 · 頂層掌權人",
     "mbti": "ENTJ（紫微天相 / 摩羯座）",
     "cars": "公務車：深黑色 Audi A8 L Security 防彈裝甲車；私人車：克爾巴阡灰 Jaguar F-Type COUPÉ R75",
-    "watch": "朗格 A. Lange & Söhne Zeitwerk；【配戴極細鈦金屬無框眼鏡】",
+    "watch": "朗格 A. Lange & Söhne Zeitwerk；極細鈦金屬無框眼鏡",
     "residence": "台北市大安區仁愛路副總統官邸；信義區智慧頂級豪宅",
     "perfume": "高級檀香、冷冽雪茄與頂級白茶香",
     "identityRole": "中華民國副總統，國家權力最巔峰掌舵者之一，苗栗客家書香門第出身，兼具科技巨擘背景與政治最高手腕。",
@@ -247,7 +247,7 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "榮南營造集團董事長（榮南王）· 中台灣營建霸主",
     "mbti": "ENTJ-A（獅子座）",
     "cars": "公務車：絲絨棕 Mercedes-Benz S450 4Matic L（專屬司機駕駛）",
-    "watch": "百達翡麗 Patek Philippe 黃金腕錶；【無配戴眼鏡】",
+    "watch": "百達翡麗 Patek Philippe 黃金腕錶",
     "residence": "台中市南屯區七期重劃區豪宅主宅",
     "perfume": "老沉香、高級威士忌與濃烈雪茄香",
     "identityRole": "榮南營造集團董事長，中台灣營造業教父，徐若宸之父。白手起家、霸道狠絕、氣場雄渾。",
@@ -266,7 +266,7 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "榮南營造家族長子 · 中興大學企業管理研究所研究生 · 營業部實習",
     "mbti": "ISFJ / ISTJ（金牛座）",
     "cars": "金屬莫蘭迪綠色 Volkswagen T-Roc（父親所贈）",
-    "watch": "簡約知性腕錶；【明確無配戴眼鏡！雙眼皮大眼微帶鳳眼】",
+    "watch": "簡約知性腕錶；雙眼皮大眼，微帶鳳眼",
     "residence": "台中市南屯區七期重劃區豪宅",
     "perfume": "清新柑橘、白麝香與剛洗淨的純棉襯衫香",
     "identityRole": "榮南營造家族長子，徐耀南之子，溫哥華私校/UBC畢業，現就讀中興企管所並在家族實習。",
@@ -285,7 +285,7 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "亞洲頂級男團 HapSTer 門面主唱兼領舞",
     "mbti": "INFJ（太陽坐命 / 天秤座）",
     "cars": "保姆車：銀色 Benz V-Class；私用車：消光磁灰 Benz G500；收藏車：米白色 Volvo 1800S",
-    "watch": "Cartier 腕錶；【舞台與私下造型配戴銀鏈耳環與復古圓框眼鏡】",
+    "watch": "Cartier 腕錶；舞台與私下造型配戴銀鏈耳環與復古圓框眼鏡",
     "residence": "新北市新莊區高級社區（低調隱密）",
     "perfume": "溫潤琥珀、小荳蔻與舞台燈光烘烤後的迷幻香氣",
     "identityRole": "風靡亞洲的頂級男團「HapSTer」主唱兼領舞，舞台上萬人矚目的頂流巨星，私下渴望真實平靜的靈魂。",
@@ -304,7 +304,7 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "弘楊集團公關總監 · 瑾和文教基金會執行長（楊家三房獨生女）",
     "mbti": "INTJ（金牛座）",
     "cars": "白色 Porsche Macan",
-    "watch": "Cartier Tank 經典女錶；【無配戴眼鏡！杏眼白皙、及肩黑髮自然捲】",
+    "watch": "Cartier Tank 經典女錶；杏眼白皙、及肩黑髮自然捲",
     "residence": "陽明山腰楊家大宅（與兩位哥哥同住）；新莊副都心高樓私人豪宅",
     "perfume": "天然動情體香，偏好金萱茶與不甜香檳，不喝咖啡",
     "identityRole": "楊家三房獨生女，台大法律/北大犯罪所畢業，弘楊集團公關總監。遊走於政商多方勢力間的頂級智性大女主。",
@@ -315,6 +315,41 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     ]
   }
 };
+
+/**
+ * 角色硬性設定（只進提示詞與糾察隊，不顯示在人物圖鑑）。
+ *
+ * 這些規則原本以【】標記寫在 OFFICIAL_DRIVE_CHARACTERS 的 watch／identityRole
+ * 裡，結果「【絕對不是檢察官或法官】」「【無配戴眼鏡】」直接顯示在玩家看的
+ * 人物圖鑑上。拆開後：圖鑑只放介紹，規則集中在這裡。
+ *
+ * glasses：null 代表不戴眼鏡；字串代表會戴、以及戴的樣式。
+ */
+const CHARACTER_CANON_RULES = {
+  '01_徐令謙': { glasses: '工作與正式場合戴復古圓眼鏡', rules: ['身分是玄辰幫二把手，絕對不是檢察官或法官'] },
+  '02_韓正寰': { glasses: null, rules: ['全劇唯一的主任檢察官，代表國家司法公權力', '絕對不是警察、律師或黑道'] },
+  '03_邵翊衡': { glasses: '暗銀色細方框眼鏡', rules: [] },
+  '04_楊紹宸': { glasses: null, rules: ['職銜是副總（楊副總），楊慕璃稱他二哥；絕對不可稱為少東'] },
+  '05_徐宇寧': { glasses: null, rules: ['專職牙醫師，絕非全科醫生、內外科醫生或密醫；不可提著醫藥箱外出急救或量血壓', '不是穿白袍的掌控狂'] },
+  '06_林政修': { glasses: null, rules: [] },
+  '07_沈湛然': { glasses: null, rules: ['在台大醫院上班，沒有個人診所，不是院長，也不是外科醫生'] },
+  '08_江瀚文': { glasses: null, rules: [] },
+  '09_吳衛廷': { glasses: null, rules: ['全劇唯一可以講草莽粗話、台語夾雜的角色；其他角色都不可以這樣說話'] },
+  '10_徐承勳': { glasses: '極細鈦金屬無框眼鏡', rules: [] },
+  '11_徐耀南': { glasses: null, rules: [] },
+  '12_徐若宸': { glasses: null, rules: [] },
+  '13_徐予澈': { glasses: '舞台與私下造型戴復古圓框眼鏡', rules: [] },
+  '14_楊慕璃': { glasses: null, rules: [] }
+};
+
+/** 把一位角色的硬性設定組成提示詞條列。 */
+function formatCanonRules(key) {
+  const c = OFFICIAL_DRIVE_CHARACTERS[key];
+  const r = CHARACTER_CANON_RULES[key];
+  if (!c || !r) return '';
+  const lines = [r.glasses ? `會戴眼鏡：${r.glasses}` : '不戴眼鏡', ...r.rules];
+  return `【${c.name} 硬性設定（違反即為錯誤）】\n${lines.map(l => `- ${l}`).join('\n')}`;
+}
 
 
 // 預設官方人設範本
@@ -569,6 +604,15 @@ const dom = new Proxy({}, {
 // ==========================================
 // 2.5 共用 UI 基礎設施 (Dialog / Toast / Modal a11y)
 // ==========================================
+/**
+ * 線條 icon（取代 emoji）。圖示定義在 index.html 的 SVG 圖示表（<symbol id="i-…">）。
+ * 只能用在 innerHTML／模板字串；textContent 與 <option> 文字無法顯示 SVG。
+ */
+function uiIcon(name, extraClass = '') {
+  const key = name || 'sparkle';
+  return `<svg class="ui-icon${extraClass ? ' ' + extraClass : ''}" aria-hidden="true"><use href="#i-${key}"></use></svg>`;
+}
+
 
 /**
  * 自訂對話框，取代原生 alert / confirm / prompt。
@@ -580,7 +624,7 @@ function showDialog(options = {}) {
   const {
     title = '提示',
     message = '',
-    icon = '✦',
+    icon = 'sparkle',
     mode = 'alert',          // 'alert' | 'confirm' | 'prompt'
     confirmText = '確定',
     cancelText = '取消',
@@ -607,7 +651,7 @@ function showDialog(options = {}) {
 
   if (titleEl) titleEl.textContent = title;
   if (msgEl) msgEl.textContent = message;
-  if (iconEl) iconEl.textContent = icon;
+  if (iconEl) iconEl.innerHTML = uiIcon(icon);
   if (confirmBtn) {
     confirmBtn.textContent = confirmText;
     confirmBtn.className = tone === 'danger'
@@ -672,11 +716,11 @@ function deferFocus(fn) {
 /** 語意化捷徑 */
 const notifyDialog = (message, title = '提示') => showDialog({ message, title });
 const confirmDialog = (message, options = {}) =>
-  showDialog(Object.assign({ message, title: '請確認', mode: 'confirm', icon: '❓' }, options));
+  showDialog(Object.assign({ message, title: '請確認', mode: 'confirm', icon: 'help' }, options));
 const confirmDangerDialog = (message, options = {}) =>
-  showDialog(Object.assign({ message, title: '危險操作', mode: 'confirm', icon: '⚠️', tone: 'danger', confirmText: '我了解，繼續' }, options));
+  showDialog(Object.assign({ message, title: '危險操作', mode: 'confirm', icon: 'alert', tone: 'danger', confirmText: '我了解，繼續' }, options));
 const promptDialog = (message, defaultValue = '', options = {}) =>
-  showDialog(Object.assign({ message, defaultValue, title: '請輸入', mode: 'prompt', icon: '✎' }, options));
+  showDialog(Object.assign({ message, defaultValue, title: '請輸入', mode: 'prompt', icon: 'pencil' }, options));
 
 /** 背景捲動鎖定計數器（避免嵌套彈窗提早解鎖） */
 let bodyScrollLockCount = 0;
@@ -809,7 +853,7 @@ function notifyUser(message, type = 'info', duration = 3200) {
   closeBtn.type = 'button';
   closeBtn.className = 'shrink-0 -mr-1 -mt-0.5 px-1.5 text-base leading-none opacity-60 hover:opacity-100 transition cursor-pointer';
   closeBtn.setAttribute('aria-label', '關閉通知');
-  closeBtn.textContent = '✕';
+  closeBtn.innerHTML = uiIcon('x');
   toast.appendChild(closeBtn);
 
   container.appendChild(toast);
@@ -978,7 +1022,7 @@ function initTargetLeadSelectOptions() {
   const shuraOpt = document.createElement('option');
   shuraOpt.value = '修羅場';
   shuraOpt.setAttribute('data-name', '修羅場');
-  shuraOpt.textContent = '⚡ 【全勢力修羅場】（13位男主隨劇情推進動態交鋒 · 多雄爭奪 · 極限拉扯）';
+  shuraOpt.textContent = '【全勢力修羅場】（13位男主隨劇情推進動態交鋒 · 多雄爭奪 · 極限拉扯）';
   select.appendChild(shuraOpt);
 
   // 13 位官方男主
@@ -1145,13 +1189,6 @@ function setupEventListeners() {
     on('close-feedback-btn', 'click', closeFeedbackModal);
     on('cancel-feedback-btn', 'click', closeFeedbackModal);
     on('feedback-form', 'submit', handleFeedbackSubmit);
-    on('report-error-btn', 'click', () => {
-      const errMsg = document.getElementById('error-message-text')?.textContent || '生成異常';
-      openFeedbackModal({
-        category: '🐞 Bug / 系統異常報錯',
-        content: `【系統異常報錯】：${errMsg}\n請協助排查此問題。`
-      });
-    });
 
     // 遊戲指南與角色圖鑑彈窗
     on('close-game-guide-btn', 'click', closeGameGuideModal);
@@ -1505,7 +1542,7 @@ function switchAuthTab(tab) {
 
 
 /**
- * ☁️ 非同步同步真實遊戲存檔至 Google Drive (Player_Saves) 與 Google Sheets (Master_Index)
+ * 非同步同步真實遊戲存檔至 Google Drive (Player_Saves) 與 Google Sheets (Master_Index)
  */
 let cloudWriteChain = Promise.resolve();
 let cloudWriteRevision = 0;
@@ -1720,7 +1757,7 @@ async function handleDeleteAccount() {
   const confirmName = await promptDialog(
     '請輸入您的帳號名稱「' + state.username + '」以完成註銷：',
     '',
-    { title: '最終確認', icon: '⚠️', confirmText: '永久註銷', tone: 'danger' }
+    { title: '最終確認', icon: 'alert', confirmText: '永久註銷', tone: 'danger' }
   );
   if (confirmName === null) return;
 
@@ -1849,10 +1886,10 @@ function updateUserBadgeUI(status = 'active') {
   let colorClass = 'text-brand-gold';
   
   if (status === 'expired') {
-    displayText = '⚠️ ' + name + ' (已過期)';
+    displayText = name + '（已過期）';
     colorClass = 'text-red-400';
   } else if (status === 'offline') {
-    displayText = '☁️ ' + name + ' (離線)';
+    displayText = name + '（離線）';
     colorClass = 'text-gray-400';
   }
 
@@ -2222,7 +2259,7 @@ let lastRequestTimestamp = 0;
 const MIN_REQUEST_GAP_MS = 1500;
 
 /**
- * ⚡ 伺服器頻率守衛（Rate Limit Cooldown Protector）
+ * 伺服器頻率守衛（Rate Limit Cooldown Protector）
  */
 async function waitForRpmCooldown() {
   const now = Date.now();
@@ -2795,34 +2832,30 @@ async function repairChapterStructure(chapter, model) {
 }
 
 /**
- * 只請模型補選項，不重寫正文。
- * 失敗時回傳空陣列，由 getNarrativeValidationError 判定為硬失敗 —— 這時才真的重跑。
+ * 經由 Worker 的單次非串流式文字請求（內部仍讀 SSE，回傳完整字串）。
+ * 摘要池、換幕整理、逐回摘要與選項修補共用。全部走 Worker、不經 GAS，
+ * 因此 GAS 停在舊版也不影響這些功能。
  */
-async function requestChoicesRepair(prose, existing, model) {
-  const need = 3 - existing.length;
-  if (need <= 0 || !LLM_CONFIG.WORKER_URL) return [];
-  const systemPrompt = '你是《暗流》的選項設計師，使用台灣繁體中文。只輸出一個 JSON 物件：'
-    + '{"choices":[{"label":"25–60 字，一個明確行動＋必要的一句話","risk":"low|mid|high","hint":"10–24 字"}]}';
-  const userPrompt = `--- 本回正文 ---\n${clampBlock(prose, 2400)}\n\n`
-    + (existing.length ? `--- 已有選項（不要重複）---\n${existing.map(c => c.label).join('\n')}\n\n` : '')
-    + `請補上 ${need} 個接續正文、彼此方向不同的選項。`;
-  try {
-    let ticket = '';
-    for (let attempt = 0; attempt < 6; attempt++) {
-      throwIfGenerationAborted();
+async function requestWorkerCompletion({ model, system, user, maxTokens = 800, temperature = 0.4, json = false, timeoutMs = 60000 }) {
+  if (!LLM_CONFIG.WORKER_URL) throw new Error('未設定 Worker');
+  let ticket = '';
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    try {
       const headers = { 'Content-Type': 'application/json', 'X-Undercurrent-Token': state.token || '' };
       if (ticket) headers['X-Queue-Ticket'] = ticket;
+      const body = {
+        model,
+        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+        temperature,
+        max_tokens: maxTokens,
+        stream: true
+      };
+      if (json) body.response_format = { type: 'json_object' };
       const res = await fetch(LLM_CONFIG.WORKER_URL, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-          temperature: 0.7,
-          max_tokens: 600,
-          stream: true,
-          response_format: { type: 'json_object' }
-        })
+        method: 'POST', headers, body: JSON.stringify(body),
+        ...(controller ? { signal: controller.signal } : {})
       });
       const text = await res.text();
       if (!res.ok) {
@@ -2832,31 +2865,58 @@ async function requestChoicesRepair(prose, existing, model) {
           await new Promise(r => setTimeout(r, q.waitMs));
           continue;
         }
-        return [];
+        throw new Error(`Worker 回應 ${res.status}`);
       }
-      let buf = '';
+      let out = '';
       text.split('\n').forEach(line => {
         if (!line.startsWith('data: ')) return;
         const payload = line.slice(6).trim();
         if (!payload || payload === '[DONE]') return;
         try {
           const o = JSON.parse(payload);
-          (o.choices || []).forEach(c => { buf += (c.delta && c.delta.content) || ''; });
+          (o.choices || []).forEach(c => { out += (c.delta && c.delta.content) || ''; });
         } catch (e) { /* 不完整片段 */ }
       });
-      const parsed = parseJsonSafely(buf);
-      const list = (parsed && Array.isArray(parsed.choices)) ? parsed.choices : [];
-      const cleaned = list
-        .filter(c => c && String(c.label || '').trim())
-        .map(c => ({ label: polishTaiwaneseText(c.label), risk: c.risk, hint: polishTaiwaneseText(c.hint || '') }));
-      console.info(`[Repair] ${model}：只補 ${cleaned.length} 個選項，未重寫正文。`);
-      return cleaned;
+      return out.trim();
+    } finally {
+      if (timer) clearTimeout(timer);
     }
+  }
+  throw new Error('排隊等待過久');
+}
+
+/**
+ * 只請模型補選項，不重寫正文。
+ * 失敗時回傳空陣列，由 getNarrativeValidationError 判定為硬失敗 —— 這時才真的重跑。
+ */
+async function requestChoicesRepair(prose, existing, model) {
+  const need = 3 - existing.length;
+  if (need <= 0 || !LLM_CONFIG.WORKER_URL) return [];
+  try {
+    throwIfGenerationAborted();
+    const out = await requestWorkerCompletion({
+      model,
+      system: '你是《暗流》的選項設計師，使用台灣繁體中文。只輸出一個 JSON 物件：'
+        + '{"choices":[{"label":"25–60 字，一個明確行動＋必要的一句話","risk":"low|mid|high","hint":"10–24 字"}]}',
+      user: `--- 本回正文 ---\n${clampBlock(prose, 2400)}\n\n`
+        + (existing.length ? `--- 已有選項（不要重複）---\n${existing.map(c => c.label).join('\n')}\n\n` : '')
+        + `請補上 ${need} 個接續正文、彼此方向不同的選項。`,
+      maxTokens: 600,
+      temperature: 0.7,
+      json: true
+    });
+    const parsed = parseJsonSafely(out);
+    const list = (parsed && Array.isArray(parsed.choices)) ? parsed.choices : [];
+    const cleaned = list
+      .filter(c => c && String(c.label || '').trim())
+      .map(c => ({ label: polishTaiwaneseText(c.label), risk: c.risk, hint: polishTaiwaneseText(c.hint || '') }));
+    console.info(`[Repair] ${model}：只補 ${cleaned.length} 個選項，未重寫正文。`);
+    return cleaned;
   } catch (err) {
     if (isGenerationAbortError(err)) throw err;
     console.warn('[Repair] 選項修補失敗，交由模型鏈重試：', err);
+    return [];
   }
-  return [];
 }
 
 /**
@@ -3013,125 +3073,249 @@ async function generateStoryFromLLM(systemPrompt, userPrompt, onStreamUpdate = n
 }
 
 // =========================================================================
-// 4.4 Drive 角色卡調閱與快取 (Lore Retrieval)
+// 4.4 角色卡載入與按場景檢索 (Character Cards)
 // =========================================================================
 
 /**
- * Drive 上 14 份角色 .md 共約 50,900 字元，而 app.js 硬編的
- * OFFICIAL_DRIVE_CHARACTERS 只有約 7,000 字元 —— 缺少關係網絡、家族背景、
- * 幕僚系統、宿敵設定，以及部分角色專屬的風格防火牆。長局中最容易造成
- * 性格漂移的正是這些內容。
+ * 角色完整人設的來源：遊戲網站自己提供的 characters/*.md（14 份，約 139KB）。
  *
- * 單張角色卡最大 8,512 字元（徐承勳）≈ 14k tokens，而目前整份提示詞只有
- * 約 7,800 字元。注入 Tier 1 全文後總量約 23k tokens，遠低於 mistral-large
- * 的 128k 視窗 —— 因此不需要精打細算，主攻角色一律注入完整人設。
+ * 為什麼不再從 Drive 讀：舊做法經 GAS 的 lore/get-character 調閱 Drive，
+ * 但只要 GAS 未部署、登入權杖過期或 Drive 找不到檔案，就只在主控台留一行
+ * 警告、默默退回精簡人設 —— 玩家與作者都看不到它失敗了。這 14 份檔案本來
+ * 就在 repo 裡、隨網站公開發布，同網域直接讀取，不需要登入也不經過任何後端。
  *
- * 取得方式：GAS 的 lore/get-character（需登入）。取不到時自動退回硬編資料，
- * 本機模式與離線都不會因此中斷遊戲。
+ * 為什麼不整張塞進提示詞：最大的角色卡有 24KB，而且多數內容與當下場景無關。
+ * 改為：精簡核心人設＋硬性設定每回都帶；完整角色卡切成片段，用 bge-m3 依
+ * 本回場景挑最相關的幾段。情慾場景會撈到情慾動態，對峙場景會撈到關係與宿敵。
  */
-const LORE_CACHE_PREFIX = 'undercurrent_lore_';
-const LORE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;   // 24 小時後自動重新調閱
-const LORE_TIER2_LIMIT = 2;                       // 在場配角最多注入兩張全文
+const CHARACTER_CARD_PATHS = ['characters/', '../../characters/'];
+const LORE_TIER2_LIMIT = 2;            // 在場配角最多附上兩位的角色卡片段
+const PERSONA_CHUNK_CHARS = 500;
+const PERSONA = {
+  leadChunks: 6,                       // 主角每回附幾段
+  leadChunksRecalibrate: 10,           // 每 5 回校準時加量
+  npcChunks: 2,                        // 每位在場配角附幾段
+  wholeCardChars: 3600,                // 主角卡在此字數內就整張帶入
+  minScore: 0.35
+};
 
-/** 記憶體層快取，避免同一回合內反覆讀 localStorage 與 JSON.parse */
-const loreMemoryCache = new Map();
+/** id -> markdown。只放記憶體：角色卡共約 139KB，寫進 localStorage 會擠壓存檔空間。 */
+const characterCardCache = new Map();
+/** id -> [{ id, text }]，切好的片段 */
+const characterChunkCache = new Map();
+/** 本回挑好的片段，供同步組裝提示詞時讀取 */
+let preparedPersonaChunks = {};
+let characterCardFailureNotified = false;
 
-function readLoreCache(id) {
-  if (loreMemoryCache.has(id)) return loreMemoryCache.get(id);
-  try {
-    const raw = localStorage.getItem(LORE_CACHE_PREFIX + id);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || !parsed.markdown) return null;
-    if (Date.now() - (parsed.fetchedAt || 0) > LORE_CACHE_TTL_MS) return null;
-    loreMemoryCache.set(id, parsed);
-    return parsed;
-  } catch (e) {
-    return null;
-  }
-}
-
-function writeLoreCache(id, markdown) {
-  const entry = { id, markdown, fetchedAt: Date.now() };
-  loreMemoryCache.set(id, entry);
-  safeLocalStorageSet(LORE_CACHE_PREFIX + id, JSON.stringify(entry));
-}
-
-/** 清空所有角色卡快取，強迫下次重新自 Drive 調閱（Drive 上編輯後用） */
-function clearLoreCache() {
-  loreMemoryCache.clear();
-  let removed = 0;
-  try {
-    // 用 localStorage.key(i) 索引迭代而非 Object.keys()：前者是 Storage 的
-    // 標準介面，在任何實作上都可靠；後者依賴 key 被暴露為可列舉自有屬性。
-    // 先收集再刪除 —— 邊迭代邊 removeItem 會讓索引位移、漏刪。
-    const doomed = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith(LORE_CACHE_PREFIX)) doomed.push(k);
+function splitCharacterCard(markdown) {
+  // 角色卡的段落標題用 emoji 開頭（⚖️ 基本資料、⛓️ …）；留在提示詞裡，模型可能把它們抄進正文
+  const cleaned = String(markdown || '')
+    // 先把「emoji 開頭的短行」轉成 Markdown 標題，清掉 emoji 後仍認得出段落
+    .replace(/^[ \t]*[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}][\u{FE0F}]?[ \t]*(.{1,38})$/gmu, '## $1')
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\u{FE0F}]/gu, '')
+    .replace(/^[ \t]+/gm, '');
+  const paragraphs = cleaned.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  const chunks = [];
+  let heading = '';
+  let buffer = '';
+  const flush = () => {
+    const text = buffer.trim();
+    if (text.length >= 30) chunks.push(heading && !text.startsWith(heading) ? `${heading}\n${text}` : text);
+    buffer = '';
+  };
+  paragraphs.forEach(p => {
+    // 段落標題：Markdown 標題，或角色卡慣用的「符號開頭短行」
+    const isHeading = /^#{1,4}\s/.test(p) || (p.length <= 40 && !p.includes('\n') && /^[^\w㐀-鿿「『（(\-*\d]/u.test(p));
+    if (isHeading) {
+      flush();
+      heading = p.replace(/^#+\s*/, '').replace(/\*\*/g, '').trim();
+      return;
     }
-    doomed.forEach(k => { localStorage.removeItem(k); removed++; });
-  } catch (e) {
-    console.warn('[Lore] 清除快取時發生異常:', e.message);
+    // 單一段落過長時依句號切開，避免整段變成一個過大的片段
+    const pieces = p.length > PERSONA_CHUNK_CHARS
+      ? (p.match(/[^。！？\n]+[。！？]?/g) || [p])
+      : [p];
+    pieces.forEach(piece => {
+      if ((buffer + '\n' + piece).length > PERSONA_CHUNK_CHARS) flush();
+      buffer += (buffer ? (pieces.length > 1 ? '' : '\n') : '') + piece;
+    });
+  });
+  flush();
+  return chunks;
+}
+
+async function fetchCharacterCardText(id) {
+  const file = encodeURIComponent(id) + '.md';
+  for (const base of CHARACTER_CARD_PATHS) {
+    try {
+      const res = await fetch(base + file, { cache: 'no-cache' });
+      if (res.ok) {
+        const text = await res.text();
+        if (text && text.length > 50) return text;
+      }
+    } catch (e) { /* 換下一個路徑 */ }
   }
-  return removed;
+  return null;
 }
 
 /**
- * 自 Drive 調閱指定角色的完整人設，結果寫入快取。
- * @param {string[]} ids 角色識別碼（如 '01_徐令謙'）
- * @param {{force?: boolean}} options force 為 true 時忽略既有快取
- * @returns {Promise<number>} 本次實際取得的張數
+ * 載入指定角色的完整角色卡。失敗時要讓人看得到 —— 這正是舊做法最大的問題。
+ * @returns {Promise<number>} 本次實際載入的張數
  */
 async function fetchCharacterLore(ids, options = {}) {
   const { force = false } = options;
   const wanted = (Array.isArray(ids) ? ids : [ids])
     .filter(Boolean)
-    .filter(id => force || !readLoreCache(id));
-  if (wanted.length === 0) return 0;
+    .filter(id => force || !characterCardCache.has(id));
+  if (!wanted.length) return 0;
+  let count = 0;
+  const missing = [];
+  await Promise.all(wanted.map(async id => {
+    const md = await fetchCharacterCardText(id);
+    if (md) {
+      characterCardCache.set(id, md);
+      characterChunkCache.set(id, splitCharacterCard(md).map((text, i) => ({ id: `card:${id}:${i}`, text })));
+      count++;
+    } else {
+      missing.push(id);
+    }
+  }));
+  if (missing.length) {
+    console.warn('[Persona] 角色卡載入失敗，暫用精簡人設：', missing.join('、'));
+    if (!characterCardFailureNotified) {
+      characterCardFailureNotified = true;
+      notifyUser(`角色卡載入失敗（${missing.map(m => m.replace(/^\d+_/, '')).join('、')}），本回暫用精簡人設。`, 'error', 6000);
+    }
+  }
+  return count;
+}
 
-  // 本機模式沒有雲端身分可用，直接沿用硬編資料
-  if (!state.token || state.token.startsWith('tok_local_')) return 0;
+function getLoreMarkdown(id) {
+  return characterCardCache.get(id) || null;
+}
 
+function clearLoreCache() {
+  const n = characterCardCache.size;
+  characterCardCache.clear();
+  characterChunkCache.clear();
+  // 清掉舊版寫進 localStorage 的 Drive 角色卡快取，釋出存檔空間
   try {
-    const res = await fetch(state.gasApiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'lore/get-character',
-        token: state.token,
-        userId: state.userId,
-        ids: wanted.slice(0, 4)
-      }),
-      redirect: 'follow'
-    });
-    const data = await res.json();
-    if (!data.success || !data.data || !data.data.cards) {
-      console.warn('[Lore] 調閱失敗，沿用硬編人設:', data.error?.message);
-      return 0;
+    const doomed = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('undercurrent_lore_')) doomed.push(k);
     }
-    let count = 0;
-    Object.values(data.data.cards).forEach(card => {
-      if (card && card.markdown) { writeLoreCache(card.id, card.markdown); count++; }
-    });
-    if ((data.data.missing || []).length) {
-      console.warn('[Lore] Drive 上找不到角色卡:', data.data.missing.join(', '));
+    doomed.forEach(k => localStorage.removeItem(k));
+  } catch (e) { /* 忽略 */ }
+  return n;
+}
+
+/**
+ * 依本回場景，替主角與在場配角挑出最相關的角色卡片段。
+ * 生成前呼叫（非同步）；結果放在 preparedPersonaChunks，供組裝提示詞時同步讀取。
+ * 任何失敗都只是少了補充片段，核心人設與硬性設定仍會照常帶入。
+ */
+async function preparePersonaContext(leadKey, npcIds, sceneQuery, turnCount) {
+  preparedPersonaChunks = {};
+  const ids = [leadKey, ...(npcIds || []).slice(0, LORE_TIER2_LIMIT)].filter(k => k && OFFICIAL_DRIVE_CHARACTERS[k]);
+  if (!ids.length) return;
+  try {
+    await fetchCharacterLore(ids);
+    const query = clampBlock(String(sceneQuery || ''), 400);
+    if (!query) return;
+    const recalibrate = turnCount >= LORE_RECALIBRATE_EVERY && turnCount % LORE_RECALIBRATE_EVERY === 0;
+    for (const id of ids) {
+      const chunks = characterChunkCache.get(id) || [];
+      if (!chunks.length) continue;
+      const k = id === leadKey ? (recalibrate ? PERSONA.leadChunksRecalibrate : PERSONA.leadChunks) : PERSONA.npcChunks;
+      // 短卡片（主角卡在預算內）整張帶入：只有 9 段卻挑 6 段，挑選本身沒有意義，
+      // 反而會漏掉剩下那幾段。只有長卡片才需要依場景挑選。
+      const totalChars = chunks.reduce((n, c) => n + c.text.length, 0);
+      if (id === leadKey && totalChars <= PERSONA.wholeCardChars) {
+        preparedPersonaChunks[id] = chunks.map(c => c.text);
+        continue;
+      }
+      await ensureMemoryVectors(chunks);
+      const [qv] = await embedTexts([query]);
+      if (!qv?.length) continue;
+      preparedPersonaChunks[id] = chunks
+        .map((c, i) => ({ i, text: c.text, score: cosineSimilarity(qv, memoryVectors.get(c.id)) }))
+        .filter(c => c.score >= PERSONA.minScore)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, k)
+        .sort((a, b) => a.i - b.i)          // 依原文順序排，讀起來才連貫
+        .map(c => c.text);
     }
-    console.log(`[Lore] 已自 Drive 調閱 ${count} 張角色卡。`);
-    return count;
   } catch (err) {
-    console.warn('[Lore] 調閱時網路異常，沿用硬編人設:', err.message);
-    return 0;
+    console.warn('[Persona] 角色卡片段檢索失敗，本回只用核心人設：', err);
   }
 }
 
 /**
- * 每隔幾回在提示詞裡加一段「重新對標人設」的強化指令。
- *
- * 為什麼需要：滾動摘要池會把早期劇情壓縮成事實條目，語氣與性格的細節
- * 在壓縮中流失最快，長局因此容易出現「講話方式變了」的漂移。
- * 完整角色卡雖然每回都注入，但單純放著不代表模型會持續對標它 ——
- * 定期給一句明確的重新校準指令，效果好得多。
+ * 依本回情境偵測在場角色並挑選角色卡片段。偵測邏輯與提示詞組裝完全一致，
+ * 確保「挑片段的角色」就是「出現在提示詞裡的角色」。
+ */
+async function preparePersonaForTurn(profile, actionText, lastProseText, turnCount) {
+  if (!profile) return;
+  const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
+  if (isShura) { preparedPersonaChunks = {}; return; }
+  const leadKey = profile.targetLead || '01_徐令謙';
+  const npcs = detectActiveNPCs(lastProseText || '', actionText || '', leadKey, profile.supportingLeads || []);
+  const spicy = state.generationMode === 'spicy' ? '親密 情慾 身體 慾望' : '';
+  // 角色卡片段要配合場景，所以查詢帶上一回結尾（與記憶檢索不同：記憶要避開近期，人設要貼合當下）
+  const query = [actionText, String(lastProseText || '').slice(-300), spicy].filter(Boolean).join('\n');
+  await preparePersonaContext(leadKey, npcs.map(n => n.id), query, turnCount);
+}
+
+function getPreparedPersonaChunks(id) {
+  return preparedPersonaChunks[id] || [];
+}
+
+async function handleReloadLore() {
+  const profile = getActivePlayerProfile();
+  const removed = clearLoreCache();
+  characterCardFailureNotified = false;
+  notifyUser('正在重新載入角色設定……', 'info', 2500);
+  const ids = [];
+  if (profile.targetLead && profile.targetLead !== '修羅場') ids.push(profile.targetLead);
+  (profile.supportingLeads || []).forEach(k => ids.push(k));
+  const got = await fetchCharacterLore(ids, { force: true });
+  renderLoreStatus();
+  notifyUser(
+    got > 0 ? `已重新載入 ${got} 張角色卡，下一回起生效。` : '角色卡載入失敗，將沿用精簡人設。',
+    got > 0 ? 'success' : 'error',
+    6000
+  );
+  return removed;
+}
+
+function renderLoreStatus() {
+  const el = document.getElementById('lore-status-line');
+  if (!el) return;
+  const profile = getActivePlayerProfile();
+  const lead = profile.targetLead;
+  if (!lead || lead === '修羅場') {
+    el.textContent = '修羅場模式：使用全員背景名冊。';
+    return;
+  }
+  const md = getLoreMarkdown(lead);
+  el.textContent = md
+    ? `${profile.targetLeadName || lead}：完整角色卡已載入（${md.length} 字），每回依場景挑選相關段落。`
+    : `${profile.targetLeadName || lead}：角色卡尚未載入，目前使用精簡人設。`;
+}
+
+function warmLoreCache(profile) {
+  if (!profile) return;
+  const ids = [];
+  if (profile.targetLead && profile.targetLead !== '修羅場') ids.push(profile.targetLead);
+  (profile.supportingLeads || []).forEach(k => ids.push(k));
+  if (ids.length) fetchCharacterLore(ids).catch(() => {});
+}
+
+/**
+ * 每隔幾回加一段「重新對標人設」的指令，並加大角色卡片段的份量。
+ * 摘要池會把語氣與性格的細節磨平，長局容易出現「講話方式變了」的漂移；
+ * 單純把人設放著不代表模型會持續對標，定期明確要求校準效果好得多。
  */
 const LORE_RECALIBRATE_EVERY = 5;
 
@@ -3141,73 +3325,12 @@ function buildLoreRecalibrationNote(turnCount, leadName) {
   return [
     '',
     `【人設重新校準 · 第 ${turnCount} 回】`,
-    `已進行 ${turnCount} 回，請在本回動筆前重新通讀上方 ${leadName} 的官方完整人設檔案，`,
-    '特別是說話風格與例句、性格與情慾動態，以及該角色專屬的風格禁制段落。',
-    '本回的對白與行為必須與檔案完全吻合 —— 若先前幾回出現語氣偏移、用詞粗俗化',
+    `已進行 ${turnCount} 回，請在本回動筆前重新通讀上方 ${leadName} 的核心人設、硬性設定與角色卡段落，`,
+    '特別是說話風格與例句、性格與情慾動態，以及該角色專屬的禁制。',
+    '本回的對白與行為必須與設定完全吻合 —— 若先前幾回出現語氣偏移、用詞粗俗化',
     '或性格軟化，請在本回自然地校正回來，不要沿用偏移後的寫法。',
     ''
   ].join('\n');
-}
-
-/** 取出快取中的完整人設；沒有就回傳 null（呼叫端負責降級） */
-function getLoreMarkdown(id) {
-  const entry = readLoreCache(id);
-  return entry ? entry.markdown : null;
-}
-
-/**
- * 手動重新調閱：在 Google Drive 上編輯過角色卡後，用這個讓修改立即生效
- * （否則要等 24 小時快取到期）。
- */
-async function handleReloadLore() {
-  const profile = getActivePlayerProfile();
-  if (!state.token || state.token.startsWith('tok_local_')) {
-    notifyUser('本機模式無法更新雲端角色設定，將沿用內建人設。', 'error', 5000);
-    return;
-  }
-  const removed = clearLoreCache();
-  notifyUser('正在自 Drive 重新調閱角色卡……', 'info', 2500);
-  const ids = [];
-  if (profile.targetLead && profile.targetLead !== '修羅場') ids.push(profile.targetLead);
-  (profile.supportingLeads || []).forEach(k => ids.push(k));
-  const got = await fetchCharacterLore(ids, { force: true });
-  renderLoreStatus();
-  notifyUser(
-    got > 0
-      ? `已重新調閱 ${got} 張角色卡，下一回起生效（清除舊快取 ${removed} 筆）。`
-      : 'Drive 上未取得角色卡，將沿用內建人設。',
-    got > 0 ? 'success' : 'error',
-    6000
-  );
-}
-
-/** 在選單抽屜顯示目前使用的是 Drive 全文還是內建精簡人設 */
-function renderLoreStatus() {
-  const el = document.getElementById('lore-status-line');
-  if (!el) return;
-  const profile = getActivePlayerProfile();
-  const lead = profile.targetLead;
-  if (!lead || lead === '修羅場') {
-    el.textContent = '修羅場模式：使用全 13 位背景名冊。';
-    return;
-  }
-  const md = getLoreMarkdown(lead);
-  el.textContent = md
-    ? `目前 ${profile.targetLeadName || lead}：Drive 完整人設（${md.length} 字元）已載入。`
-    : `目前 ${profile.targetLeadName || lead}：使用內建精簡人設。點上方按鈕自 Drive 調閱完整版。`;
-}
-
-/**
- * 開局或載入存檔後預熱：主攻對象 + 指定配角。
- * 刻意不 await —— 第一回的提示詞可以先用硬編資料組成，
- * 調閱完成後從第二回起自動升級為全量人設。
- */
-function warmLoreCache(profile) {
-  if (!profile) return;
-  const ids = [];
-  if (profile.targetLead && profile.targetLead !== '修羅場') ids.push(profile.targetLead);
-  (profile.supportingLeads || []).forEach(k => ids.push(k));
-  if (ids.length) fetchCharacterLore(ids).catch(() => {});
 }
 
 // =========================================================================
@@ -3235,7 +3358,7 @@ const CONTEXT_BUDGET = {
   // 這裡若設太小，較長的章節餵回下一回的歷史時會被裁掉、失去銜接細節。
   recentProsePerTurn: 2400,
   actDossiers: 2,              // 保留最近幾幕的幕篇檔案
-  actDossierChars: 900,        // 單份幕篇檔案上限
+  actDossierChars: 1400,       // 單份幕篇檔案上限（幕篇檔案要求 800–1,200 字）
   playerProfileChars: 900,
   liveStateChars: 800,
   questFlagsShown: 4           // 任務旗標只列最新幾條，避免隨回合累積膨脹
@@ -3608,8 +3731,9 @@ function buildLiveStateBlock(saveState, profile) {
  * 結果寫進下一回的提示詞 —— 不重新生成本回。
  */
 const MEMORY = {
-  maxFacts: 300,
+  maxFacts: 1000,          // 約 60 字／則，1,000 則約 60KB；每回 3–4 則，可涵蓋 250 回以上
   maxScenes: 120,
+  maxSummaries: 1000,      // 逐回摘要，每回一則、50 字內
   factChars: 60,
   sceneChars: 260,
   topK: 6,                 // 撈回幾則。太多會擠壓近期全文的份量。
@@ -3659,7 +3783,8 @@ function normalizeMemoryKey(text) {
 function trimMemoryBank(bank) {
   const facts = bank.filter(m => m.kind === 'fact').slice(-MEMORY.maxFacts);
   const scenes = bank.filter(m => m.kind === 'scene').slice(-MEMORY.maxScenes);
-  return [...facts, ...scenes].sort((a, b) => a.turn - b.turn);
+  const summaries = bank.filter(m => m.kind === 'summary').slice(-MEMORY.maxSummaries);
+  return [...facts, ...scenes, ...summaries].sort((a, b) => a.turn - b.turn);
 }
 
 /**
@@ -3758,7 +3883,12 @@ async function buildRetrievedMemoryBlock(queryText) {
     backfillMemoryBank();
     const currentTurn = Number(state.saveState.turnCount) || 1;
     const windowStart = currentTurn - CONTEXT_BUDGET.recentTurns;
-    const candidates = getMemoryBank().filter(m => m.turn < currentTurn && (m.kind === 'fact' || m.turn < windowStart));
+    const bank = getMemoryBank();
+    // 已有逐回摘要的回合，不再用較長、較不精準的場景摘錄
+    const summarizedTurns = new Set(bank.filter(m => m.kind === 'summary').map(m => m.turn));
+    const candidates = bank.filter(m => m.turn < currentTurn
+      && (m.kind === 'fact' || m.turn < windowStart)
+      && !(m.kind === 'scene' && summarizedTurns.has(m.turn)));
     if (!candidates.length) return '';
 
     // 查詢只用本回行動。曾經混入「上一回結尾」，結果檢索被上一回的話題帶偏
@@ -3768,11 +3898,16 @@ async function buildRetrievedMemoryBlock(queryText) {
     lastRetrievedMemories = ranked;
 
     const facts = ranked.filter(m => m.kind === 'fact').sort((a, b) => a.turn - b.turn);
+    const summaries = ranked.filter(m => m.kind === 'summary').sort((a, b) => a.turn - b.turn);
     const scenes = ranked.filter(m => m.kind === 'scene').sort((a, b) => a.turn - b.turn);
     const lines = ['【語意檢索記憶（與本回行動相關的早期劇情；與之矛盾即為錯誤，務必保持一致）】'];
     if (facts.length) {
       lines.push('已確立的事實：');
       facts.forEach(m => lines.push(`- 第 ${m.turn} 回：${m.text}`));
+    }
+    if (summaries.length) {
+      lines.push('相關回合：');
+      summaries.forEach(m => lines.push(`- 第 ${m.turn} 回：${m.text}`));
     }
     if (scenes.length) {
       lines.push('相關場景：');
@@ -3806,6 +3941,8 @@ const PATROL = {
   maxFactsPerCall: 5,      // 5 條 × 2 題 ＋ 2 題通用檢查 = 12 題上限
   maxCalls: 3,
   memoryFacts: 6,          // 每回最多比對幾條過去的記憶事實
+  personaChecks: 3,        // 每回最多檢查幾位出場角色的語氣與性格
+  personaThreshold: 0.7,
   timeoutMs: 6000
 };
 
@@ -3815,11 +3952,12 @@ function collectCanonFactsForProse(prose) {
   Object.values(OFFICIAL_DRIVE_CHARACTERS || {}).forEach(c => {
     if (!c?.name || !prose.includes(c.name)) return;
     if (c.cars) facts.push({ topic: `${c.name}開或搭乘的車`, fact: `${c.name}的座車：${clampBlock(c.cars, 70)}` });
-    if (/眼鏡/.test(c.watch || '')) {
-      const wears = !/無配戴眼鏡|不戴眼鏡|無眼鏡/.test(c.watch);
+    const canon = Object.entries(CHARACTER_CANON_RULES).find(([key]) => OFFICIAL_DRIVE_CHARACTERS[key] === c);
+    if (canon) {
+      const rule = canon[1];
       facts.push({
         topic: `${c.name}臉上有沒有戴眼鏡`,
-        fact: wears ? `${c.name}會戴眼鏡（${clampBlock(c.watch, 40)}）` : `${c.name}不戴眼鏡`
+        fact: rule.glasses ? `${c.name}會戴眼鏡（${rule.glasses}）` : `${c.name}不戴眼鏡`
       });
     }
     if (c.title) facts.push({ topic: `${c.name}的職業或職銜`, fact: `${c.name}是${clampBlock(c.title, 50)}` });
@@ -3909,8 +4047,43 @@ async function runContinuityPatrol(chapter, actionLabel, memories) {
         .then(answers => ({ group, answers }));
     }));
 
+    // 語氣與性格：實測（2026-10-03）符合人設時 0.15–0.31、明顯崩壞時 0.92–0.96，界線清楚。
+    // 細微漂移的準度較低，那部分交給每 5 回的人設校準。
+    const personaTargets = Object.values(OFFICIAL_DRIVE_CHARACTERS)
+      .filter(c => c?.name && prose.includes(c.name) && c.personality)
+      .slice(0, PATROL.personaChecks);
+    const personaPromise = personaTargets.length ? (() => {
+      const q = {};
+      personaTargets.forEach((c, i) => {
+        const persona = `${c.title || ''}。${c.personality}${c.speechExamples?.[0] ? ' 例句：' + c.speechExamples[0] : ''}`;
+        q[`v${i}`] = {
+          type: 'noul',
+          instructions: `角色設定：${c.name}——${clampBlock(persona, 260)}\n正文中${c.name}的說話語氣與用詞，是否明顯不符合這個設定？`,
+          criteria: { true: `${c.name}的語氣或用詞明顯偏離設定（例如變得油滑、撒嬌、粗俗或浮誇）`, false: `${c.name}的語氣與用詞符合設定` }
+        };
+        q[`b${i}`] = {
+          type: 'noul',
+          instructions: `角色設定：${c.name}——${clampBlock(persona, 260)}\n正文中${c.name}的行為與態度，是否明顯違背這個設定的性格？`,
+          criteria: { true: `${c.name}的行為明顯違背設定的性格`, false: `${c.name}的行為符合設定的性格` }
+        };
+      });
+      return callDecisions(q, `【新章節正文】\n${clampBlock(prose, 6000)}`).catch(() => null);
+    })() : Promise.resolve(null);
+
     const notes = [];
     lastPatrolReport = [];
+    const personaAnswers = await personaPromise;
+    if (personaAnswers) {
+      personaTargets.forEach((c, i) => {
+        const v = personaAnswers[`v${i}`]?.noul ?? 0;
+        const b = personaAnswers[`b${i}`]?.noul ?? 0;
+        lastPatrolReport.push({ fact: `${c.name} 語氣／行為`, source: '人設', mention: 1, contradict: Math.max(v, b) });
+        if (v >= PATROL.personaThreshold || b >= PATROL.personaThreshold) {
+          const what = [v >= PATROL.personaThreshold ? '說話語氣' : '', b >= PATROL.personaThreshold ? '行為態度' : ''].filter(Boolean).join('與');
+          notes.push(`上一回${c.name}的${what}偏離人設。本回回到設定：${clampBlock(c.personality, 80)}${c.speechExamples?.[0] ? '（語調參考：' + c.speechExamples[0] + '）' : ''}`);
+        }
+      });
+    }
     results.forEach((r, gi) => {
       if (!r || !r.answers) return;
       r.group.forEach((f, i) => {
@@ -3936,6 +4109,107 @@ async function runContinuityPatrol(chapter, actionLabel, memories) {
     console.warn('[Patrol] 糾察隊檢查失敗（不影響遊玩）：', err);
     return [];
   }
+}
+
+// ------------------------------------------
+// 逐回摘要（每回 50 字內，背景生成）
+// ------------------------------------------
+/**
+ * 每回結束後在背景請模型寫一句 50 字內的摘要，不擋畫面、不影響下一回送出。
+ * 三個用途：
+ *  - 劇情時間軸：較早回合的摘要放進提示詞，讓模型知道「整局走到哪裡」
+ *  - 語意檢索：存進記憶庫（kind: summary），比場景摘錄更精準
+ *  - 玩家查看：顯示在章節導覽；超過 60 回、章節已移出記憶的回合也看得到
+ */
+const TURN_SUMMARY_MAX_CHARS = 50;
+
+function clampTurnSummary(text) {
+  let t = polishTaiwaneseText(String(text || '').replace(/^[「『"]|[」』"]$/g, '').replace(/\s+/g, '').trim());
+  if (t.length <= TURN_SUMMARY_MAX_CHARS) return t;
+  // 超過上限時從最後一個標點斷開，不在字詞中間截斷
+  const cut = t.slice(0, TURN_SUMMARY_MAX_CHARS);
+  const p = Math.max(cut.lastIndexOf('，'), cut.lastIndexOf('。'), cut.lastIndexOf('；'));
+  return p >= 20 ? cut.slice(0, p) + '。' : cut;
+}
+
+function rememberTurnSummary(turn, text) {
+  if (!state.saveState || !text) return;
+  const bank = getMemoryBank().filter(m => !(m.kind === 'summary' && m.turn === turn));
+  bank.push({ id: `t${turn}_m`, turn, kind: 'summary', text });
+  state.saveState.memoryBank = trimMemoryBank(bank);
+}
+
+async function generateTurnSummary(chapter) {
+  const raw = await requestWorkerCompletion({
+    model: LLM_CONFIG.SUMMARY_MODEL,
+    system: '用台灣繁體中文寫一句 50 字以內的本回摘要：誰、做了什麼、結果如何。寫清楚人名，不寫形容與評論，只輸出那一句。',
+    user: `玩家行動：${clampBlock(chapter.chosenLabel || '', 80)}\n\n本回正文：\n${clampBlock(chapter.prose, 2400)}`,
+    maxTokens: 150,
+    temperature: 0.2,
+    timeoutMs: 45000
+  });
+  return clampTurnSummary(raw);
+}
+
+function scheduleTurnSummary(chapter) {
+  const turn = Number(chapter?.turn) || 0;
+  if (!turn || !chapter?.prose) return;
+  generateTurnSummary(chapter).then(summary => {
+    if (!summary || summary.length < 6) return;
+    // 生成期間玩家可能已回溯或換檔；只寫回仍存在的同一回合
+    const record = (state.chapterHistoryList || []).find(ch => Number(ch.turn) === turn);
+    if (!record || record.prose !== chapter.prose) return;
+    record.turnSummary = summary;
+    if (state.chapterData && Number(state.chapterData.turn) === turn) state.chapterData.turnSummary = summary;
+    rememberTurnSummary(turn, summary);
+    persistChapterHistory(state.chapterHistoryList);
+    safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+    const nav = document.getElementById('chapter-nav-list');
+    if (nav && nav.offsetParent !== null) renderChapterNavList();
+  }).catch(err => console.warn('[TurnSummary] 第 ' + turn + ' 回摘要生成失敗（不影響遊玩）：', err.message));
+}
+
+/**
+ * 舊存檔沒有逐回摘要：續玩時在背景補最近 10 回。
+ * 一次一則依序進行，生成中就暫停，避免和正文生成搶排隊名額。
+ */
+let turnSummaryBackfillRunning = false;
+async function backfillTurnSummaries(limit = 10) {
+  if (turnSummaryBackfillRunning || !state.token || state.token.startsWith('tok_local_')) return;
+  turnSummaryBackfillRunning = true;
+  try {
+    backfillMemoryBank();
+    const pending = (state.chapterHistoryList || [])
+      .filter(ch => ch && !ch.turnSummary && !ch.proseArchived && String(ch.prose || '').length > 80)
+      .slice(-limit);
+    for (const ch of pending) {
+      if (state.isGenerating) break;
+      const summary = await generateTurnSummary(ch).catch(() => '');
+      if (!summary || summary.length < 6) continue;
+      ch.turnSummary = summary;
+      rememberTurnSummary(Number(ch.turn), summary);
+    }
+    if (pending.length) {
+      persistChapterHistory(state.chapterHistoryList);
+      safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+    }
+  } finally {
+    turnSummaryBackfillRunning = false;
+  }
+}
+
+/**
+ * 劇情時間軸：近期全文窗口之前的回合，各用一句摘要串起來。
+ * 更早的劇情由摘要池與幕篇檔案涵蓋，這裡只放最近 40 回，約 2,000 字。
+ */
+function buildTurnTimelineBlock(currentTurn) {
+  const windowStart = (Number(currentTurn) || 1) - CONTEXT_BUDGET.recentTurns;
+  const items = getMemoryBank()
+    .filter(m => m.kind === 'summary' && m.turn < windowStart)
+    .sort((a, b) => a.turn - b.turn)
+    .slice(-40);
+  if (!items.length) return '';
+  return `【劇情時間軸（較早回合的逐回摘要）】\n${items.map(m => `第 ${m.turn} 回：${m.text}`).join('\n')}\n`;
 }
 
 /**
@@ -4083,90 +4357,72 @@ function detectActiveNPCs(lastProseText, playerChoice, primaryLeadKey, defaultSu
  * 三層角色提示詞組裝器 (Tier 1 主角 / Tier 2 在場配角 / Tier 3 世界名冊)
  * 具備 100% 原始人設檔案全量細節對標能力（座車、手錶、住所、語氣、關係）
  */
+/** 精簡核心人設：每回都帶，是角色卡片段之外的骨架。 */
+function formatCoreProfile(c, { compact = false } = {}) {
+  const examples = (c.speechExamples || []).slice(0, compact ? 1 : 4).map(ex => `  * ${ex}`).join('\n');
+  const lines = [
+    `- 姓名與稱謂：${c.fullName || c.name}（${c.age || ''}${c.mbti ? '，' + c.mbti : ''}）`,
+    `- 職銜：${c.title || '依照官方設定'}`,
+    `- 座車：${c.cars || '依照官方設定'}`,
+    compact ? '' : `- 配件：${c.watch || '依照官方設定'}`,
+    compact ? '' : `- 住所與活動範圍：${c.residence || '依照官方設定'}`,
+    compact ? '' : `- 香氣：${c.perfume || '依照官方設定'}`,
+    `- 身分定位：${c.identityRole || ''}`,
+    `- 性格與情慾動態：${c.personality || ''}`,
+    examples ? `- 說話風格例句（嚴格對標語調）：\n${examples}` : ''
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
+function pushPersonaChunks(blocks, key, name) {
+  const chunks = getPreparedPersonaChunks(key);
+  if (!chunks.length) return;
+  blocks.push(`【${name} 角色卡相關段落（依本回場景挑選，與上方設定同等權威）】`);
+  chunks.forEach(text => blocks.push(text));
+}
+
 function assembleCharacterPromptBlock(primaryLeadKey, activeNPCs, isShura) {
   const blocks = [];
 
   if (isShura) {
-    blocks.push('=== 【全勢力修羅場 (Tier 1)】 ===');
-    blocks.push('當前模式：十三勢力修羅場交鋒！所有 13 位男主均可能依局勢動態突入，請隨時維持各方勢力交鋒的緊張感與性張力！提及各角色時必須嚴格對標其官方座車、職銜與性格！\n');
+    blocks.push('=== 【全勢力修羅場（核心）】 ===');
+    blocks.push('當前模式：十三勢力修羅場交鋒！所有 13 位男主均可能依局勢動態突入，請隨時維持各方勢力交鋒的緊張感與性張力！提及各角色時必須嚴格對標其官方座車、職銜與性格！');
+    // 修羅場人人都可能出場，硬性設定全員帶上（每人一兩行，份量很小）
+    Object.keys(CHARACTER_CANON_RULES).forEach(key => {
+      const rule = formatCanonRules(key);
+      if (rule) blocks.push(rule);
+    });
+    blocks.push('');
   } else {
-    const primaryChar = OFFICIAL_DRIVE_CHARACTERS[primaryLeadKey] || OFFICIAL_DRIVE_CHARACTERS['01_徐令謙'];
-    const primaryLore = getLoreMarkdown(primaryLeadKey);
-
-    if (primaryLore) {
-      // Drive 上的完整角色卡：含關係網絡、家族背景、幕僚系統、宿敵與
-      // 角色專屬風格防火牆 —— 這些是硬編摘要沒有、而長局防漂移最需要的內容。
-      blocks.push('=== 【主要互動角色 (Tier 1 · 核心主角 · Drive 官方完整人設檔案)】 ===');
-      blocks.push('【最高權重】以下為該角色的官方完整設定檔全文。任何描寫與此衝突時，一律以本檔案為準：');
-      blocks.push(primaryLore.trim());
-      blocks.push('');
-      return finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs);
-    }
-
-    const exStr = (primaryChar.speechExamples || []).map(ex => '  * ' + ex).join('\n');
-    blocks.push('=== 【主要互動角色 (Tier 1 · 核心主角 · 精簡人設)】 ===');
-    blocks.push(`- 姓名與稱謂：${primaryChar.fullName || primaryChar.name}（${primaryChar.age}，${primaryChar.mbti || ''}）
-- 官方專屬職銜：${primaryChar.title}
-- 專屬座車出入：${primaryChar.cars || '依照官方設定'}
-- 專屬手錶配件：${primaryChar.watch || '依照官方設定'}
-- 住所與活動範圍：${primaryChar.residence || '依照官方設定'}
-- 香水與感官氣息：${primaryChar.perfume || '依照官方設定'}
-- 核心身分定位：${primaryChar.identityRole}
-- 深度性格與情慾動態：${primaryChar.personality}
-- 專屬說話風格例句（請嚴格對標其說話語調）：
-${exStr}\n`);
+    const key = OFFICIAL_DRIVE_CHARACTERS[primaryLeadKey] ? primaryLeadKey : '01_徐令謙';
+    const c = OFFICIAL_DRIVE_CHARACTERS[key];
+    blocks.push('=== 【主要互動角色（核心主角）】 ===');
+    blocks.push(formatCoreProfile(c));
+    blocks.push(formatCanonRules(key));
+    pushPersonaChunks(blocks, key, c.name);
+    blocks.push('');
   }
 
   if (activeNPCs && activeNPCs.length > 0) {
-    blocks.push('=== 【當前在場配角 (Tier 2 · 動態突入 · 精準人設對標)】 ===');
-    blocks.push('【在場配角演繹指引】：以下角色已動態升階為在場配角！請載入其完整職銜、座車與上位者身分，推動衝突與暗流，絕不可張冠李戴或隨意發明設定！');
-    let tier2FullCount = 0;
+    blocks.push('=== 【當前在場配角（動態突入）】 ===');
+    blocks.push('以下角色已在場：請依其職銜、座車與身分推動衝突與暗流，絕不可張冠李戴或隨意發明設定。');
     activeNPCs.forEach((npc, idx) => {
-      const npcLore = tier2FullCount < LORE_TIER2_LIMIT ? getLoreMarkdown(npc.id) : null;
-      if (npcLore) {
-        tier2FullCount++;
-        blocks.push(`▶ 在場配角 [${idx + 1}]：${npc.name}（Drive 官方完整人設檔案）`);
-        blocks.push(npcLore.trim());
-        blocks.push('');
-        return;
-      }
-      const fullChar = OFFICIAL_DRIVE_CHARACTERS[npc.id] || OFFICIAL_DRIVE_CHARACTERS[npc.name] || {};
-      blocks.push(`▶ 在場配角 [${idx + 1}]：${fullChar.fullName || npc.name}（${fullChar.age || ''}）
-  - 精確職銜：${fullChar.title || npc.role}
-  - 專屬座車：${fullChar.cars || '-'}
-  - 專屬手錶/住所：${fullChar.watch || '-'} ｜ ${fullChar.residence || '-'}
-  - 核心特徵與性格：${fullChar.personality || npc.oneLiner}
-  - 經典語調：${(fullChar.speechExamples || [])[0] || '-'}`);
+      const c = OFFICIAL_DRIVE_CHARACTERS[npc.id] || OFFICIAL_DRIVE_CHARACTERS[npc.name] || {};
+      blocks.push(`- 在場配角 ${idx + 1}：${c.fullName || npc.name}`);
+      blocks.push(c.name ? formatCoreProfile(c, { compact: true }) : `  ${npc.role || ''} ${npc.oneLiner || ''}`);
+      if (npc.id && CHARACTER_CANON_RULES[npc.id]) blocks.push(formatCanonRules(npc.id));
+      if (idx < LORE_TIER2_LIMIT && npc.id) pushPersonaChunks(blocks, npc.id, c.name || npc.name);
     });
     blocks.push('');
   }
 
-  return finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs, true);
+  return finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs);
 }
 
 /**
- * 補上 Tier 2 / Tier 3 區塊。
- * Tier 1 走 Drive 全文時會提前 return，因此這段抽成獨立函式供兩條路徑共用。
- * @param {boolean} tier2AlreadyDone 呼叫端是否已自行輸出 Tier 2
+ * 補上背景名冊與角色演繹校準。
  */
-function finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs, tier2AlreadyDone = false) {
-  if (!tier2AlreadyDone && activeNPCs && activeNPCs.length > 0) {
-    blocks.push('=== 【當前在場配角 (Tier 2 · 動態突入)】 ===');
-    let n = 0;
-    activeNPCs.forEach((npc, idx) => {
-      const npcLore = n < LORE_TIER2_LIMIT ? getLoreMarkdown(npc.id) : null;
-      if (npcLore) {
-        n++;
-        blocks.push(`▶ 在場配角 [${idx + 1}]：${npc.name}（Drive 官方完整人設檔案）`);
-        blocks.push(npcLore.trim());
-      } else {
-        const c = OFFICIAL_DRIVE_CHARACTERS[npc.id] || {};
-        blocks.push(`▶ 在場配角 [${idx + 1}]：${c.fullName || npc.name}｜${c.title || npc.role}｜座車 ${c.cars || '-'}`);
-        blocks.push(`  性格：${c.personality || npc.oneLiner}`);
-      }
-    });
-    blocks.push('');
-  }
+function finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs) {
 
   const activeIds = (activeNPCs || []).map(n => n.id);
   if (primaryLeadKey) activeIds.push(primaryLeadKey);
@@ -4182,15 +4438,15 @@ function finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs, tier2AlreadyD
     });
   }
 
-  // Drive 人物卡可能仍是舊快取；把最新演繹規則放在所有人物資料之後，
-  // 避免較晚載入的舊版措辭把徐令謙拉回兇狠、控制型模板。
+  // 角色卡原文有部分舊版措辭；把最新演繹規則放在所有人物資料之後，
+  // 避免角色卡片段把徐令謙拉回兇狠、控制型模板。
   const requiresXuCalibration = primaryLeadKey === '01_徐令謙'
     || primaryLeadKey === '徐令謙'
     || primaryLeadKey === '修羅場'
     || (activeNPCs || []).some(npc => npc.id === '01_徐令謙' || npc.name === '徐令謙');
   if (requiresXuCalibration) {
     blocks.push('');
-    blocks.push(`=== 【徐令謙最新演繹校準（最高優先，覆蓋舊版 Drive 用語）】 ===
+    blocks.push(`=== 【徐令謙最新演繹校準（最高優先，覆蓋角色卡舊版用語）】 ===
 若前方人物卡或快取文字與本段衝突，一律視為舊版並以本段為準：
 1. 徐令謙冷靜、自持、有分寸且具紳士風度；語句簡潔、不油條、不浮誇、不吼叫、不以逞兇鬥狠展示份量。
 2. 他對玩家的吸引力來自克制、可靠與不動聲色的照顧。尊重玩家的選擇與界線，不強迫靠近、不封路、不以命令或威脅換取服從。
@@ -4432,12 +4688,14 @@ function convertSimplifiedToTraditional(text) {
  *  - 酒店：在台灣指有陪侍的場所，黑幫背景的故事裡很可能是刻意用的
  *  - 土豆：台灣指花生，不能換成馬鈴薯
  *  - 領導、顏值、內卷：台灣口語也在用，換掉反而不自然
+ *  - 搜索：台灣法律用語是「搜索票」「搜索扣押」，換成「搜尋」會把司法情節寫錯
+ *  - 網絡：「關係網絡」「人際網絡」在台灣是正確用法，角色卡本身就這樣寫
  * 取自「去 AI 感與台灣用語」守則的非台灣用語表。
  */
 const TAIWAN_TERM_REPLACEMENTS = [
   ['出租車', '計程車'], ['的士', '計程車'], ['打車', '叫車'], ['地鐵', '捷運'], ['公交車', '公車'],
   ['視頻', '影片'], ['短信', '簡訊'], ['信息', '訊息'], ['手機號', '手機號碼'], ['郵箱', '電子信箱'],
-  ['屏幕', '螢幕'], ['網絡', '網路'], ['軟件', '軟體'], ['賬號', '帳號'], ['搜索', '搜尋'],
+  ['屏幕', '螢幕'], ['軟件', '軟體'], ['賬號', '帳號'],
   ['質量', '品質'], ['身份證', '身分證'], ['身份', '身分'], ['公佈', '公布'],
   ['立馬', '立刻'], ['靠譜', '可靠'], ['小區', '社區'], ['服務員', '服務生'],
   ['盒飯', '便當'], ['方便麵', '泡麵'], ['西紅柿', '番茄'], ['酸奶', '優格'],
@@ -4702,8 +4960,6 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
 
   // 1. 動態偵測在場配角
   const activeNPCs = detectActiveNPCs(lastProseText, playerActionText, leadKey, profile.supportingLeads || []);
-  // 在場配角可能是本局第一次登場，順手調閱其角色卡（下一回即可用上全文）
-  fetchCharacterLore(activeNPCs.slice(0, LORE_TIER2_LIMIT).map(n => n.id)).catch(() => {});
   const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura);
 
   // 2. 上下文信封各區塊（見 CONTEXT_BUDGET 的說明）
@@ -4713,6 +4969,7 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
   const pinnedMemoryBlock = buildPinnedMemoryBlock(historyList, saveState);
   const liveStateBlock = buildLiveStateBlock(saveState, profile);
   const summaryBlock = summaryPool ? `【長期劇情摘要池（中期劇情的濃縮事實）】\n${summaryPool}\n` : '';
+  const timelineBlock = buildTurnTimelineBlock(turnCount);
   const literaryCraftBlock = buildLiteraryCraftBlock(turnCount, historyList);
 
   const systemPrompt = `你是連載長篇小說作者，同時負責維持互動故事的狀態資料。正文必須先像可出版的小說成立，再正確填寫遊戲欄位。
@@ -4786,6 +5043,7 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     '',
     dossierBlock,
     summaryBlock,
+    timelineBlock,
     retrievedMemoryBlock,
     patrolCorrectionBlock,
     pinnedMemoryBlock,
@@ -4821,56 +5079,39 @@ async function triggerRollingSummaryUpdate(turnCount) {
     offeredChoices: (h.choices || []).map(choice => choice.label).filter(Boolean)
   }));
 
-  const systemPrompt = '你是小說記憶統整引擎。請將現有摘要與最新 5 回合完整故事紀錄濃縮為 1,000 ~ 1,500 字元高資訊密度摘要池。務必保留關鍵對話與承諾、人物知道或不知道的資訊、場景位置與時間、物品、關係轉折、重大線索及尚未完成的行動。請一律使用台灣繁體中文輸出純文字摘要，不要多餘寒暄。';
+  const systemPrompt = '你是小說記憶統整引擎。請將現有摘要與最新 5 回合完整故事紀錄整合為 3,000 ~ 4,500 字的高資訊密度摘要池。'
+    + '務必保留：關鍵對話與承諾、人物知道或不知道的資訊、場景位置與時間、物品去向、關係轉折、重大線索、尚未完成的行動。'
+    + '依時間順序分段，寫清楚人名，不寫評論與形容。請一律使用台灣繁體中文輸出純文字摘要，不要多餘寒暄。';
   const userPrompt = `--- 現有摘要池 ---\n${state.saveState.summaryPool || '（初始開局）'}\n\n--- 待整合的最新回合記錄 ---\n${JSON.stringify(recent5Turns, null, 2)}\n\n【請直接輸出更新後的純摘要文字】：`;
 
   try {
-    const response = await fetch(state.gasApiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8'
-      },
-      body: JSON.stringify({
-        action: 'llm/proxy',
-        model: LLM_CONFIG.SUMMARY_MODEL,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.2,
-        max_tokens: 2000,
-        token: state.token,
-        userId: state.userId
-      }),
-      redirect: 'follow',
-      signal: AbortSignal.timeout(90000)
+    // 改走 Worker：先前經 GAS 代理，GAS 停在舊版時摘要會被白名單擋下而靜默失效
+    const raw = await requestWorkerCompletion({
+      model: LLM_CONFIG.SUMMARY_MODEL,
+      system: systemPrompt,
+      user: userPrompt,
+      maxTokens: 4000,
+      temperature: 0.2,
+      timeoutMs: 120000
     });
-
-    if (!response.ok) {
-      // 先前這裡沒有任何記錄 —— 摘要池壞了三週都沒人發現。
-      console.warn(`[MemoryPipeline] 摘要池更新失敗（HTTP ${response.status}），長期記憶本回未更新。`);
+    // 摘要會被注入每一回的提示詞，簡體字與非台灣用語要在這裡就清掉
+    const newSummary = raw ? polishTaiwaneseText(raw) : '';
+    const stillCurrent = state.saveState === sourceState && state.token === sourceToken
+      && state.saveState.turnCount === turnCount
+      && (state.saveState.summaryPool || '') === sourceSummary
+      && JSON.stringify(state.chapterHistoryList || []) === sourceHistory;
+    if (!newSummary || newSummary.length <= 20) {
+      console.warn('[MemoryPipeline] 摘要池更新回傳空內容，長期記憶本回未更新。');
+      return;
     }
-    if (response.ok) {
-      const data = await response.json();
-      if (!data.success) {
-        console.warn('[MemoryPipeline] 摘要池更新被拒：', data.error || data.message || data);
-      }
-      const rawSummary = data.success && data.data?.content?.trim();
-      // 摘要同樣會被注入每一回的提示詞，簡體字與非台灣用語要在這裡就清掉
-      const newSummary = rawSummary ? polishTaiwaneseText(rawSummary) : rawSummary;
-      const stillCurrent = state.saveState === sourceState && state.token === sourceToken
-        && state.saveState.turnCount === turnCount
-        && (state.saveState.summaryPool || '') === sourceSummary
-        && JSON.stringify(state.chapterHistoryList || []) === sourceHistory;
-      if (stillCurrent && newSummary && newSummary.length > 20) {
-        state.saveState.summaryPool = clampSummaryPool(newSummary);
-        safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
-        console.log(`[MemoryPipeline] Summary Pool successfully updated (${newSummary.length} chars).`);
-        syncStateToGoogleDriveCloud(state.saveState, state.chapterData);
-      }
+    if (stillCurrent) {
+      state.saveState.summaryPool = clampSummaryPool(newSummary);
+      safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+      console.log(`[MemoryPipeline] 摘要池已更新（${newSummary.length} 字）。`);
+      syncStateToGoogleDriveCloud(state.saveState, state.chapterData);
     }
   } catch (err) {
-    console.warn('[MemoryPipeline] Summary update failed in background:', err.message);
+    console.warn('[MemoryPipeline] 摘要池更新失敗，長期記憶本回未更新：', err.message);
   }
 }
 
@@ -4997,6 +5238,7 @@ async function startNewGameWithProfile(profile) {
 
   let initialChapter = null;
   try {
+    await preparePersonaForTurn(profile, profile.customScenario || '故事開場', '', 1);
     const { systemPrompt, userPrompt } = buildFirstTurnPrompt(profile);
     
     minimizeGenerationOverlay();
@@ -5062,6 +5304,7 @@ async function startNewGameWithProfile(profile) {
   delete initialChapter.stateSnapshot.memoryBank;
   state.chapterHistoryList = [initialChapter];
   rememberChapter(initialChapter);
+  scheduleTurnSummary(initialChapter);
   persistChapterHistory(state.chapterHistoryList);
   
   renderStoryStream(initialChapter);
@@ -5118,6 +5361,8 @@ async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
 
     try {
       // 先做語意檢索再組提示詞。失敗會回空字串，不會中斷這一回。
+      const lastProseForPersona = String((state.chapterHistoryList || []).slice(-1)[0]?.prose || '');
+      await preparePersonaForTurn(profile, customInput || choiceLabel, lastProseForPersona, state.saveState.turnCount);
       const retrievedMemoryBlock = await buildRetrievedMemoryBlock(choiceLabel);
       const patrolCorrectionBlock = await buildPatrolCorrectionBlock();
       const { systemPrompt, userPrompt } = buildNextTurnPrompt(
@@ -5188,8 +5433,9 @@ async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
     updateGameplayBreadcrumb();
     // 背景糾察：不阻塞畫面，結果於下一回提示詞中生效
     scheduleContinuityPatrol(nextChapter, choiceLabel);
+    scheduleTurnSummary(nextChapter);
 
-    // ⚡ 每 5 回合自動在背景非同步更新滾動摘要池 (Summary Pool)
+    // 每 5 回合自動在背景非同步更新滾動摘要池 (Summary Pool)
     if (state.saveState.turnCount % 5 === 0) {
       triggerRollingSummaryUpdate(state.saveState.turnCount);
     }
@@ -5336,7 +5582,7 @@ function renderStoryStream(activeChapter) {
 
     let decisionPill = past.chosenLabel && past.chosenLabel !== '【正式開局】' ? `
       <div class="mb-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-brand-gold/15 text-brand-gold border border-brand-gold/30 text-xs font-bold font-serif">
-        <span>✦ 玩家行動：</span>
+        <span>${uiIcon('sparkle')} 玩家行動：</span>
         <span class="text-amber-200 font-sans">${escapeHtml(past.chosenLabel)}</span>
       </div>
     ` : '';
@@ -5354,7 +5600,7 @@ function renderStoryStream(activeChapter) {
       ${decisionPill}
       <article class="font-serif prose-tc is-past select-text">${paragraphsHtml}</article>
       <div class="flex flex-wrap justify-end gap-2 pt-2 border-t border-brand-border/30">
-        <button class="past-pin-btn px-2.5 py-1.5 rounded-full border border-brand-border text-[11px] ${past.memoryPinned ? 'text-brand-gold border-brand-gold/50' : 'text-slate-500'} cursor-pointer" data-turn="${escapeHtml(past.turn || (i + 1))}">${past.memoryPinned ? '📌 已標記重要' : '📌 標記重要'}</button>
+        <button class="past-pin-btn px-2.5 py-1.5 rounded-full border border-brand-border text-[11px] ${past.memoryPinned ? 'text-brand-gold border-brand-gold/50' : 'text-slate-500'} cursor-pointer" data-turn="${escapeHtml(past.turn || (i + 1))}">${past.memoryPinned ? uiIcon('pin') + ' 已標記重要' : uiIcon('pin') + ' 標記重要'}</button>
         <button class="past-rewind-btn px-2.5 py-1.5 rounded-full border border-rose-300/50 text-[11px] text-rose-600 cursor-pointer" data-turn="${escapeHtml(past.turn || (i + 1))}">↩︎ 從此回分歧</button>
       </div>
     `;
@@ -5374,7 +5620,7 @@ function renderStoryStream(activeChapter) {
   const activeRecord = activeChapter || chapters[count - 1];
   const activeActionPill = activeRecord && activeRecord.chosenLabel && activeRecord.chosenLabel !== '【正式開局】' ? `
     <div class="mb-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-brand-gold/15 text-brand-gold border border-brand-gold/30 text-xs font-bold font-serif">
-      <span>✦ 玩家行動：</span>
+      <span>${uiIcon('sparkle')} 玩家行動：</span>
       <span class="text-amber-200 font-sans">${escapeHtml(activeRecord.chosenLabel)}</span>
     </div>
   ` : '';
@@ -5448,7 +5694,7 @@ function renderStoryStream(activeChapter) {
       </div>
     </div>
     <div class="flex flex-wrap justify-end gap-2">
-      <button id="stream-pin-memory-btn" class="px-3 py-1.5 rounded-full border ${activeRecord?.memoryPinned ? 'border-brand-gold/60 text-brand-gold' : 'border-brand-border text-slate-500'} text-[11px] cursor-pointer">${activeRecord?.memoryPinned ? '📌 已標記重要' : '📌 標記重要'}</button>
+      <button id="stream-pin-memory-btn" class="px-3 py-1.5 rounded-full border ${activeRecord?.memoryPinned ? 'border-brand-gold/60 text-brand-gold' : 'border-brand-border text-slate-500'} text-[11px] cursor-pointer">${activeRecord?.memoryPinned ? uiIcon('pin') + ' 已標記重要' : uiIcon('pin') + ' 標記重要'}</button>
       <button id="stream-fork-btn" class="px-3 py-1.5 rounded-full border border-purple-300/50 text-purple-600 text-[11px] cursor-pointer">⑂ 建立分歧存檔</button>
     </div>
   `;
@@ -5691,6 +5937,17 @@ function renderChapterNavList() {
   }
 
   const currentTurn = state.saveState?.turnCount;
+  const summaryByTurn = new Map(getMemoryBank().filter(m => m.kind === 'summary').map(m => [m.turn, m.text]));
+  // 超過 60 回的章節會移出記憶，但逐回摘要仍在記憶庫裡 —— 讓玩家照樣查得到
+  const listedTurns = new Set(chapters.map((ch, idx) => Number(ch.turn || idx + 1)));
+  const archived = Array.from(summaryByTurn.entries()).filter(([t]) => !listedTurns.has(t)).sort((a, b) => a[0] - b[0]);
+  if (archived.length) {
+    const box = document.createElement('div');
+    box.className = 'px-3 py-2 rounded-lg border border-brand-border/40 bg-brand-dark/40 text-slate-400 space-y-1';
+    box.innerHTML = `<div class="text-[10px] font-mono opacity-70">較早回合（正文已封存，僅保留摘要）</div>`
+      + archived.map(([t, text]) => `<div class="text-[11px] leading-relaxed"><span class="font-mono opacity-60">第 ${t} 回</span>　${escapeHtml(text)}</div>`).join('');
+    listEl.appendChild(box);
+  }
   chapters.forEach((ch, idx) => {
     const turn = ch.turn || (idx + 1);
     const isCurrent = turn === currentTurn;
@@ -5701,12 +5958,14 @@ function renderChapterNavList() {
         ? 'bg-brand-gold/15 border-brand-gold/50 text-brand-gold'
         : 'bg-brand-card/60 border-brand-border/60 text-slate-300 hover:border-brand-gold/40 hover:text-white'
     }`;
+    const summary = ch.turnSummary || summaryByTurn.get(Number(turn)) || '';
     row.innerHTML = `
       <div class="flex items-center gap-2">
         <span class="font-mono text-[10px] shrink-0 opacity-70">第 ${ch.act || 1}-${turn} 回</span>
         <span class="font-serif font-bold truncate">${escapeHtml(ch.chapterTitle || '未命名章節')}</span>
         ${isCurrent ? '<span class="ml-auto text-[10px] font-mono shrink-0">目前</span>' : ''}
       </div>
+      ${summary ? `<div class="mt-1 text-[11px] leading-relaxed text-slate-400">${escapeHtml(summary)}</div>` : ''}
     `;
     row.addEventListener('click', () => {
       closeChapterNav();
@@ -5823,7 +6082,7 @@ function updateHomeContinueCard() {
       meta.style.display = 'flex';
       meta.innerHTML = `
         <span class="px-2 py-0.5 rounded bg-sky-950/60 border border-sky-700/50 text-sky-300 font-mono">第 ${act} 幕 · 第 ${turn} 回</span>
-        <span class="px-2 py-0.5 rounded bg-brand-gold/15 border border-brand-gold/30 text-brand-gold">🎯 ${escapeHtml(profile.targetLeadName || '修羅場')}</span>
+        <span class="px-2 py-0.5 rounded bg-brand-gold/15 border border-brand-gold/30 text-brand-gold">${uiIcon('target')} ${escapeHtml(profile.targetLeadName || '修羅場')}</span>
         <span class="text-slate-500">${escapeHtml(profile.name || '主角')}</span>
       `;
     }
@@ -5989,14 +6248,14 @@ function renderProfileManagerList() {
             ▶ 套用開局
           </button>
           <button class="edit-profile-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-brand-border transition cursor-pointer" data-key="${escapeHtml(p.key)}">
-            ✏️ 編輯
+            ${uiIcon('pencil')} 編輯
           </button>
           ${!p.isDefault ? `
             <button class="rename-profile-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white text-xs border border-brand-border transition cursor-pointer" data-key="${escapeHtml(p.key)}">
-              🏷️ 重新命名
+              ${uiIcon('tag')} 重新命名
             </button>
             <button class="delete-profile-btn px-2 py-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white text-xs border border-rose-800/40 transition cursor-pointer" data-key="${escapeHtml(p.key)}">
-              🗑️ 刪除
+              ${uiIcon('trash')} 刪除
             </button>
           ` : ''}
         </div>
@@ -6045,7 +6304,7 @@ function loadSavedProfilePresetsIntoSelect() {
     const prof = custom[key];
     const opt = document.createElement('option');
     opt.value = key;
-    opt.textContent = `📁 【自訂】${prof.name}（${(prof.profession || '').slice(0, 10)}...）`;
+    opt.textContent = `【自訂】${prof.name}（${(prof.profession || '').slice(0, 10)}...）`;
     select.appendChild(opt);
   });
 }
@@ -6226,8 +6485,8 @@ function persistChapterHistory(list) {
   );
 }
 
-/** 摘要池上限：CONFIG.PIPELINE.SUMMARY_POOL_MAX_CHARS 對應的前端硬夾制 */
-const SUMMARY_POOL_MAX_CHARS = 2000;
+/** 摘要池上限。2,000 字在長局中太快被壓縮到失去細節，調高到 5,000 字。 */
+const SUMMARY_POOL_MAX_CHARS = 5000;
 function clampSummaryPool(text) {
   const str = String(text || '');
   if (str.length <= SUMMARY_POOL_MAX_CHARS) return str;
@@ -6537,7 +6796,7 @@ function renderSaveArchivesList() {
 
   container.innerHTML = '';
 
-  // 1. 如果當前有正在進行中的遊戲進度，在最上方提供【🟢 進行中的最新冒險進度 (AutoSave)】大卡片
+  // 1. 如果當前有正在進行中的遊戲進度，在最上方提供【 進行中的最新冒險進度 (AutoSave)】大卡片
   if (state.chapterData && state.saveState && !search) {
     const p = state.playerProfile || state.saveState?.meta?.playerProfile || {};
     const turn = state.saveState?.turnCount || 1;
@@ -6565,7 +6824,7 @@ function renderSaveArchivesList() {
           <span class="text-slate-500">（${escapeHtml(p.age || '25')}歲 · ${escapeHtml(p.profession || p.occupation || '政經分析師')}）</span>
         </div>
         <div class="flex items-center gap-2">
-          <span class="text-slate-400">🎯 攻略男主：</span>
+          <span class="text-slate-400">${uiIcon('target')} 攻略男主：</span>
           <span class="font-bold text-amber-300">${escapeHtml(lead)}</span>
         </div>
       </div>
@@ -6580,11 +6839,11 @@ function renderSaveArchivesList() {
         </div>
         <div class="flex items-center gap-2">
           <button class="active-save-as-btn px-3 py-1.5 rounded-lg bg-brand-gold text-slate-950 font-black hover:bg-yellow-500 transition text-xs shadow cursor-pointer flex items-center gap-1">
-            <span>💾</span>
+            <span>${uiIcon('save')}</span>
             <span>儲存為新檔</span>
           </button>
           <button class="active-sync-drive-btn px-3 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-blue-100 font-bold transition text-xs border border-blue-600/50 cursor-pointer flex items-center gap-1">
-            <span>☁️</span>
+            <span>${uiIcon('cloud')}</span>
             <span>手動同步此局至雲端（可跨裝置遊戲）</span>
           </button>
           <button class="active-resume-btn px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold transition text-xs cursor-pointer flex items-center gap-1">
@@ -6639,7 +6898,7 @@ function renderSaveArchivesList() {
           <span class="font-serif font-black text-sm text-white group-hover:text-brand-gold transition">${escapeHtml(s.name)}</span>
         </div>
         <div class="flex items-center gap-2 font-mono text-[11px] text-slate-400">
-          <span>🕒</span>
+          <span>${uiIcon('clock')}</span>
           <span>${escapeHtml(s.timestamp || '-')}</span>
         </div>
       </div>
@@ -6650,17 +6909,17 @@ function renderSaveArchivesList() {
           <span class="font-bold text-white">${escapeHtml(p.name || '女主')}</span>
         </div>
         <div class="flex items-center gap-1.5 bg-brand-dark/80 px-2.5 py-1 rounded border border-brand-border/60">
-          <span class="text-slate-400">🎯 攻略：</span>
+          <span class="text-slate-400">${uiIcon('target')} 攻略：</span>
           <span class="font-bold text-amber-300">${escapeHtml(lead)}</span>
         </div>
         <div class="flex items-center gap-1.5 bg-brand-dark/80 px-2.5 py-1 rounded border border-brand-border/60">
-          <span class="text-slate-400">📖 進度：</span>
+          <span class="text-slate-400">${uiIcon('book')} 進度：</span>
           <span class="font-bold text-sky-300">第 ${escapeHtml(turn)} 回（${escapeHtml(chTitle)}）</span>
         </div>
         ${s.branchOrigin ? `<div class="flex items-center gap-1.5 bg-purple-50 px-2.5 py-1 rounded border border-purple-200"><span class="text-purple-600">⑂ 分歧來源：</span><span class="font-bold text-purple-700">第 ${escapeHtml(s.branchOrigin.turn || '?')} 回</span></div>` : ''}
         <div class="flex items-center gap-2 text-[11px] text-slate-400 ml-auto">
-          <span>🌡️ 張力: <b class="text-rose-400">${escapeHtml(tension)}%</b></span>
-          <span>🍷 微醺: <b class="text-amber-400">${escapeHtml(tipsy)}%</b></span>
+          <span>${uiIcon('thermo')} 張力: <b class="text-rose-400">${escapeHtml(tension)}%</b></span>
+          <span>${uiIcon('wine')} 微醺: <b class="text-amber-400">${escapeHtml(tipsy)}%</b></span>
         </div>
       </div>
 
@@ -6674,15 +6933,15 @@ function renderSaveArchivesList() {
           <span>讀取載入此存檔</span>
         </button>
         <button class="rename-archive-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white transition text-xs border border-brand-border cursor-pointer flex items-center gap-1" data-id="${escapeHtml(s.id || '')}">
-          <span>✏️</span>
+          <span>${uiIcon('pencil')}</span>
           <span>重新命名</span>
         </button>
         <button class="sync-single-archive-btn px-3 py-1.5 rounded-lg bg-blue-950/70 hover:bg-blue-900 text-blue-200 hover:text-white transition text-xs border border-blue-700/50 cursor-pointer flex items-center gap-1" data-id="${escapeHtml(s.id || '')}">
-          <span>☁️</span>
+          <span>${uiIcon('cloud')}</span>
           <span>手動同步此檔至雲端（可跨裝置遊戲）</span>
         </button>
         <button class="delete-archive-btn px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white transition text-xs border border-rose-800/40 cursor-pointer flex items-center gap-1" data-id="${escapeHtml(s.id || '')}">
-          <span>🗑️</span>
+          <span>${uiIcon('trash')}</span>
           <span>刪除</span>
         </button>
       </div>
@@ -6718,7 +6977,7 @@ function renderHomeRecentSaves() {
     
     row.innerHTML = `
       <div class="flex items-center gap-2">
-        <span class="text-brand-gold">💾</span>
+        <span class="text-brand-gold">${uiIcon('save')}</span>
         <span class="font-bold text-white">${escapeHtml(s.name)}</span>
         <span class="text-[11px] text-slate-400">（第 ${escapeHtml(s.turnCount || 1)} 回 · ${escapeHtml(s.playerProfile?.targetLeadName || '主線')}）</span>
       </div>
@@ -6732,6 +6991,7 @@ function renderHomeRecentSaves() {
 
 function handleContinueGame() {
   warmLoreCache(getActivePlayerProfile());
+  backfillTurnSummaries();
   if (state.chapterHistoryList && state.chapterHistoryList.length > 0 && state.chapterData) {
     switchView('gameplay');
     // switchView 只更新麵包屑，從不渲染故事本體 —— 先前續玩進來會看到一片空白，
@@ -6854,7 +7114,7 @@ function renderRosterGallery() {
       </div>
       ${isProtagonist ? '' : `<div class="pt-2 flex items-center justify-end">
         <button class="select-this-lead-btn px-3 py-1.5 rounded-lg bg-brand-gold/20 hover:bg-brand-gold text-brand-gold hover:text-slate-950 font-bold text-xs transition border border-brand-gold/40 cursor-pointer shadow-sm" data-key="${k}">
-          ✦ 以此男主開局 →
+          ${uiIcon('sparkle')} 以此男主開局 →
         </button>
       </div>`}
     `;
@@ -7117,6 +7377,7 @@ async function handleRegenerateTurn() {
     const profile = getActivePlayerProfile();
     showLoading('選項確認中……', '正在重新演算並構思第 1 回開局情節……');
     try {
+      await preparePersonaForTurn(profile, profile.customScenario || '故事開場', '', 1);
       const { systemPrompt, userPrompt } = buildFirstTurnPrompt(profile);
       // 先渲染空白卡片，立即隱藏 loading
       hideLoading();
@@ -7269,52 +7530,57 @@ async function handleActRebase() {
   if (!rebaseOk) return;
   if (!state.saveState) return notifyUser('目前尚無可重整的遊戲進度。', 'error');
 
-  if (!state.token || state.token.startsWith('tok_local_')) {
-    const actNumber = state.saveState.meta.currentAct || 1;
-    const recent = (state.chapterHistoryList || []).slice(-8);
-    const localDossier = [
-      `# 第 ${actNumber} 幕幕篇檔案（本機濃縮）`,
-      clampBlock(state.saveState.summaryPool || '尚無長期摘要。', 1200),
-      '## 幕末銜接',
-      recent.map(ch => `- 第 ${ch.turn || '?'} 回 ${ch.chapterTitle || ''}：${String(ch.prose || '').slice(0, 160)}`).join('\n')
-    ].join('\n\n');
-    state.saveState.actDossiers = (Array.isArray(state.saveState.actDossiers) ? state.saveState.actDossiers : [])
-      .concat(localDossier).slice(-6);
-    state.saveState.meta.currentAct = actNumber + 1;
-    state.saveState.meta.contextResetTurn = Math.max(1, Number(state.saveState.turnCount) || 1);
-    state.saveState.summaryPool = `【第 ${actNumber} 幕已完結並重整】${clampBlock(state.saveState.summaryPool, 1700)}`;
-    safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
-    updateGameplayBreadcrumb();
-    notifyUser('故事記憶整理完成，已進入第 ' + state.saveState.meta.currentAct + ' 幕。', 'success', 5000);
-    return;
-  }
+  const actNumber = state.saveState.meta.currentAct || 1;
+  const recent = (state.chapterHistoryList || []).slice(-8);
+  // 本機濃縮版：Worker 無法使用時的退路，也是 AI 版失敗時的保底
+  const localDossier = [
+    `# 第 ${actNumber} 幕幕篇檔案（本機濃縮）`,
+    clampBlock(state.saveState.summaryPool || '尚無長期摘要。', 1200),
+    '## 幕末銜接',
+    recent.map(ch => `- 第 ${ch.turn || '?'} 回 ${ch.chapterTitle || ''}：${ch.turnSummary || String(ch.prose || '').slice(0, 160)}`).join('\n')
+  ].join('\n\n');
 
   showLoading('正在整理故事記憶……', '系統會保留人物關係、數值、物品與重要情節。');
   setGenerationBusy(true);
+  let dossier = localDossier;
   try {
-    const response = await fetch(state.gasApiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'novel/rebase',
-        token: state.token,
-        userId: state.userId,
-        saveState: state.saveState
-      }),
-      redirect: 'follow'
+    // 改走 Worker：GAS 的 novel/rebase 內部用的是舊供應商的模型 ID，在 OpenRouter 上不存在
+    const timeline = (state.chapterHistoryList || [])
+      .map(ch => ch.turnSummary ? `第 ${ch.turn} 回：${ch.turnSummary}` : '')
+      .filter(Boolean).join('\n');
+    const facts = getMemoryBank().filter(m => m.kind === 'fact')
+      .slice(-60).map(m => `第 ${m.turn} 回：${m.text}`).join('\n');
+    const tail = recent.map(ch => `── 第 ${ch.turn || '?'} 回 ${ch.chapterTitle || ''} ──\n${clampBlock(ch.prose, 900)}`).join('\n');
+    const raw = await requestWorkerCompletion({
+      model: LLM_CONFIG.SUMMARY_MODEL,
+      system: '你是長篇小說的編輯，負責在換幕時撰寫「幕篇檔案」，讓下一幕能無縫承接。使用台灣繁體中文，只輸出檔案內容。'
+        + '依序寫四段：一、本幕主線（發生了什麼、因果）；二、人物關係與立場的變化；三、已確立且不可推翻的事實（承諾、物品去向、身分秘密）；'
+        + '四、懸而未決的線索與下一幕的起點。寫清楚人名，不寫評論與形容，總長 800–1,200 字。',
+      user: `【第 ${actNumber} 幕】\n\n--- 摘要池 ---\n${state.saveState.summaryPool || '（無）'}\n\n`
+        + (timeline ? `--- 逐回摘要 ---\n${timeline}\n\n` : '')
+        + (facts ? `--- 已確立的事實 ---\n${facts}\n\n` : '')
+        + `--- 幕末最近幾回 ---\n${tail}`,
+      maxTokens: 2500,
+      temperature: 0.3,
+      timeoutMs: 120000
     });
-    const data = await response.json();
-    if (!data.success || !data.data?.saveState) {
-      throw new Error(data.error?.message || '後端未回傳重整存檔');
-    }
-    state.saveState = data.data.saveState;
+    if (raw && raw.length > 200) dossier = `# 第 ${actNumber} 幕幕篇檔案\n\n${polishTaiwaneseText(raw)}`;
+    else console.warn('[Act Rebase] AI 幕篇檔案過短，改用本機濃縮版。');
+  } catch (err) {
+    console.warn('[Act Rebase] AI 幕篇檔案失敗，改用本機濃縮版：', err.message);
+  }
+
+  try {
+    state.saveState.actDossiers = (Array.isArray(state.saveState.actDossiers) ? state.saveState.actDossiers : [])
+      .concat(dossier).slice(-6);
+    state.saveState.meta.currentAct = actNumber + 1;
+    state.saveState.meta.contextResetTurn = Math.max(1, Number(state.saveState.turnCount) || 1);
+    state.saveState.summaryPool = `【第 ${actNumber} 幕已完結並重整】${clampBlock(state.saveState.summaryPool, 4500)}`;
     safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+    syncStateToGoogleDriveCloud(state.saveState, state.chapterData);
     updateGameplayBreadcrumb();
     renderSaveState();
     notifyUser('故事記憶整理完成，已進入第 ' + state.saveState.meta.currentAct + ' 幕。', 'success', 5000);
-  } catch (err) {
-    console.error('[Act Rebase] Failed:', err);
-    notifyUser('故事記憶整理失敗：' + err.message, 'error', 6000);
   } finally {
     hideLoading();
     setGenerationBusy(false);
@@ -7637,12 +7903,12 @@ function closeFeedbackModal() {
 async function handleFeedbackSubmit(e) {
   if (e && e.preventDefault) e.preventDefault();
 
-  const category = document.getElementById('feedback-category')?.value || '💬 一般心得';
+  const category = document.getElementById('feedback-category')?.value || '整體遊玩心得 / 其他';
   const content = document.getElementById('feedback-content')?.value.trim();
   const contact = document.getElementById('feedback-contact')?.value.trim() || state.username || '匿名玩家';
   const attachDiag = document.getElementById('feedback-attach-diagnostics')?.checked !== false;
 
-  let rating = '⭐⭐⭐⭐⭐ 5星 (極致沉浸)';
+  let rating = '5星 (極致沉浸)';
   const checkedRating = document.querySelector('input[name="feedback-rating"]:checked');
   if (checkedRating) rating = checkedRating.value;
 
@@ -7706,7 +7972,7 @@ async function handleFeedbackSubmit(e) {
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.innerHTML = '<span>🚀</span><span>送出回饋通知</span>';
+      submitBtn.innerHTML = `${uiIcon('send')}<span>送出回饋通知</span>`;
     }
   }
 }

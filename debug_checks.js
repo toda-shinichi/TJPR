@@ -238,7 +238,9 @@ vm.runInContext(`
 assert.strictEqual(novelContainer.children.length, 3, '串流暫存回合錯誤吞掉上一回合');
 const activeHtml = novelContainer.children[2].innerHTML;
 assert.match(activeHtml, /本回選擇/, '串流中玩家行動標籤取到前一回合');
-assert.doesNotMatch(activeHtml, /<(?:img|svg|iframe|b)[\s>]/i, '狀態面板仍可插入未轉義 HTML');
+// 介面 icon 是合法的 <svg class="ui-icon">；其餘任何 svg（如注入的 <svg onload=…>）仍須被擋下
+assert.doesNotMatch(activeHtml, /<(?:img|iframe|b)[\s>]|<svg(?! class="ui-icon")[\s>]/i, '狀態面板仍可插入未轉義 HTML');
+assert.match(activeHtml, /&lt;svg onload/, '注入的 svg 未以純文字顯示');
 assert.match(activeHtml, /&lt;img/, '狀態面板惡意文字未以純文字顯示');
 
 storage.set('undercurrent_named_saves', JSON.stringify({ not: 'an array' }));
@@ -270,7 +272,22 @@ assert.doesNotMatch(xuLingqianLore, /深沉狠戾|高階獵食者|退路全被�
 assert.match(xuLingqianLore, /力量方向：他的危險與權勢只朝向外部威脅，絕不朝向玩家/, '徐令謙角色卡缺少力量方向規則');
 assert.match(xuLingqianLore, /給玩家充分自由，不監禁、不命令、不以安全之名剝奪選擇/, '徐令謙角色卡缺少自由與守護規則');
 assert.strictEqual((rootApp.match(/徐令謙專屬例外：他的張力來自風度、克制、可靠承擔與深情守護/g) || []).length, 2, '開局與續回提示詞未共同套用徐令謙戀愛校準');
-assert.match(rootApp, /徐令謙最新演繹校準（最高優先，覆蓋舊版 Drive 用語）/, '缺少防止 Drive 舊人物卡覆蓋新版性格的最終校準');
+assert.match(rootApp, /徐令謙最新演繹校準（最高優先，覆蓋角色卡舊版用語）/, '缺少防止角色卡舊版用語覆蓋新版性格的最終校準');
+// 角色卡改由網站同網域提供，不再經 GAS／Drive；失敗時必須讓人看得到
+assert.doesNotMatch(rootApp, /action: 'lore\/get-character'/, '角色卡仍經 GAS 從 Drive 讀取');
+assert.match(rootApp, /const CHARACTER_CARD_PATHS = \['characters\/'/, '角色卡未改讀網站上的 characters/');
+assert.match(rootApp, /notifyUser\(`角色卡載入失敗/, '角色卡載入失敗時未通知');
+// 寫死的硬性規則不得出現在人物圖鑑的資料欄位
+const rosterDb = vm.runInContext('OFFICIAL_DRIVE_CHARACTERS', frontendContext);
+for (const [key, c] of Object.entries(rosterDb)) {
+  for (const field of ['watch', 'identityRole', 'title', 'personality', 'cars']) {
+    assert.ok(!/【[^】]*(絕對|絕非|無配戴|嚴禁|唯一)/.test(String(c[field] || '')), `${key}.${field} 仍含寫死規則，會顯示在人物圖鑑`);
+  }
+}
+assert.ok(vm.runInContext("formatCanonRules('02_韓正寰')", frontendContext).includes('不戴眼鏡'), '硬性設定未進提示詞');
+// 角色卡切段：每段不超過上限，且不得遺失內容
+const chunks = vm.runInContext("splitCharacterCard('# 測試\\n\\n⚖️ 基本資料\\n\\n' + '他是檢察官。'.repeat(60) + '\\n\\n' + '他不戴眼鏡。'.repeat(60))", frontendContext);
+assert.ok(chunks.length >= 2 && chunks.every(c => c.length <= 560), '角色卡切段長度異常');
 assert.match(
   vm.runInContext("finishCharacterBlocks([], '01_徐令謙', [])", frontendContext),
   /權勢與危險只用來處理外部威脅，絕不朝向玩家/,
@@ -412,6 +429,9 @@ assert.strictEqual(vm.runInContext("polishTaiwaneseText('他说这里没有人,�
 assert.strictEqual(vm.runInContext("polishTaiwaneseText('她拨开头发，坐上 BMW X6 M60i。')", frontendContext), '她撥開頭髮，坐上 BMW X6 M60i。', '髮／發或英數處理錯誤');
 const tradSample = '皇后、公里、只有、台灣、余光、里長、酒店、土豆、「等等——」';
 assert.strictEqual(vm.runInContext(`polishTaiwaneseText(${JSON.stringify(tradSample)})`, frontendContext), tradSample, '合法繁體字或刻意用詞被誤改');
+// 台灣法律用語「搜索票」與「關係網絡」必須保留（曾被誤換成「搜尋票」「關係網路」）
+assert.strictEqual(vm.runInContext("polishTaiwaneseText('韓正寰持搜索票上門，查他的關係網絡。')", frontendContext), '韓正寰持搜索票上門，查他的關係網絡。', '法律用語或正確用法被誤換');
+assert.ok(!/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(vm.runInContext("splitCharacterCard('# 韓正寰\\n\\n⚖️ 基本資料\\n\\n姓名：韓正寰').join('')", frontendContext)), '角色卡片段仍含 emoji');
 // AI 腔偵測：旁白驚嘆號要抓，對白裡的不算
 assert.ok(vm.runInContext("detectAiFlavor('他停下來！雨很大。「快走！」').some(i => i.includes('驚嘆號'))", frontendContext), '旁白驚嘆號未被偵測');
 assert.ok(!vm.runInContext("detectAiFlavor('雨很大。「快走！」').some(i => i.includes('驚嘆號'))", frontendContext), '對白內的驚嘆號被誤判');
@@ -864,5 +884,27 @@ assert.match(rootApp, /scheduleContinuityPatrol\(nextChapter, choiceLabel\)/, '�
 assert.match(rootApp, /"memoryNotes": \[/, '提示詞未要求模型產出記憶條目');
 assert.match(workerCode, /pathname === '\/decide'/, 'Worker 缺少糾察隊端點');
 assert.match(workerCode, /DECISION_MODELS = \['respan\/span-01-lite'\]/, '糾察隊端點未限制模型');
+
+
+// ── 本輪：摘要、時間軸、記憶上限、去 GAS、去 emoji ──
+assert.match(rootApp, /const SUMMARY_POOL_MAX_CHARS = 5000;/, '摘要池上限不是 5,000 字');
+assert.match(rootApp, /maxFacts: 1000,/, '記憶庫事實上限不是 1,000 則');
+// 摘要池與換幕整理改走 Worker：GAS 停在舊版時這兩條曾經靜默失效
+assert.doesNotMatch(rootApp, /action: 'novel\/rebase'/, '換幕整理仍依賴 GAS');
+const summaryFn = rootApp.slice(rootApp.indexOf('async function triggerRollingSummaryUpdate'), rootApp.indexOf('async function triggerRollingSummaryUpdate') + 3000);
+assert.match(summaryFn, /requestWorkerCompletion\(/, '摘要池未改走 Worker');
+assert.doesNotMatch(summaryFn, /action: 'llm\/proxy'/, '摘要池仍經 GAS 代理');
+// 逐回摘要：50 字內、背景排程、可供玩家查看
+assert.ok(vm.runInContext("clampTurnSummary('徐令謙收下胸針並藏進風衣暗格，韓正寰找上門要求交出，徐令謙拒絕後韓正寰揚言申請搜索票再來。').length <= 51", frontendContext), '逐回摘要超過 50 字');
+assert.match(rootApp, /scheduleTurnSummary\(nextChapter\)/, '回合結束未排程逐回摘要');
+assert.match(rootApp, /const timelineBlock = buildTurnTimelineBlock\(turnCount\)/, '逐回摘要未進入提示詞時間軸');
+assert.match(rootApp, /較早回合（正文已封存，僅保留摘要）/, '章節導覽未顯示已封存回合的摘要');
+// 回報按鍵只能綁一次，否則表單會被開兩次
+assert.strictEqual((rootApp.match(/on\('report-error-btn'/g) || []).length, 1, '回報按鍵重複綁定');
+// 介面不得有 emoji（以線條 icon 取代）
+const emojiRe = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}]/u;
+const htmlNoScript = html.replace(/<script[\s\S]*?<\/script>/g, '');
+assert.ok(!emojiRe.test(htmlNoScript), 'index.html 仍含 emoji');
+assert.match(html, /<symbol id="i-save"/, '缺少 icon 圖示表');
 
 console.log('所有本機偵錯檢查皆已通過。');

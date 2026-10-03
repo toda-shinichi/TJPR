@@ -15,22 +15,28 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./tailwind.generated.css?v=0f3d5198fe">
-  <link rel="stylesheet" href="./style.css?v=0f3d5198fe">
+  <link rel="stylesheet" href="./tailwind.generated.css?v=2ca55d57aa">
+  <link rel="stylesheet" href="./style.css?v=2ca55d57aa">
+  <style>
+    /* 線條 icon（取代 emoji）：跟著文字大小與顏色走 */
+    .ui-icon { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; flex-shrink: 0;
+      fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
 </head>
 <body class="bg-brand-dark text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-gold selection:text-white">
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol><symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></symbol><symbol id="i-sparkle" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 3l1.9 5.8L20 12l-6.1 3.2L12 21l-1.9-5.8L4 12l6.1-3.2z"/></symbol><symbol id="i-scroll" viewBox="0 0 24 24"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></symbol><symbol id="i-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></symbol><symbol id="i-book" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol><symbol id="i-brain" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24A2.5 2.5 0 0 0 14.5 2Z"/></symbol><symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></symbol><symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></symbol><symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></symbol><symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></symbol><symbol id="i-home" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol><symbol id="i-library" viewBox="0 0 24 24"><path d="m16 6 4 14M12 6v14M8 8v12M4 4v16"/></symbol><symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/></symbol><symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol><symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol><symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol><symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol><symbol id="i-mask" viewBox="0 0 24 24"><path d="M2 12a5 5 0 0 0 5 5 8 8 0 0 1 5 2 8 8 0 0 1 5-2 5 5 0 0 0 5-5V7h-5a8 8 0 0 0-5 2 8 8 0 0 0-5-2H2Z"/><path d="M6 11c1.5 0 3 .5 3 2-2 0-3 0-3-2ZM18 11c-1.5 0-3 .5-3 2 2 0 3 0 3-2Z"/></symbol><symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol><symbol id="i-stop" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/></symbol><symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></symbol><symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol><symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/></symbol><symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol><symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol><symbol id="i-thermo" viewBox="0 0 24 24"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></symbol><symbol id="i-wine" viewBox="0 0 24 24"><path d="M8 22h8M7 10h10M12 15v7M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z"/></symbol><symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></symbol><symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol><symbol id="i-bug" viewBox="0 0 24 24"><path d="M8 2l1.88 1.88M14.12 3.88 16 2M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6M12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4"/></symbol></svg>
 
     <!-- 頂部通用導航列 (Mobile-First 專屬直覺式導航) -->
   <header class="sticky top-0 z-40 bg-brand-surface/95 backdrop-blur-md border-b border-brand-border px-3 sm:px-6 py-2.5 flex items-center justify-between shadow-lg">
     <div class="flex items-center space-x-2 sm:space-x-3">
       <button id="nav-home-btn" class="font-serif font-black text-lg sm:text-xl tracking-wider text-brand-gold hover:text-yellow-400 transition flex items-center gap-1 cursor-pointer" title="回到遊戲首頁">
-        <span class="text-brand-gold text-base sm:text-lg">✦</span>
+        <span class="text-brand-gold text-base sm:text-lg"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg></span>
         <span>《暗流》</span>
       </button>
       <span class="text-[11px] text-slate-400 font-mono hidden md:inline border-l border-slate-700 pl-3">UNDER CURRENT</span>
     </div>
 
-    <!-- 🖥️ 電腦版導航功能按鈕組 (>= md 展開文字) -->
+    <!-- 電腦版導航功能按鈕組 (>= md 展開文字) -->
     <div class="hidden md:flex items-center gap-2">
       <button id="force-reload-btn" onclick="forceBypassCacheReload()" class="hidden px-2.5 py-1.5 rounded-lg bg-sky-950/60 hover:bg-sky-900 border border-sky-700/50 text-xs text-sky-300 hover:text-white transition items-center gap-1 cursor-pointer" title="強制穿透快取並載入最新版">
         <span>更新最新版</span>
@@ -61,7 +67,7 @@
       </button>
     </div>
 
-    <!-- 📱 手機版專屬超清晰文字膠囊按鈕組 (< md 顯示) -->
+    <!-- 手機版專屬超清晰文字膠囊按鈕組 (< md 顯示) -->
     <div class="flex md:hidden items-center gap-2">
       <!-- 快速存檔大選單按鈕 -->
       <button id="mobile-nav-saves-btn" class="px-3 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-brand-gold font-bold flex items-center gap-1.5 shadow cursor-pointer">
@@ -77,7 +83,7 @@
   <!-- 主內容容器 -->
   <main class="flex-1 w-full max-w-4xl mx-auto p-3 sm:p-6 flex flex-col justify-start">
     
-    <!-- 🏠 1. 首頁視圖 (Home View) -->
+    <!-- 1. 首頁視圖 (Home View) -->
     <div id="home-view" class="space-y-5 sm:space-y-6" style="display:block;">
       
       <!-- 英雄標題區 -->
@@ -162,7 +168,7 @@
 
       </div>
 
-      <!-- 📜 遊戲指南、系統說明與 13 位男主角色圖鑑入口 -->
+      <!-- 遊戲指南、系統說明與 13 位男主角色圖鑑入口 -->
       <button type="button" id="home-open-guide-btn" class="w-full p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-brand-card/95 via-purple-950/40 to-brand-card/95 border border-brand-gold/40 hover:border-brand-gold transition cursor-pointer shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 group">
         <div class="text-center sm:text-left">
           <div>
@@ -197,10 +203,10 @@
 
     </div>
 
-    <!-- 📖 2. 遊戲進行視圖 (Gameplay View) -->
+    <!-- 2. 遊戲進行視圖 (Gameplay View) -->
     <div id="gameplay-view" class="space-y-6" style="display:none;">
       
-      <!-- 📱 App 風格頂部返回與狀態條 -->
+      <!-- App 風格頂部返回與狀態條 -->
       <div class="sticky z-30 flex items-center justify-between p-2.5 rounded-xl bg-brand-surface/95 backdrop-blur-md border border-brand-border shadow-md" style="top: calc(var(--header-height, 52px) + 0.5rem);">
         <button id="back-to-home-btn" aria-label="返回首頁" class="px-3 py-1.5 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shrink-0 whitespace-nowrap">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
@@ -216,15 +222,15 @@
 
         <div class="flex items-center gap-1.5">
           <button id="gameplay-quick-save-btn" aria-label="快速存檔" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="快速存檔">
-            <span>💾</span>
+            <span><svg class="ui-icon" aria-hidden="true"><use href="#i-save"></use></svg></span>
             <span class="hidden sm:inline">存檔</span>
           </button>
           <button id="gameplay-memory-btn" aria-label="故事記憶" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="查看故事記憶與重要回合">
-            <span>🧠</span>
+            <span><svg class="ui-icon" aria-hidden="true"><use href="#i-brain"></use></svg></span>
             <span class="hidden sm:inline">記憶</span>
           </button>
           <button id="gameplay-drawer-btn" aria-label="角色狀態" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="角色狀態">
-            <span>📊</span>
+            <span><svg class="ui-icon" aria-hidden="true"><use href="#i-chart"></use></svg></span>
             <span class="hidden sm:inline">狀態</span>
           </button>
         </div>
@@ -245,36 +251,36 @@
       <!-- 卷末換窗建議提示（回合數過多時由 JS 顯示） -->
       <div id="rebase-suggestion-banner" class="p-3 rounded-xl bg-amber-950/60 border border-amber-700/50 text-amber-100 text-xs flex flex-wrap items-center justify-between gap-2 shadow-lg" style="display:none;">
         <div class="flex items-center gap-2 min-w-0">
-          <span class="text-base shrink-0">📚</span>
+          <span class="text-base shrink-0"><svg class="ui-icon" aria-hidden="true"><use href="#i-library"></use></svg></span>
           <span id="rebase-suggestion-text" class="leading-relaxed">本幕已進行多回，建議整理故事記憶以維持劇情連貫度。</span>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <button id="rebase-suggestion-action-btn" class="game-action-control px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold transition cursor-pointer">
             立即換窗
           </button>
-          <button id="rebase-suggestion-dismiss-btn" class="text-amber-400/80 hover:text-white p-1 cursor-pointer" aria-label="稍後再說">✕</button>
+          <button id="rebase-suggestion-dismiss-btn" class="text-amber-400/80 hover:text-white p-1 cursor-pointer" aria-label="稍後再說"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
         </div>
       </div>
 
       <!-- 異常中斷救援橫幅 -->
       <div id="error-recovery-banner" class="p-3 rounded-xl bg-rose-950/80 border border-rose-700/60 text-rose-200 text-xs flex items-center justify-between shadow-lg" style="display:none;">
         <div class="flex items-center gap-2">
-          <span class="text-base">⚠️</span>
+          <span class="text-base"><svg class="ui-icon" aria-hidden="true"><use href="#i-alert"></use></svg></span>
           <span id="error-message-text">生成請求超時或中斷。</span>
         </div>
                 <div class="flex items-center gap-2">
           <button id="report-error-btn" class="px-2.5 py-1 rounded-lg bg-rose-900/80 hover:bg-rose-800 text-rose-200 border border-rose-600/50 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer">
-            <span>📝</span>
+            <span><svg class="ui-icon" aria-hidden="true"><use href="#i-file"></use></svg></span>
             <span>一鍵回報問題</span>
           </button>
           <button id="retry-turn-btn" class="px-3 py-1 rounded-lg bg-rose-700 hover:bg-rose-600 text-white font-bold transition cursor-pointer">
             重試此回
           </button>
-          <button id="dismiss-error-btn" class="text-rose-400 hover:text-white p-1 cursor-pointer">✕</button>
+          <button id="dismiss-error-btn" class="text-rose-400 hover:text-white p-1 cursor-pointer"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
         </div>
       </div>
 
-      <!-- 📜 連貫長篇小說瀑布流容器 (Continuous Novel Stream) -->
+      <!-- 連貫長篇小說瀑布流容器 (Continuous Novel Stream) -->
       <div id="novel-stream-container" class="space-y-6">
         <!-- 章節卡片由 JS 動態追加 -->
       </div>
@@ -283,7 +289,7 @@
       <section id="decisions-section" class="p-5 sm:p-6 rounded-2xl bg-brand-surface border border-brand-border shadow-2xl space-y-4">
         <div class="flex items-center justify-between border-b border-brand-border/60 pb-3">
           <div class="flex items-center gap-2">
-            <span class="text-brand-gold text-sm font-bold">✦ <span id="decisions-heading-pronoun">你</span>的下一步抉擇</span>
+            <span class="text-brand-gold text-sm font-bold"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> <span id="decisions-heading-pronoun">你</span>的下一步抉擇</span>
             <span class="text-xs text-slate-400">（點選後可先改寫，再決定是否送出）</span>
           </div>
           <div class="flex items-center gap-2">
@@ -313,7 +319,7 @@
           <div id="selected-action-summary" class="hidden rounded-lg border border-brand-gold/30 bg-brand-gold/10 px-3 py-2 text-xs text-slate-700" aria-live="polite"></div>
           <div class="flex items-center justify-between gap-2">
             <label for="custom-action-input" class="text-xs text-slate-300 font-bold flex items-center gap-1.5">
-              <span>⚡ 自由行動／說話／肢體互動：</span>
+              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-zap"></use></svg> 自由行動／說話／肢體互動：</span>
             </label>
             <span class="text-[10px] text-slate-500 font-mono hidden sm:inline">Enter＝一般 · Shift+Enter 換行</span>
           </div>
@@ -336,7 +342,7 @@
 
   </main>
 
-  <!-- 🔐 玩家帳號登入 / 註冊強制攔截門禁 (Strict Auth Gatekeeper Modal) -->
+  <!-- 玩家帳號登入 / 註冊強制攔截門禁 (Strict Auth Gatekeeper Modal) -->
   <div id="auth-modal" role="dialog" aria-modal="true" aria-label="玩家身分驗證" class="fixed inset-0 bg-[#07080b]/95 backdrop-blur-xl z-[100] overflow-y-auto p-4 flex justify-center items-start transition-opacity" style="display:none;">
     <div class="bg-brand-surface border border-brand-gold/50 rounded-2xl max-w-md w-full p-6 sm:p-8 my-auto shadow-2xl shadow-black space-y-6 relative">
       
@@ -350,10 +356,10 @@
 
       <div class="flex rounded-lg bg-brand-dark p-1 border border-brand-border text-xs font-bold">
         <button type="button" id="tab-login-btn" class="flex-1 py-2.5 rounded-md bg-brand-gold text-slate-950 transition cursor-pointer font-bold">
-          ✦ 登入既有帳號
+          <svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> 登入既有帳號
         </button>
         <button type="button" id="tab-register-btn" class="flex-1 py-2.5 rounded-md text-slate-400 hover:text-white transition cursor-pointer font-bold">
-          ✦ 註冊全新玩家
+          <svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> 註冊全新玩家
         </button>
       </div>
 
@@ -371,7 +377,7 @@
         </div>
         <div id="login-form-message" class="form-message" role="alert" aria-live="polite"></div>
         <button type="submit" id="submit-login-btn" class="w-full bg-brand-gold hover:bg-yellow-500 text-slate-950 font-black py-3 rounded-xl transition text-sm shadow-xl shadow-brand-gold/15 cursor-pointer">
-          ✦ 登入並進入遊戲首頁
+          <svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> 登入並進入遊戲首頁
         </button>
       </form>
 
@@ -389,13 +395,13 @@
         </div>
         <div id="register-form-message" class="form-message" role="alert" aria-live="polite"></div>
         <button type="submit" id="submit-register-btn" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-3 rounded-xl transition text-sm shadow-xl shadow-emerald-900/20 cursor-pointer">
-          ✦ 立即註冊並進入遊戲
+          <svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> 立即註冊並進入遊戲
         </button>
       </form>
     </div>
   </div>
 
-  <!-- 🌟 開局創建玩家角色與人物設定表單彈窗 (Character Creation Modal) -->
+  <!-- 開局創建玩家角色與人物設定表單彈窗 (Character Creation Modal) -->
   <div id="character-creation-modal" role="dialog" aria-modal="true" aria-label="角色自訂與開局情境設定" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[80] overflow-y-auto p-3 sm:p-6 md:p-8 flex justify-center items-start transition-opacity" style="display:none;">
     <div class="bg-brand-surface border border-brand-gold/40 rounded-2xl max-w-xl w-full p-5 sm:p-7 my-auto shadow-2xl shadow-black space-y-4 relative">
       
@@ -479,7 +485,7 @@
 
         <!-- 攻略對象選擇（13 位官方男主 + 全勢力修羅場模式） -->
         <div class="space-y-2">
-          <label class="block font-bold text-brand-gold mb-1">✦ 主要攻略對象 (Tier 1 核心主線) *</label>
+          <label class="block font-bold text-brand-gold mb-1"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> 主要攻略對象 (Tier 1 核心主線) *</label>
           <select id="form-target-lead" class="w-full bg-brand-dark border border-brand-gold/60 rounded-lg px-3 py-2 text-white font-bold focus:border-brand-gold focus:outline-none">
             <!-- 由 JS 自動同步填入 13 位官方男主 -->
           </select>
@@ -490,7 +496,7 @@
           <span id="creator-advanced-toggle-icon">展開 ▾</span>
         </button>
 
-        <!-- ⚠️ 修羅場模式負載提醒卡片 (動態顯示) -->
+        <!-- 修羅場模式負載提醒卡片 (動態顯示) -->
         <div id="shura-warning-card" class="p-3.5 rounded-xl bg-amber-950/70 border border-amber-500/60 text-amber-200 text-xs space-y-1 shadow-lg" style="display:none;">
           <div class="font-bold flex items-center gap-1.5 text-amber-300">
             <span>【全勢力修羅場模式 · 負載與耗時提醒】</span>
@@ -503,7 +509,7 @@
         <!-- 優先交織在場配角 (Tier 2 候選 · 複選 1~2 位) -->
         <div id="supporting-leads-block" class="creator-advanced-field bg-brand-card p-3 rounded-xl border border-brand-border space-y-2">
           <div class="flex items-center justify-between">
-            <label class="block font-bold text-slate-200 text-xs">✦ 優先交織配角 (Tier 2 · 可選 1~2 位)</label>
+            <label class="block font-bold text-slate-200 text-xs"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> 優先交織配角 (Tier 2 · 可選 1~2 位)</label>
             <span class="text-[11px] text-slate-400">（未勾選人物亦會在背景持續運轉勢力）</span>
           </div>
           <div id="supporting-leads-chips" class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-xs max-h-36 overflow-y-auto pr-1">
@@ -532,11 +538,11 @@
 
                 <div class="flex flex-col sm:flex-row gap-2 pt-2">
           <button type="submit" id="submit-char-btn" class="flex-1 py-3 rounded-xl bg-brand-gold hover:bg-yellow-500 text-slate-950 font-black text-xs sm:text-sm transition shadow-xl shadow-brand-gold/20 cursor-pointer flex items-center justify-center gap-1.5">
-            <span>✦</span>
+            <span><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg></span>
             <span>開始第 1 回故事</span>
           </button>
           <button type="button" id="cancel-char-creation-btn" onclick="closeCharacterCreationModal()" class="py-3 px-5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs sm:text-sm transition border border-brand-border cursor-pointer flex items-center justify-center gap-1">
-            <span>✕</span>
+            <span><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></span>
             <span>取消並返回首頁</span>
           </button>
         </div>
@@ -546,7 +552,7 @@
     </div>
   </div>
 
-  <!-- 📝 人設庫管理中心彈窗 (Profile Presets Manager Modal) -->
+  <!-- 人設庫管理中心彈窗 (Profile Presets Manager Modal) -->
   <div id="profile-manager-modal" role="dialog" aria-modal="true" aria-label="人設庫" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[85] overflow-y-auto p-3 sm:p-6 flex justify-center items-start transition-opacity" style="display:none;">
     <div class="bg-brand-surface border border-purple-500/50 rounded-2xl max-w-2xl w-full max-h-[88vh] my-auto flex flex-col shadow-2xl p-5 sm:p-6 space-y-4 relative">
       
@@ -584,7 +590,7 @@
     </div>
   </div>
 
-  <!-- 💾 大型存檔與讀檔大選單中心 (Save & Load Center Modal) -->
+  <!-- 大型存檔與讀檔大選單中心 (Save & Load Center Modal) -->
   <div id="save-archive-modal" role="dialog" aria-modal="true" aria-label="存檔庫" class="fixed inset-0 bg-black/90 backdrop-blur-lg z-[85] overflow-y-auto p-3 sm:p-6 flex justify-center items-start transition-opacity" style="display:none;">
     <div class="bg-brand-surface border border-brand-gold/50 rounded-2xl max-w-4xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl p-5 sm:p-7 space-y-4 relative">
       
@@ -631,7 +637,7 @@
               <span>手動同步至雲端（可跨裝置遊戲）</span>
             </button>
           <button id="cloud-load-btn" class="px-3 py-2 rounded-xl bg-sky-950/60 hover:bg-sky-900 text-sky-200 hover:text-white font-bold text-xs border border-sky-700/50 transition cursor-pointer flex items-center gap-1.5" title="從雲端載入存檔以在其他裝置接續遊玩">
-            <span>☁️</span>
+            <span><svg class="ui-icon" aria-hidden="true"><use href="#i-cloud"></use></svg></span>
             <span>從雲端載入存檔</span>
           </button>
             <button id="export-all-saves-btn" class="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-brand-border transition text-xs cursor-pointer" title="匯出全部存檔至 JSON 檔案">
@@ -661,7 +667,7 @@
     </div>
   </div>
 
-  <!-- 🧠 AI 記憶中心 -->
+  <!-- AI 記憶中心 -->
   <div id="memory-center-modal" role="dialog" aria-modal="true" aria-label="AI 記憶中心" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[90] overflow-y-auto p-3 sm:p-6 flex justify-center items-start" style="display:none;">
     <div class="bg-brand-surface border border-brand-gold/50 rounded-2xl max-w-3xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl p-5 sm:p-6 space-y-4">
       <div class="flex items-start justify-between gap-3 pb-3 border-b border-brand-border">
@@ -669,7 +675,7 @@
           <h3 class="font-serif font-black text-lg text-brand-gold">AI 記憶中心</h3>
           <p class="text-xs text-slate-400 mt-1">查看長期摘要、當前狀態與玩家指定不可遺忘的重要回合。</p>
         </div>
-        <button id="close-memory-center-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer" aria-label="關閉記憶中心">✕</button>
+        <button id="close-memory-center-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer" aria-label="關閉記憶中心"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
       </div>
       <div id="memory-center-content" class="modal-scroll-container flex-1 overflow-y-auto space-y-4 pr-1 text-xs"></div>
       <div class="flex flex-wrap justify-end gap-2 pt-2 border-t border-brand-border">
@@ -679,7 +685,7 @@
     </div>
   </div>
 
-  <!-- 📜 遊戲說明、系統功能與角色圖鑑彈窗 (Game Guide Modal) -->
+  <!-- 遊戲說明、系統功能與角色圖鑑彈窗 (Game Guide Modal) -->
   <div id="game-guide-modal" role="dialog" aria-modal="true" aria-label="遊戲指南與角色圖鑑" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[85] overflow-y-auto p-3 sm:p-6 flex justify-center items-start transition-opacity" style="display:none;">
     <div class="bg-brand-surface border border-brand-gold/50 rounded-2xl max-w-3xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl p-5 sm:p-6 space-y-4 relative">
       
@@ -704,7 +710,7 @@
           系統功能說明
         </button>
         <button id="guide-tab-roster-btn" class="guide-tab-btn py-2 px-3 sm:px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition cursor-pointer whitespace-nowrap">
-          👥 13 位男主＋主角全景圖鑑
+          <svg class="ui-icon" aria-hidden="true"><use href="#i-users"></use></svg> 13 位男主＋主角全景圖鑑
         </button>
       </div>
 
@@ -715,7 +721,7 @@
         <div id="guide-panel-gameplay" class="space-y-4">
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>✦ 1. 先定義主角，再開始第一回</span>
+              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> 1. 先定義主角，再開始第一回</span>
             </h4>
             <p class="text-slate-300 text-xs">
               開局可設定主角姓名、年齡、職業、背景、外貌、界線、攻略對象與自訂情境；也可直接套用官方或自訂人設。系統會以這些設定生成第一回，沒有預先寫死的劇情分支。
@@ -724,7 +730,7 @@
 
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>✦ 2. 選擇、自由行動與回合推進</span>
+              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> 2. 選擇、自由行動與回合推進</span>
             </h4>
             <p class="text-slate-300 text-xs">
               每回通常會提供 3 個依當前情境生成的選項；選項文字與提示是建議，真正的後果會由前情、人物關係與你的行動共同推演。
@@ -738,7 +744,7 @@
 
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>✦ 3. 閱讀節奏與狀態面板</span>
+              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> 3. 閱讀節奏與狀態面板</span>
             </h4>
             <p class="text-slate-300 text-xs">
               在抉擇區可調整正文字級（16–26px）與顯示速度。每回結尾的狀態面板會整理時間地點、人物互動、道具、傳聞、張力與關係變化；右上角「狀態」可查看生命、理智與關係數值。這些內容適合在做下一步前快速回顧。
@@ -750,7 +756,7 @@
         <div id="guide-panel-system" class="space-y-4" style="display:none;">
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>🎭 1. 角色設定與劇情脈絡</span>
+              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-mask"></use></svg> 1. 角色設定與劇情脈絡</span>
             </h4>
             <ul class="space-y-1.5 text-slate-300 text-xs">
               <li><strong class="text-brand-gold">攻略主線</strong>：開局選定的男主與主角人設會持續帶入後續回合。</li>
@@ -761,7 +767,7 @@
 
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>🧠 2. 近期上下文與長期摘要</span>
+              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-brain"></use></svg> 2. 近期上下文與長期摘要</span>
             </h4>
             <p class="text-slate-300 text-xs">
               每次推進會參考近期回合、既有劇情摘要與玩家釘選的重要回合；在雲端帳號模式下，系統約每 5 回合於背景更新一次摘要。遊玩畫面上方的「記憶」可查看 AI 目前掌握的摘要與狀態，重要承諾或轉折也可標記為不可遺忘。
@@ -770,7 +776,7 @@
 
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>💾 3. 自動進度、具名存檔與備份</span>
+              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-save"></use></svg> 3. 自動進度、具名存檔與備份</span>
             </h4>
             <p class="text-slate-300 text-xs">
               進行中的冒險會自動保留在本機；存檔庫可建立、搜尋、重新命名、載入與刪除具名存檔，也可匯出／匯入 JSON 備份。每回可建立分歧存檔；從歷史回合回溯時，系統也會先保存原時間線，再安全切回當時的完整狀態快照。
@@ -779,7 +785,7 @@
 
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>☁️ 4. 雲端同步與跨裝置接續</span>
+              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-cloud"></use></svg> 4. 雲端同步與跨裝置接續</span>
             </h4>
             <p class="text-slate-300 text-xs">
               使用雲端帳號登入後，開局與成功推進回合會嘗試同步；也可在存檔庫或頂端同步狀態手動同步與載入。若顯示「本機模式」或同步失敗，進度仍會留在目前裝置，但不能保證跨裝置讀取。
@@ -788,7 +794,7 @@
 
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span>📚 5. 長局遊玩與故事記憶整理</span>
+              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-library"></use></svg> 5. 長局遊玩與故事記憶整理</span>
             </h4>
             <p class="text-slate-300 text-xs">
               同一幕累積約 30 回後，系統會建議「整理故事記憶」，將本幕的重要情節濃縮並進入下一幕。數值、關係與道具都會保留，建議執行前先建立具名存檔。
@@ -800,7 +806,7 @@
         <div id="guide-panel-roster" class="space-y-3" style="display:none;">
           <div class="flex items-center justify-between pb-1">
             <span class="text-slate-400 text-xs">收錄 13 位官方男主，另附官方主角檔案：</span>
-            <input type="text" id="search-roster-input" placeholder="🔍 搜尋男主姓名、勢力、職稱..." class="bg-brand-dark border border-brand-border rounded-lg px-3 py-1 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
+            <input type="text" id="search-roster-input" placeholder="搜尋男主姓名、勢力、職稱..." class="bg-brand-dark border border-brand-border rounded-lg px-3 py-1 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none">
           </div>
           <div id="roster-gallery-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <!-- 由 JS 動態生成 13 位男主與主角圖鑑卡片 -->
@@ -815,11 +821,11 @@
     <!-- 右側滑出式狀態抽屜 (Drawer) -->
   <div id="drawer-backdrop" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity opacity-0 pointer-events-none"></div>
 
-  <!-- 📊 狀態抽屜：只放角色數值，遊玩中最常查的資訊 -->
+  <!-- 狀態抽屜：只放角色數值，遊玩中最常查的資訊 -->
   <aside id="side-drawer" class="fixed top-0 right-0 bottom-0 w-full sm:w-96 bg-brand-surface border-l border-brand-border z-50 p-6 overflow-y-auto modal-scroll-container transform translate-x-full transition-transform duration-300 ease-in-out shadow-2xl space-y-5" role="dialog" aria-modal="true" aria-label="角色狀態面板">
     <div class="flex justify-between items-center pb-3 border-b border-brand-border">
       <h2 class="font-serif font-bold text-base text-white flex items-center gap-2">
-        <span class="text-brand-gold">📊</span>
+        <span class="text-brand-gold"><svg class="ui-icon" aria-hidden="true"><use href="#i-chart"></use></svg></span>
         角色狀態與好感度
       </h2>
       <button id="close-drawer-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer touch-target" aria-label="關閉狀態面板">
@@ -865,11 +871,11 @@
     </div>
   </aside>
 
-  <!-- ☰ 選單抽屜：導覽 + 帳號與資料，與狀態面板分離 -->
+  <!-- 選單抽屜：導覽 + 帳號與資料，與狀態面板分離 -->
   <aside id="menu-drawer" class="fixed top-0 right-0 bottom-0 w-full sm:w-80 bg-brand-surface border-l border-brand-border z-50 p-6 overflow-y-auto modal-scroll-container transform translate-x-full transition-transform duration-300 ease-in-out shadow-2xl space-y-5" role="dialog" aria-modal="true" aria-label="功能選單">
     <div class="flex justify-between items-center pb-3 border-b border-brand-border">
       <h2 class="font-serif font-bold text-base text-white flex items-center gap-2">
-        <span class="text-brand-gold">☰</span>
+        <span class="text-brand-gold"><svg class="ui-icon" aria-hidden="true"><use href="#i-menu"></use></svg></span>
         功能選單
       </h2>
       <button id="close-menu-drawer-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer touch-target" aria-label="關閉功能選單">
@@ -881,31 +887,31 @@
       <div class="text-[11px] font-bold text-brand-gold uppercase tracking-wider">全域功能導航</div>
       <div class="grid grid-cols-2 gap-2">
         <button id="drawer-home-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-brand-gold/50 text-left transition cursor-pointer flex flex-col gap-0.5">
-          <div class="text-xs font-bold text-white flex items-center gap-1"><span>🏠</span><span>首頁主選單</span></div>
+          <div class="text-xs font-bold text-white flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-home"></use></svg></span><span>首頁主選單</span></div>
           <div class="text-[10px] text-slate-400">返回主畫面</div>
         </button>
         <button id="drawer-gameplay-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-sky-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
-          <div class="text-xs font-bold text-sky-300 flex items-center gap-1"><span>📖</span><span>繼續冒險</span></div>
+          <div class="text-xs font-bold text-sky-300 flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-book"></use></svg></span><span>繼續冒險</span></div>
           <div class="text-[10px] text-slate-400">回到小說劇情</div>
         </button>
         <button id="drawer-saves-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-emerald-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
-          <div class="text-xs font-bold text-emerald-300 flex items-center gap-1"><span>💾</span><span>存檔庫</span></div>
+          <div class="text-xs font-bold text-emerald-300 flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-save"></use></svg></span><span>存檔庫</span></div>
           <div class="text-[10px] text-slate-400">存讀檔與雲端同步</div>
         </button>
         <button id="drawer-presets-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-purple-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
-          <div class="text-xs font-bold text-purple-300 flex items-center gap-1"><span>📝</span><span>人設庫</span></div>
+          <div class="text-xs font-bold text-purple-300 flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-file"></use></svg></span><span>人設庫</span></div>
           <div class="text-[10px] text-slate-400">主角履歷與情境</div>
         </button>
         <button id="drawer-guide-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-amber-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
-          <div class="text-xs font-bold text-amber-300 flex items-center gap-1"><span>📜</span><span>角色圖鑑</span></div>
+          <div class="text-xs font-bold text-amber-300 flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-scroll"></use></svg></span><span>角色圖鑑</span></div>
           <div class="text-[10px] text-slate-400">人物檔案與系統指南</div>
         </button>
                 <button id="drawer-feedback-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-sky-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
-          <div class="text-xs font-bold text-sky-300 flex items-center gap-1"><span>💬</span><span>測試回饋</span></div>
+          <div class="text-xs font-bold text-sky-300 flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-message"></use></svg></span><span>測試回饋</span></div>
           <div class="text-[10px] text-slate-400">意見與問題回報</div>
         </button>
         <button onclick="forceBypassCacheReload()" class="p-2.5 rounded-xl bg-sky-950/40 hover:bg-sky-950 border border-sky-700/50 text-left transition cursor-pointer flex flex-col gap-0.5">
-          <div class="text-xs font-bold text-sky-200 flex items-center gap-1"><span>🔄</span><span>更新最新版</span></div>
+          <div class="text-xs font-bold text-sky-200 flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-refresh"></use></svg></span><span>更新最新版</span></div>
           <div class="text-[10px] text-slate-400">強制穿透快取</div>
         </button>
       </div>
@@ -937,10 +943,10 @@
       <div class="text-[11px] font-bold text-rose-400/90 uppercase tracking-wider">帳號與資料</div>
       <div class="bg-brand-card p-3 rounded-xl border border-brand-border space-y-2">
         <button id="drawer-cloud-load-btn" class="w-full text-left px-3 py-2 rounded-lg bg-sky-950/50 hover:bg-sky-950 border border-sky-700/50 text-xs text-sky-200 hover:text-white transition cursor-pointer">
-          ☁️ 從雲端載入存檔（跨裝置接續）
+          <svg class="ui-icon" aria-hidden="true"><use href="#i-cloud"></use></svg> 從雲端載入存檔（跨裝置接續）
         </button>
         <button id="drawer-reload-lore-btn" class="w-full text-left px-3 py-2 rounded-lg bg-purple-950/50 hover:bg-purple-950 border border-purple-700/50 text-xs text-purple-200 hover:text-white transition cursor-pointer" title="在 Google Drive 上編輯過角色卡後，用這個讓修改立即生效">
-          📜 重新載入角色設定
+          <svg class="ui-icon" aria-hidden="true"><use href="#i-scroll"></use></svg> 重新載入角色設定
         </button>
         <div id="lore-status-line" class="text-[10px] text-slate-500 px-1 leading-relaxed"></div>
         <button id="drawer-logout-btn" class="w-full text-left px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-brand-border text-xs text-slate-300 hover:text-white transition cursor-pointer">
@@ -956,7 +962,7 @@
     </div>
   </aside>
 
-  <!-- 💬 測試意見反饋與問題回報彈窗 (Feedback Modal) -->
+  <!-- 測試意見反饋與問題回報彈窗 (Feedback Modal) -->
   <div id="feedback-modal" role="dialog" aria-modal="true" aria-label="測試意見反饋與問題回報" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[90] overflow-y-auto p-3 sm:p-6 flex justify-center items-start transition-opacity" style="display:none;">
     <div class="bg-brand-surface border border-sky-500/50 rounded-2xl max-w-lg w-full my-auto shadow-2xl p-5 sm:p-6 space-y-4 relative">
       
@@ -1002,11 +1008,11 @@
               <span class="text-[10px] text-slate-400">3星</span>
             </label>
             <label class="p-2 rounded-lg bg-brand-dark border border-brand-border/60 hover:border-sky-400 cursor-pointer flex flex-col items-center gap-1">
-              <input type="radio" name="feedback-rating" value="⭐⭐⭐⭐ 4星 (很棒)" class="accent-sky-400">
+              <input type="radio" name="feedback-rating" value="4星 (很棒)" class="accent-sky-400">
               <span class="text-[10px] text-slate-400">4星</span>
             </label>
             <label class="p-2 rounded-lg bg-brand-dark border border-brand-border/60 hover:border-sky-400 cursor-pointer flex flex-col items-center gap-1">
-              <input type="radio" name="feedback-rating" value="⭐⭐⭐⭐⭐ 5星 (極致沉浸)" checked class="accent-sky-400">
+              <input type="radio" name="feedback-rating" value="5星 (極致沉浸)" checked class="accent-sky-400">
               <span class="text-[10px] text-amber-300 font-bold">5星</span>
             </label>
           </div>
@@ -1036,7 +1042,7 @@
         <!-- 按鈕組 -->
         <div class="flex gap-2 pt-2">
           <button type="submit" id="submit-feedback-btn" class="flex-1 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs sm:text-sm transition shadow-lg cursor-pointer flex items-center justify-center gap-1.5">
-            <span>🚀</span>
+            <span><svg class="ui-icon" aria-hidden="true"><use href="#i-send"></use></svg></span>
             <span>送出回饋通知</span>
           </button>
           <button type="button" id="cancel-feedback-btn" class="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition border border-brand-border cursor-pointer">
@@ -1087,13 +1093,13 @@
       <div id="generation-dock-meta" class="text-[11px] text-slate-400 truncate">可以繼續閱讀前文</div>
     </div>
     <button id="restore-generation-btn" class="shrink-0 px-3 py-2 rounded-lg bg-brand-gold text-slate-950 text-[11px] font-black cursor-pointer">查看進度</button>
-    <button id="dock-abort-generation-btn" class="shrink-0 p-2 text-slate-500 hover:text-rose-300 cursor-pointer" aria-label="中止本回生成">✕</button>
+    <button id="dock-abort-generation-btn" class="shrink-0 p-2 text-slate-500 hover:text-rose-300 cursor-pointer" aria-label="中止本回生成"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
   </div>
 
-  <!-- 📖 閱讀輔助浮動控制：跳過打字機 / 回到最新章節 -->
+  <!-- 閱讀輔助浮動控制：跳過打字機 / 回到最新章節 -->
   <div id="reader-fabs" class="fixed left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center gap-2 pointer-events-none" style="bottom: calc(1rem + env(safe-area-inset-bottom, 0px));">
     <button id="abort-streaming-fab" type="button" class="pointer-events-auto hidden items-center gap-1.5 px-4 py-2.5 rounded-full bg-rose-950/95 backdrop-blur-md text-rose-200 hover:text-white font-bold text-xs shadow-2xl shadow-black/50 border border-rose-600/60 transition active:scale-95 cursor-pointer">
-      <span>🛑</span>
+      <span><svg class="ui-icon" aria-hidden="true"><use href="#i-stop"></use></svg></span>
       <span>中止生成</span>
     </button>
     <button id="skip-typewriter-fab" type="button" class="pointer-events-auto hidden items-center gap-1.5 px-4 py-2.5 rounded-full bg-brand-gold text-slate-950 font-bold text-xs shadow-2xl shadow-black/50 border border-yellow-300/50 transition active:scale-95 cursor-pointer">
@@ -1106,22 +1112,22 @@
     </button>
   </div>
 
-  <!-- 📑 章節目錄浮層 -->
+  <!-- 章節目錄浮層 -->
   <div id="chapter-nav-panel" class="fixed inset-0 z-[95] bg-black/70 backdrop-blur-sm p-4 flex items-start justify-center" style="display:none;" role="dialog" aria-modal="true" aria-label="章節目錄">
     <div class="bg-brand-surface border border-brand-gold/40 rounded-2xl w-full max-w-md mt-20 shadow-2xl overflow-hidden flex flex-col max-h-[70vh]">
       <div class="flex items-center justify-between px-4 py-3 border-b border-brand-border shrink-0">
         <h3 class="font-serif font-bold text-sm text-brand-gold">章節目錄</h3>
-        <button id="close-chapter-nav-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer" aria-label="關閉章節目錄">✕</button>
+        <button id="close-chapter-nav-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer" aria-label="關閉章節目錄"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
       </div>
       <div id="chapter-nav-list" class="modal-scroll-container overflow-y-auto p-2 space-y-1 text-xs"></div>
     </div>
   </div>
 
-  <!-- 💠 自訂對話框（取代原生 alert / confirm / prompt） -->
+  <!-- 自訂對話框（取代原生 alert / confirm / prompt） -->
   <div id="app-dialog" class="fixed inset-0 z-[150] bg-[#07080b]/88 backdrop-blur-md p-4 flex items-center justify-center" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title">
     <div class="bg-brand-surface border border-brand-border rounded-2xl max-w-sm w-full p-5 sm:p-6 shadow-2xl shadow-black space-y-4">
       <div class="flex items-start gap-3">
-        <span id="app-dialog-icon" class="text-2xl leading-none shrink-0">✦</span>
+        <span id="app-dialog-icon" class="text-2xl leading-none shrink-0"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg></span>
         <div class="min-w-0 space-y-1">
           <h3 id="app-dialog-title" class="font-serif font-bold text-base text-white leading-snug">提示</h3>
           <p id="app-dialog-message" class="text-xs text-slate-300 leading-relaxed whitespace-pre-line"></p>
@@ -1145,7 +1151,7 @@
 
   <div id="toast-container" class="fixed right-3 bottom-3 sm:right-5 sm:bottom-5 z-[140] flex w-[calc(100%-1.5rem)] max-w-sm flex-col gap-2 pointer-events-none" aria-live="polite" aria-atomic="true"></div>
 
-  <!-- 🔄 快取穿透與最新版本保證工具 -->
+  <!-- 快取穿透與最新版本保證工具 -->
   <script>
     function forceBypassCacheReload() {
       const timestamp = new Date().getTime();
@@ -1154,6 +1160,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=0f3d5198fe" defer></script>
+    <script src="app.js?v=2ca55d57aa" defer></script>
 </body>
 </html>
