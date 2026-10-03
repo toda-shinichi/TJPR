@@ -9,13 +9,20 @@ if ! command -v node >/dev/null 2>&1; then
   exit 0
 fi
 
+# Tailwind 是預先產生的 CSS：只要新增了 class 卻沒重新產生，那些樣式在線上就不會生效。
+# 先前就因此漏掉過「露骨」按鈕的陰影與時間軸區塊的底色，所以每次提交都重新產生。
+if [ -x node_modules/.bin/tailwindcss ]; then
+  npm run --silent build:css >/dev/null 2>&1 || { echo "pre-commit: Tailwind CSS 產生失敗，提交中止。" >&2; exit 1; }
+fi
+
 node tools/stamp-assets.js || exit 1
 
 # 把腳本剛才可能改動的檔案重新加入本次提交
-for f in index.html app.js style.css \
+for f in index.html app.js style.css tailwind.generated.css \
          project-epilogue/frontend-web/index.html \
          project-epilogue/frontend-web/app.js \
-         project-epilogue/frontend-web/style.css; do
+         project-epilogue/frontend-web/style.css \
+         project-epilogue/frontend-web/tailwind.generated.css; do
   [ -f "$f" ] && git add "$f"
 done
 

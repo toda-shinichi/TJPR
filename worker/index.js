@@ -31,8 +31,15 @@ const PINNED_PROVIDERS = {
   // 比 streamlake／sail-research 快 2.5 倍以上；novita 次之但曾只寫 128 字。
   'deepseek/deepseek-v4-flash-0731': ['parasail/fp8', 'novita/fp8', 'streamlake/fp8'],
   // 實測 streamlake 2/2 完整可用、分數 100、11.6 秒
-  'qwen/qwen3-30b-a3b-instruct-2507': ['streamlake', 'dekallm', 'siliconflow/fp8']
-  // qwen3-235b 與 hy3 尚未逐家實測完畢，暫依價格排序並允許輪替
+  'qwen/qwen3-30b-a3b-instruct-2507': ['streamlake', 'dekallm', 'siliconflow/fp8'],
+  // 2026-10-03 實測：gmicloud 12.3s／分數 100／最便宜、parasail 11.1s 最快但篇幅偏短、
+  // venice 13.7s、streamlake 15.5s。排除 deepinfra／novita／nebius（51–71 秒）與
+  // alibaba（JSON 0/2 可用）。
+  'qwen/qwen3-235b-a22b-2507': ['gmicloud/fp8', 'parasail/fp8', 'venice/fp8', 'streamlake'],
+  // 2026-10-03 實測（不強制 JSON）：deepinfra 7.9s、tencent 10.5s、atlas-cloud 10.1s，
+  // 三家露骨 3/3 全過。排除 novita／gmicloud／phala：一般提示詞正常，但要求露骨內容時
+  // 回傳空白，判斷有內容過濾。
+  'tencent/hy3': ['deepinfra/fp4', 'tencent/fp8', 'atlas-cloud/fp8']
 };
 
 /**
@@ -47,6 +54,15 @@ const REASONING_DISABLED_MODELS = new Set([
   // qwen 的 -2507 instruct 版本不帶 reasoning 參數（思考版是獨立的 model ID），
   // 列進來只會送出一個供應商看不懂的欄位。
 ]);
+
+/**
+ * 不套用強制 JSON 的模型。
+ * 實測（2026-10-03）hy3 開啟強制 JSON 時，tencent 與 gmicloud 輸出 {"prose\":"…，
+ * 多一個反斜線讓整份 JSON 失效；novita／phala／atlas-cloud 不支援該參數而被
+ * OpenRouter 直接排除，六家只剩 deepinfra 可用。關閉後五家都能寫出合法 JSON，
+ * 前端的寬鬆解析可處理少數格式瑕疵。
+ */
+const JSON_MODE_DISABLED_MODELS = new Set(['tencent/hy3']);
 
 function resolveReasoning(model, requestedReasoning, viaSharedKey) {
   if (viaSharedKey && requestedReasoning && typeof requestedReasoning === 'object') {
@@ -686,7 +702,8 @@ export default {
           ...body,
           provider: resolveProviderRouting(body.model, normalized.requestedProvider, viaSharedKey),
           reasoning: resolveReasoning(body.model, normalized.requestedReasoning, viaSharedKey),
-          response_format: normalized.responseFormat
+          // 部分模型的供應商在強制 JSON 下會輸出壞掉的 JSON（見 JSON_MODE_DISABLED_MODELS），對它們略過
+          response_format: JSON_MODE_DISABLED_MODELS.has(body.model) ? undefined : normalized.responseFormat
         })
       });
 

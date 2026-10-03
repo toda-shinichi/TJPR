@@ -1143,6 +1143,11 @@ function setupEventListeners() {
     on('drawer-saves-btn', 'click', () => { closeDrawer(); openSaveArchiveModal(); });
     on('drawer-presets-btn', 'click', () => { closeDrawer(); openProfileManagerModal(); });
     on('drawer-guide-btn', 'click', () => { closeDrawer(); openGameGuideModal('gameplay'); });
+    on('drawer-timeline-btn', 'click', () => {
+      closeDrawer();
+      if (!(state.chapterHistoryList || []).length) return notifyUser('目前還沒有劇情紀錄。', 'info');
+      openChapterNav();
+    });
 
     // 抽屜開關
     on('open-drawer-btn', 'click', openMenuDrawer);
@@ -3452,7 +3457,7 @@ function buildPinnedMemoryBlock(historyList, saveState = state.saveState) {
     const facts = [
       `── 第 ${h.turn || '?'} 回：${h.chapterTitle || '重要回合'} ──`,
       h.chosenLabel ? `【玩家行動】${h.chosenLabel}` : '',
-      `【不可遺忘原文】${clampBlock(h.prose, 900)}`
+      `【不可遺忘原文】${clampBlock(h.prose, 1500)}`
     ].filter(Boolean);
     return facts.join('\n');
   });
@@ -3734,7 +3739,7 @@ const MEMORY = {
   maxFacts: 1000,          // 約 60 字／則，1,000 則約 60KB；每回 3–4 則，可涵蓋 250 回以上
   maxScenes: 120,
   maxSummaries: 1000,      // 逐回摘要，每回一則、50 字內
-  factChars: 60,
+  factChars: 120,          // 模型常寫到 70–90 字；60 字上限曾把約定的時間地點截掉
   sceneChars: 260,
   topK: 6,                 // 撈回幾則。太多會擠壓近期全文的份量。
   maxScenes: 2,            // 場景條目長且不精確，最多佔兩則，其餘名額留給事實
@@ -5960,9 +5965,9 @@ function renderChapterNavList() {
     }`;
     const summary = ch.turnSummary || summaryByTurn.get(Number(turn)) || '';
     row.innerHTML = `
-      <div class="flex items-center gap-2">
-        <span class="font-mono text-[10px] shrink-0 opacity-70">第 ${ch.act || 1}-${turn} 回</span>
-        <span class="font-serif font-bold truncate">${escapeHtml(ch.chapterTitle || '未命名章節')}</span>
+      <div class="flex items-start gap-2">
+        <span class="font-mono text-[10px] shrink-0 opacity-70 mt-0.5">第 ${ch.act || 1}-${turn} 回</span>
+        <span class="font-serif font-bold break-words min-w-0">${escapeHtml(ch.chapterTitle || '未命名章節')}</span>
         ${isCurrent ? '<span class="ml-auto text-[10px] font-mono shrink-0">目前</span>' : ''}
       </div>
       ${summary ? `<div class="mt-1 text-[11px] leading-relaxed text-slate-400">${escapeHtml(summary)}</div>` : ''}
@@ -6567,6 +6572,18 @@ function getPinnedMemories() {
   return Array.from(byTurn.values()).slice(-8);
 }
 
+/** 長文先顯示前 260 字，可展開全文（取代先前的硬截斷「……」）。 */
+function renderExpandableProse(prose) {
+  const text = String(prose || '');
+  if (text.length <= 260) return `<p class="text-slate-600 leading-relaxed whitespace-pre-wrap">${escapeHtml(text)}</p>`;
+  return `<details class="group">
+    <summary class="list-none cursor-pointer text-slate-600 leading-relaxed">
+      <span class="whitespace-pre-wrap">${escapeHtml(text.slice(0, 260))}</span><span class="group-open:hidden">…… <span class="text-brand-gold text-[11px]">展開全文</span></span>
+    </summary>
+    <p class="text-slate-600 leading-relaxed whitespace-pre-wrap">${escapeHtml(text.slice(260))}</p>
+  </details>`;
+}
+
 function renderMemoryCenter() {
   const container = dom.memoryCenterContent;
   if (!container) return;
@@ -6575,6 +6592,11 @@ function renderMemoryCenter() {
   const sp = state.chapterData?.statusPanel || {};
   const rels = state.saveState?.relationships || {};
   const recentCount = Math.min(CONTEXT_BUDGET.recentTurns, (state.chapterHistoryList || []).length);
+  const facts = getMemoryBank().filter(m => m.kind === 'fact').slice().sort((a, b) => b.turn - a.turn);
+  const factsHtml = facts.length
+    ? `<div class="p-3 rounded-xl bg-brand-card border border-brand-border space-y-1.5 max-h-80 overflow-y-auto">${facts.map(m => `
+        <div class="leading-relaxed text-slate-600"><span class="font-mono text-[10px] text-slate-400 mr-1">第 ${escapeHtml(m.turn)} 回</span>${m.topic ? `<span class="text-brand-gold mr-1">［${escapeHtml(m.topic)}］</span>` : ''}${escapeHtml(m.text)}</div>`).join('')}</div>`
+    : '<div class="p-3 rounded-xl bg-brand-card/60 border border-brand-border text-slate-500">記憶庫目前是空的。每一回結束後，模型會把新確立的事實寫進來。</div>';
   const pinnedHtml = pinned.length ? pinned.map(ch => `
     <article class="p-3 rounded-xl bg-brand-card border border-brand-border space-y-1.5">
       <div class="flex items-center justify-between gap-2">
@@ -6582,7 +6604,7 @@ function renderMemoryCenter() {
         <button class="memory-unpin-btn text-[11px] text-rose-500 hover:text-rose-700 cursor-pointer" data-turn="${escapeHtml(ch.turn || '')}">取消釘選</button>
       </div>
       ${ch.chosenLabel ? `<div class="text-slate-500">玩家行動：${escapeHtml(ch.chosenLabel)}</div>` : ''}
-      <p class="text-slate-600 leading-relaxed">${escapeHtml(String(ch.prose || '').slice(0, 260))}${String(ch.prose || '').length > 260 ? '……' : ''}</p>
+      ${renderExpandableProse(ch.prose)}
     </article>`).join('') : '<div class="p-3 rounded-xl bg-brand-card/60 border border-brand-border text-slate-500">尚未釘選重要回合。可在每一回章節卡片使用「標記重要」。</div>';
 
   container.innerHTML = `
@@ -6598,6 +6620,10 @@ function renderMemoryCenter() {
       </div>
     </section>
     <section class="space-y-2"><h4 class="font-serif font-bold text-brand-gold">玩家釘選的重要記憶（${pinned.length}）</h4>${pinnedHtml}</section>
+    <section class="space-y-2">
+      <div class="flex items-center justify-between"><h4 class="font-serif font-bold text-brand-gold">記憶庫：已確立的事實（${facts.length}）</h4><span class="text-[10px] text-slate-500">每回生成前依劇情檢索</span></div>
+      ${factsHtml}
+    </section>
   `;
   container.querySelectorAll('.memory-unpin-btn').forEach(btn => {
     btn.addEventListener('click', () => toggleMemoryPin(Number(btn.dataset.turn), false));
@@ -6638,7 +6664,8 @@ function toggleMemoryPin(turn, forceValue) {
         turn: chapter.turn,
         chapterTitle: chapter.chapterTitle || '',
         chosenLabel: chapter.chosenLabel || '',
-        prose: String(chapter.prose || '').slice(0, 1200),
+        // 存全文：先前只存前 1,200 字，長章節的後半段一釘選就永久遺失
+        prose: String(chapter.prose || ''),
         memoryPinned: true
       }].slice(-8)
     : withoutTurn;

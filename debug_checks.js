@@ -907,4 +907,28 @@ const htmlNoScript = html.replace(/<script[\s\S]*?<\/script>/g, '');
 assert.ok(!emojiRe.test(htmlNoScript), 'index.html 仍含 emoji');
 assert.match(html, /<symbol id="i-save"/, '缺少 icon 圖示表');
 
+
+// ── 劇情時間軸入口與截斷修正 ──
+assert.match(html, /id="drawer-timeline-btn"/, '選單抽屜缺少劇情時間軸按鈕');
+assert.match(rootApp, /on\('drawer-timeline-btn', 'click'/, '劇情時間軸按鈕未綁定');
+// 釘選記憶存全文：曾只存前 1,200 字，長章節的後半段一釘選就永久遺失
+assert.doesNotMatch(rootApp, /prose: String\(chapter\.prose \|\| ''\)\.slice\(0, 1200\)/, '釘選記憶仍只存前 1,200 字');
+assert.doesNotMatch(rootApp, /String\(ch\.prose \|\| ''\)\.slice\(0, 260\)\)\}\$\{String\(ch\.prose \|\| ''\)\.length > 260 \? '……'/, '記憶中心仍硬截斷釘選記憶');
+assert.match(rootApp, /factChars: 120,/, '記憶事實上限仍會截掉約定的時間地點');
+assert.doesNotMatch(rootApp, /font-serif font-bold truncate">\$\{escapeHtml\(ch\.chapterTitle/, '章節目錄標題仍被截斷');
+// 預先產生的 Tailwind 必須涵蓋新用到的樣式，否則線上不會生效
+const twCss = fs.readFileSync('tailwind.generated.css', 'utf8');
+['group-open\\:hidden', 'break-words', 'max-h-80', 'shadow-rose-600\\/20'].forEach(cls => {
+  assert.ok(twCss.includes('.' + cls), `Tailwind CSS 缺少 ${cls.replace(/\\/g, '')}，請執行 npm run build:css`);
+});
+
+
+// ── qwen3-235b 與 hy3 供應商（2026-10-03 實測）──
+assert.match(workerCode, /'qwen\/qwen3-235b-a22b-2507': \['gmicloud\/fp8'/, 'qwen3-235b 未釘選實測最佳供應商');
+assert.match(workerCode, /'tencent\/hy3': \['deepinfra\/fp4', 'tencent\/fp8', 'atlas-cloud\/fp8'\]/, 'hy3 未釘選實測可用的三家供應商');
+// hy3 在強制 JSON 下會輸出壞掉的 JSON，必須略過該參數
+assert.match(workerCode, /const JSON_MODE_DISABLED_MODELS = new Set\(\['tencent\/hy3'\]\)/, 'hy3 未略過強制 JSON');
+const hyPinned = (workerCode.match(/'tencent\/hy3': \[([^\]]*)\]/) || [])[1] || '';
+['novita', 'gmicloud', 'phala'].forEach(p => assert.ok(!hyPinned.includes(p), `hy3 釘選含露骨內容回空白的 ${p}`));
+
 console.log('所有本機偵錯檢查皆已通過。');

@@ -15,8 +15,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./tailwind.generated.css?v=2ca55d57aa">
-  <link rel="stylesheet" href="./style.css?v=2ca55d57aa">
+  <link rel="stylesheet" href="./tailwind.generated.css?v=3d07cf9895">
+  <link rel="stylesheet" href="./style.css?v=3d07cf9895">
   <style>
     /* 線條 icon（取代 emoji）：跟著文字大小與顏色走 */
     .ui-icon { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; flex-shrink: 0;
@@ -894,6 +894,10 @@
           <div class="text-xs font-bold text-sky-300 flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-book"></use></svg></span><span>繼續冒險</span></div>
           <div class="text-[10px] text-slate-400">回到小說劇情</div>
         </button>
+        <button id="drawer-timeline-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-brand-gold/50 text-left transition cursor-pointer flex flex-col gap-0.5">
+          <div class="text-xs font-bold text-brand-gold flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-clock"></use></svg></span><span>劇情時間軸</span></div>
+          <div class="text-[10px] text-slate-400">每回 50 字摘要</div>
+        </button>
         <button id="drawer-saves-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-emerald-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
           <div class="text-xs font-bold text-emerald-300 flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-save"></use></svg></span><span>存檔庫</span></div>
           <div class="text-[10px] text-slate-400">存讀檔與雲端同步</div>
@@ -1113,10 +1117,10 @@
   </div>
 
   <!-- 章節目錄浮層 -->
-  <div id="chapter-nav-panel" class="fixed inset-0 z-[95] bg-black/70 backdrop-blur-sm p-4 flex items-start justify-center" style="display:none;" role="dialog" aria-modal="true" aria-label="章節目錄">
-    <div class="bg-brand-surface border border-brand-gold/40 rounded-2xl w-full max-w-md mt-20 shadow-2xl overflow-hidden flex flex-col max-h-[70vh]">
+  <div id="chapter-nav-panel" class="fixed inset-0 z-[95] bg-black/70 backdrop-blur-sm p-4 flex items-start justify-center" style="display:none;" role="dialog" aria-modal="true" aria-label="章節目錄與劇情時間軸">
+    <div class="bg-brand-surface border border-brand-gold/40 rounded-2xl w-full max-w-md mt-20 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
       <div class="flex items-center justify-between px-4 py-3 border-b border-brand-border shrink-0">
-        <h3 class="font-serif font-bold text-sm text-brand-gold">章節目錄</h3>
+        <h3 class="font-serif font-bold text-sm text-brand-gold">章節目錄與劇情時間軸</h3>
         <button id="close-chapter-nav-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer" aria-label="關閉章節目錄"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
       </div>
       <div id="chapter-nav-list" class="modal-scroll-container overflow-y-auto p-2 space-y-1 text-xs"></div>
@@ -1160,6 +1164,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=2ca55d57aa" defer></script>
+    <script src="app.js?v=3d07cf9895" defer></script>
 </body>
 </html>
