@@ -251,7 +251,9 @@ assert.strictEqual(vm.runInContext('Object.keys(getCustomPresets()).length', fro
 assert.match(rootApp, /if \(state\.generationAbortRequested\) throw createGenerationAbortError\(\)/, '生成中止仍可能被備援迴圈吞掉');
 assert.match(rootApp, /signal: controller\.signal/, 'Worker 串流未連接 AbortController');
 assert.match(rootApp, /chapterHistoryLength: \(state\.chapterHistoryList \|\| \[\]\)\.length/, '回合交易快照未以輕量長度保存章節歷史');
-assert.match(rootApp, /stateSnapshot: JSON\.parse\(JSON\.stringify\(state\.saveState \|\| \{\}\)\)/, '新回合未保存可供精確回溯的狀態快照');
+assert.match(rootApp, /stateSnapshot: \(\(\) => \{\s*const snapshot = JSON\.parse\(JSON\.stringify\(state\.saveState \|\| \{\}\)\);\s*delete snapshot\.memoryBank;/, '新回合未保存可供精確回溯的狀態快照（且不得內含記憶庫）');
+// 回溯時記憶庫要沿用並剔除未來條目，而不是被快照整個清空
+assert.match(rootApp, /state\.saveState\.memoryBank = carriedMemory\.filter\(m => m\.turn <= restoredTurn\)/, '回溯會清空記憶庫');
 assert.match(rootApp, /createCurrentStoryFork\(\)\) return;[\s\S]*state\.saveState = JSON\.parse\(JSON\.stringify\(target\.stateSnapshot\)\)/, '歷史回溯沒有先建立分歧或還原狀態快照');
 assert.match(rootApp, /customActionInput\.dataset\.choiceId[\s\S]*已帶入建議行動/, '選項未改為先帶入自由行動欄');
 assert.match(rootApp, /const previousGameSnapshot = \{/, '新開局中止前未保存舊遊戲狀態');
@@ -835,5 +837,32 @@ vm.runInContext(`
 assert.match(vm.runInContext('novelResetContent', memoryContext), /第 2 幕/);
 assert.strictEqual(vm.runInContext('rebaseSave.turnHistory.length', memoryContext), 0);
 assert.strictEqual(vm.runInContext('rebaseSave.meta.currentAct', memoryContext), 2);
+
+
+// ── 語意記憶模組 ──
+vm.runInContext(`
+  state.saveState = { turnCount: 5, memoryBank: [] };
+  rememberChapter({ turn: 3, chosenLabel: '收下胸針', prose: '徐令謙把祖母綠胸針收進風衣內袋的暗格，銅扣按回原位。雨聲很大，倉庫裡只有一盞燈。',
+    memoryNotes: ['徐令谦把胸针收在风衣内袋暗格', '楊慕璃答應週五晚上八點在碼頭碰面', '短'] });
+`, frontendContext);
+const bank1 = vm.runInContext('state.saveState.memoryBank', frontendContext);
+assert.strictEqual(bank1.filter(m => m.kind === 'fact').length, 2, '記憶事實未正確寫入（過短條目應被略過）');
+assert.ok(bank1.some(m => m.text.includes('徐令謙把胸針收在風衣內袋暗格')), '記憶條目未套用簡繁潤飾');
+assert.strictEqual(bank1.filter(m => m.kind === 'scene').length, 1, '場景條目未寫入');
+// 同一回合重新生成：舊版本條目必須被取代，不得殘留
+vm.runInContext(`rememberChapter({ turn: 3, prose: '另一個版本的第三回，完全不同的內容，長度足夠寫入場景條目。'.repeat(2), memoryNotes: ['新版本事實一則'] });`, frontendContext);
+const bank2 = vm.runInContext('state.saveState.memoryBank', frontendContext);
+assert.ok(!bank2.some(m => m.text.includes('碼頭')), '重新生成後舊版本記憶仍殘留');
+assert.ok(bank2.some(m => m.text === '新版本事實一則'), '重新生成後新記憶未寫入');
+// 糾察隊：從出場角色抽出硬性設定
+const canon = vm.runInContext("collectCanonFactsForProse('韓正寰推開門。')", frontendContext);
+assert.ok(canon.some(f => f.fact.includes('韓正寰不戴眼鏡')), '糾察隊未抽出「不戴眼鏡」設定');
+assert.ok(canon.some(f => f.fact.includes('Škoda')), '糾察隊未抽出座車設定');
+assert.strictEqual(vm.runInContext("collectCanonFactsForProse('雨一直下。').length", frontendContext), 0, '未出場角色不應被檢查');
+assert.match(rootApp, /const patrolCorrectionBlock = await buildPatrolCorrectionBlock\(\)/, '糾察結果未帶入下一回提示詞');
+assert.match(rootApp, /scheduleContinuityPatrol\(nextChapter, choiceLabel\)/, '章節採用後未啟動背景糾察');
+assert.match(rootApp, /"memoryNotes": \[/, '提示詞未要求模型產出記憶條目');
+assert.match(workerCode, /pathname === '\/decide'/, 'Worker 缺少糾察隊端點');
+assert.match(workerCode, /DECISION_MODELS = \['respan\/span-01-lite'\]/, '糾察隊端點未限制模型');
 
 console.log('所有本機偵錯檢查皆已通過。');

@@ -3588,25 +3588,39 @@ function buildLiveStateBlock(saveState, profile) {
 }
 
 // ==========================================
-// 4.6 語意檢索記憶（bge-m3 嵌入）
+// 4.6 語意記憶模組（bge-m3 嵌入檢索 ＋ span-01-lite 糾察隊）
 // ==========================================
 /**
- * 摘要池是「壓縮」，會把細節磨平；近期全文是「窗口」，只看得到最後 5 回。
- * 兩者之間有一個缺口：三十回前提過一次的物件、承諾或人物，模型完全看不到。
- * 這裡用嵌入向量把玩家這一回的行動當成查詢，從所有舊回合裡撈回最相關的幾則，
- * 補進上下文信封 —— 這是避免長線劇情失憶與 OOC 最直接的手段。
+ * 為什麼需要獨立的記憶庫：
+ *  - 摘要池是「壓縮」，會把細節磨平。
+ *  - 近期全文只看得到最後 5 回。
+ *  - 章節本身會被壓縮：超過 30 回的正文截成 240 字，超過 60 回整章移出記憶。
+ * 因此第 61 回之後，第 1 回立下的約定就徹底看不到了。
+ *
+ * 記憶庫把每回的關鍵事實另存成精簡條目（存在 saveState，隨存檔同步到雲端），
+ * 不隨章節壓縮而消失。條目有兩種：
+ *  - fact ：模型在同一次生成中順手產出的 memoryNotes（承諾、物品去向、身分揭露、
+ *           關係轉折）。不需要額外呼叫模型。
+ *  - scene：該回的場景摘錄，作為事實之外的情境線索。
+ *
+ * 每回生成前，用 bge-m3 把「本回行動＋上一回結尾」當查詢，撈回最相關的條目；
+ * 生成後，span-01-lite 在背景比對正文與設定、記憶是否矛盾，
+ * 結果寫進下一回的提示詞 —— 不重新生成本回。
  */
-const RETRIEVAL = {
-  topK: 3,                 // 撈回幾則。太多會擠壓近期全文的份量。
+const MEMORY = {
+  maxFacts: 300,
+  maxScenes: 120,
+  factChars: 60,
+  sceneChars: 260,
+  topK: 6,                 // 撈回幾則。太多會擠壓近期全文的份量。
+  maxScenes: 2,            // 場景條目長且不精確，最多佔兩則，其餘名額留給事實
+  scenePenalty: 0.04,      // 場景條目的分數折扣：同樣相關時優先採用精簡的事實
   minScore: 0.42,          // 低於此分數視為不相關，寧可不補也不要餵雜訊。
-  perMemoryChars: 420,
-  maxIndexed: 200,         // 最多索引幾則舊回合（由新到舊）
   batchSize: 64            // 與 Worker 的 EMBED_MAX_BATCH 一致
 };
 
-/** turn -> {text, vec}，僅存在於本次工作階段；重載後重新嵌入（成本極低）。 */
-let memoryIndex = [];
-let memoryIndexSignature = '';
+/** id -> 向量。只存在本次工作階段；重載後按需重新嵌入（Workers AI 成本極低）。 */
+const memoryVectors = new Map();
 
 async function embedTexts(texts) {
   if (!LLM_CONFIG.WORKER_URL || !texts.length) return [];
@@ -3631,63 +3645,327 @@ function cosineSimilarity(a, b) {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
-/** 取出可供檢索的舊回合 —— 近期 N 回已經全文在信封裡，重複撈回只是浪費預算。 */
-function collectRetrievableTurns() {
-  const list = state.chapterHistoryList || [];
-  const older = list.slice(0, Math.max(0, list.length - CONTEXT_BUDGET.recentTurns));
-  return older
-    .slice(-RETRIEVAL.maxIndexed)
-    .map((h, i) => ({
-      turn: i + 1,
-      text: clampBlock(String(h.prose || '').replace(/\s+/g, ' ').trim(), RETRIEVAL.perMemoryChars)
-    }))
-    .filter(m => m.text.length >= 40);
+function getMemoryBank() {
+  if (!state.saveState) return [];
+  if (!Array.isArray(state.saveState.memoryBank)) state.saveState.memoryBank = [];
+  return state.saveState.memoryBank;
 }
 
-async function ensureMemoryIndex() {
-  const entries = collectRetrievableTurns();
-  const signature = entries.length + ':' + (entries[entries.length - 1]?.text.slice(0, 32) || '');
-  if (signature === memoryIndexSignature && memoryIndex.length === entries.length) return;
+function normalizeMemoryKey(text) {
+  return String(text || '').replace(/[\s，。、！？「」『』：；,.!?:;]/g, '');
+}
 
-  const vectors = [];
-  for (let i = 0; i < entries.length; i += RETRIEVAL.batchSize) {
-    const slice = entries.slice(i, i + RETRIEVAL.batchSize);
-    vectors.push(...await embedTexts(slice.map(e => e.text)));
-  }
-  memoryIndex = entries.map((e, i) => ({ ...e, vec: vectors[i] || [] })).filter(e => e.vec.length);
-  memoryIndexSignature = signature;
+/** 依類型各自限量；事實比場景珍貴，各自保留最新的若干筆。 */
+function trimMemoryBank(bank) {
+  const facts = bank.filter(m => m.kind === 'fact').slice(-MEMORY.maxFacts);
+  const scenes = bank.filter(m => m.kind === 'scene').slice(-MEMORY.maxScenes);
+  return [...facts, ...scenes].sort((a, b) => a.turn - b.turn);
 }
 
 /**
- * 依本回行動撈回最相關的舊回合片段。
+ * 把剛被採用的章節寫入記憶庫。
+ * 同一回合重新生成時，先移除該回合（含之後）的舊條目，避免被丟棄的版本殘留。
+ */
+function rememberChapter(chapter) {
+  if (!chapter || !state.saveState) return;
+  const turn = Number(chapter.turn) || Number(state.saveState.turnCount) || 1;
+  const bank = getMemoryBank().filter(m => m.turn < turn);
+  const seen = new Set(bank.filter(m => m.kind === 'fact').map(m => normalizeMemoryKey(m.text)));
+
+  const notes = Array.isArray(chapter.memoryNotes) ? chapter.memoryNotes : [];
+  notes.slice(0, 4).forEach((note, i) => {
+    // 接受 { topic, fact } 或純字串（舊格式／模型偶爾省略主題）
+    const rawFact = typeof note === 'string' ? note : (note && (note.fact || note.text)) || '';
+    const rawTopic = typeof note === 'string' ? '' : (note && note.topic) || '';
+    const text = clampBlock(polishTaiwaneseText(String(rawFact).trim()), MEMORY.factChars);
+    const topic = clampBlock(polishTaiwaneseText(String(rawTopic).trim()), 16);
+    const key = normalizeMemoryKey(text);
+    if (text.length < 6 || seen.has(key)) return;
+    seen.add(key);
+    bank.push({ id: `t${turn}_f${i}`, turn, kind: 'fact', text, ...(topic ? { topic } : {}) });
+  });
+
+  const prose = String(chapter.prose || '').replace(/\s+/g, ' ').trim();
+  if (prose.length >= 40) {
+    const head = chapter.chosenLabel ? `玩家行動：${clampBlock(chapter.chosenLabel, 40)}。` : '';
+    bank.push({ id: `t${turn}_s`, turn, kind: 'scene', text: head + clampBlock(prose, MEMORY.sceneChars) });
+  }
+  state.saveState.memoryBank = trimMemoryBank(bank);
+}
+
+/** 舊存檔沒有記憶庫：從現存章節回填場景條目，讓檢索立即可用。 */
+function backfillMemoryBank() {
+  if (!state.saveState || getMemoryBank().length) return;
+  (state.chapterHistoryList || []).forEach((chapter, index) => {
+    const turn = Number(chapter?.turn) || index + 1;
+    const prose = String(chapter?.prose || '').replace(/\s+/g, ' ').trim();
+    if (prose.length < 40) return;
+    const head = chapter.chosenLabel ? `玩家行動：${clampBlock(chapter.chosenLabel, 40)}。` : '';
+    getMemoryBank().push({ id: `t${turn}_s`, turn, kind: 'scene', text: head + clampBlock(prose, MEMORY.sceneChars) });
+  });
+  state.saveState.memoryBank = trimMemoryBank(getMemoryBank());
+}
+
+async function ensureMemoryVectors(entries) {
+  const missing = entries.filter(m => !memoryVectors.has(m.id));
+  for (let i = 0; i < missing.length; i += MEMORY.batchSize) {
+    const slice = missing.slice(i, i + MEMORY.batchSize);
+    const vectors = await embedTexts(slice.map(m => m.text));
+    slice.forEach((m, j) => { if (vectors[j]?.length) memoryVectors.set(m.id, vectors[j]); });
+  }
+}
+
+/** 以語意相似度排序記憶；場景條目打折並限量，名額優先給精簡的事實。 */
+async function rankMemories(queryText, candidates, topK = MEMORY.topK) {
+  if (!candidates.length) return [];
+  await ensureMemoryVectors(candidates);
+  const [queryVec] = await embedTexts([queryText]);
+  if (!queryVec?.length) return [];
+  const scored = candidates
+    .map(m => {
+      const raw = cosineSimilarity(queryVec, memoryVectors.get(m.id));
+      return { ...m, score: raw, rank: m.kind === 'scene' ? raw - MEMORY.scenePenalty : raw };
+    })
+    .filter(m => m.score >= MEMORY.minScore)
+    .sort((a, b) => b.rank - a.rank);
+  const picked = [];
+  let scenes = 0;
+  for (const m of scored) {
+    if (m.kind === 'scene') {
+      if (scenes >= MEMORY.maxScenes) continue;
+      scenes += 1;
+    }
+    picked.push(m);
+    if (picked.length >= topK) break;
+  }
+  return picked;
+}
+
+/** 本回實際注入提示詞的記憶。糾察隊會拿它來比對正文有沒有寫錯。 */
+let lastRetrievedMemories = [];
+
+/**
+ * 依本回行動撈回最相關的舊記憶。
+ * 近期 N 回已經全文在信封裡，重複撈回只是浪費預算，故只檢索更早的回合。
  * 檢索失敗一律回空字串 —— 少了補充記憶只是劇情略平，
  * 但若讓它拋出例外中斷生成，玩家會直接失去這一回。
  */
 async function buildRetrievedMemoryBlock(queryText) {
-  const query = String(queryText || '').trim();
-  if (!query) return '';
+  lastRetrievedMemories = [];
+  const action = String(queryText || '').trim();
+  if (!action || !state.saveState) return '';
   try {
-    await ensureMemoryIndex();
-    if (!memoryIndex.length) return '';
-    const [queryVec] = await embedTexts([clampBlock(query, RETRIEVAL.perMemoryChars)]);
-    if (!queryVec?.length) return '';
+    backfillMemoryBank();
+    const currentTurn = Number(state.saveState.turnCount) || 1;
+    const windowStart = currentTurn - CONTEXT_BUDGET.recentTurns;
+    const candidates = getMemoryBank().filter(m => m.turn < currentTurn && (m.kind === 'fact' || m.turn < windowStart));
+    if (!candidates.length) return '';
 
-    const ranked = memoryIndex
-      .map(m => ({ ...m, score: cosineSimilarity(queryVec, m.vec) }))
-      .filter(m => m.score >= RETRIEVAL.minScore)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, RETRIEVAL.topK);
+    // 查詢只用本回行動。曾經混入「上一回結尾」，結果檢索被上一回的話題帶偏
+    // （實測問「赴約」卻撈回上一回的「手沖咖啡」）；上一回本來就以全文在提示詞裡，不需要再撈。
+    const ranked = await rankMemories(clampBlock(action, 160), candidates);
     if (!ranked.length) return '';
+    lastRetrievedMemories = ranked;
 
-    const body = ranked
-      .sort((a, b) => a.turn - b.turn)
-      .map(m => `── 第 ${m.turn} 回（相關度 ${m.score.toFixed(2)}）──\n${m.text}`)
-      .join('\n');
-    return `【語意檢索補充記憶（與本回行動高度相關的早期劇情，務必保持一致）】\n${body}\n`;
+    const facts = ranked.filter(m => m.kind === 'fact').sort((a, b) => a.turn - b.turn);
+    const scenes = ranked.filter(m => m.kind === 'scene').sort((a, b) => a.turn - b.turn);
+    const lines = ['【語意檢索記憶（與本回行動相關的早期劇情；與之矛盾即為錯誤，務必保持一致）】'];
+    if (facts.length) {
+      lines.push('已確立的事實：');
+      facts.forEach(m => lines.push(`- 第 ${m.turn} 回：${m.text}`));
+    }
+    if (scenes.length) {
+      lines.push('相關場景：');
+      scenes.forEach(m => lines.push(`- 第 ${m.turn} 回：${m.text}`));
+    }
+    return lines.join('\n') + '\n';
   } catch (err) {
-    console.warn('[Retrieval] 檢索失敗，本回改用既有上下文：', err);
+    console.warn('[Memory] 檢索失敗，本回改用既有上下文：', err);
     return '';
   }
+}
+
+// ------------------------------------------
+// 糾察隊：span-01-lite（行為評分分類器，免費、約 0.5 秒）
+// ------------------------------------------
+/**
+ * 實測（2026-10-03）的結論與設計取捨：
+ *  - 一題籠統的「有沒有矛盾」只抓得到一半的矛盾。
+ *  - 每條事實單獨一題可全數抓到，但「沒提到」常被誤判為矛盾（誤報 8/29）。
+ *  - 每條事實拆成「有沒有寫到」＋「有沒有寫錯」兩題、兩題都過門檻才算，
+ *    誤報降到 1/34。有寫到且寫對時矛盾機率僅 0.05–0.15，寫錯時 0.67–0.94，界線清楚。
+ *  - 它只接受是非題（noul），一次最多 12 題，平行作答。
+ *
+ * 準度足以「指出問題」，不足以「判整章作廢」。所以結果只寫進下一回提示詞，
+ * 由模型在後續自然修正，本回不重新生成。
+ */
+const PATROL = {
+  model: 'respan/span-01-lite',
+  mentionThreshold: 0.4,
+  contradictThreshold: 0.6,
+  maxFactsPerCall: 5,      // 5 條 × 2 題 ＋ 2 題通用檢查 = 12 題上限
+  maxCalls: 3,
+  memoryFacts: 6,          // 每回最多比對幾條過去的記憶事實
+  timeoutMs: 6000
+};
+
+/** 從出場角色的官方設定抽出可檢查的硬性事實（座車、眼鏡、職銜）。 */
+function collectCanonFactsForProse(prose) {
+  const facts = [];
+  Object.values(OFFICIAL_DRIVE_CHARACTERS || {}).forEach(c => {
+    if (!c?.name || !prose.includes(c.name)) return;
+    if (c.cars) facts.push({ topic: `${c.name}開或搭乘的車`, fact: `${c.name}的座車：${clampBlock(c.cars, 70)}` });
+    if (/眼鏡/.test(c.watch || '')) {
+      const wears = !/無配戴眼鏡|不戴眼鏡|無眼鏡/.test(c.watch);
+      facts.push({
+        topic: `${c.name}臉上有沒有戴眼鏡`,
+        fact: wears ? `${c.name}會戴眼鏡（${clampBlock(c.watch, 40)}）` : `${c.name}不戴眼鏡`
+      });
+    }
+    if (c.title) facts.push({ topic: `${c.name}的職業或職銜`, fact: `${c.name}是${clampBlock(c.title, 50)}` });
+  });
+  return facts;
+}
+
+async function callDecisions(questions, stateText) {
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), PATROL.timeoutMs) : null;
+  try {
+    const res = await fetch(LLM_CONFIG.WORKER_URL.replace(/\/$/, '') + '/decide', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Undercurrent-Token': state.token || '' },
+      body: JSON.stringify({ model: PATROL.model, questions, state: stateText }),
+      ...(controller ? { signal: controller.signal } : {})
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data && data.answers ? data.answers : null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * 背景糾察：比對正文與設定、檢索到的記憶，並檢查是否回應玩家行動、是否灌水或混入說明。
+ * 回傳要寫進下一回提示詞的更正事項（字串陣列）。任何失敗都回空陣列，不影響遊玩。
+ */
+async function runContinuityPatrol(chapter, actionLabel, memories) {
+  const prose = String(chapter?.prose || '');
+  if (!prose || !LLM_CONFIG.WORKER_URL) return [];
+  try {
+    // 要檢查的是「這一章寫到的東西有沒有跟過去矛盾」，所以拿正文本身去找相關記憶，
+    // 而不是只用玩家行動撈到的那批（實測後者會漏掉正文另外寫到的物品與約定）。
+    const turn = Number(chapter.turn) || Number(state.saveState?.turnCount) || 0;
+    const pastFacts = getMemoryBank().filter(m => m.kind === 'fact' && m.turn < turn);
+    let related = [];
+    try {
+      related = await rankMemories(clampBlock(prose, 1200), pastFacts, PATROL.memoryFacts);
+    } catch (e) { related = []; }
+    const memoryFacts = [...related, ...(memories || []).filter(m => m.kind === 'fact')]
+      .filter((m, i, arr) => arr.findIndex(x => x.id === m.id) === i)
+      // 沒有主題的事實不檢查：拿整句話當「是否提及」的主題，實測提及機率只有 0.08–0.18，
+      // 等於永遠判定沒提到；而單看矛盾機率又沒有鑑別力（無關記憶也有 0.85 以上）。
+      .filter(m => m.topic)
+      .slice(0, PATROL.memoryFacts)
+      .map(m => ({ topic: m.topic, fact: m.text, source: `第 ${m.turn} 回記憶` }));
+    const facts = [
+      ...collectCanonFactsForProse(prose).map(f => ({ ...f, source: '角色設定' })),
+      ...memoryFacts
+    ].slice(0, PATROL.maxFactsPerCall * PATROL.maxCalls);
+
+    const general = {
+      g_action: {
+        type: 'noul',
+        instructions: `玩家這一回選擇的行動是「${clampBlock(actionLabel, 80)}」。正文是否描寫了這個行動的執行與後果？`,
+        criteria: { true: '正文描寫了玩家行動的執行與後果', false: '正文忽略、跳過或改寫了玩家的行動' }
+      },
+      g_padding: {
+        type: 'noul',
+        instructions: '正文是否有灌水：重複描寫同一件事、反覆重述已知資訊，或堆疊空洞形容而沒有推進劇情？',
+        criteria: { true: '有明顯的重複或灌水段落', false: '每一段都在推進劇情或提供新資訊' }
+      }
+    };
+
+    const groups = [];
+    for (let i = 0; i < Math.max(facts.length, 1); i += PATROL.maxFactsPerCall) {
+      groups.push(facts.slice(i, i + PATROL.maxFactsPerCall));
+    }
+    const results = await Promise.all(groups.map((group, gi) => {
+      const questions = gi === 0 ? { ...general } : {};
+      group.forEach((f, i) => {
+        questions[`m${i}`] = {
+          type: 'noul',
+          instructions: `正文是否具體描寫了「${f.topic}」？`,
+          criteria: { true: `正文有具體寫到${f.topic}`, false: `正文完全沒有寫到${f.topic}` }
+        };
+        questions[`c${i}`] = {
+          type: 'noul',
+          instructions: `既定事實是「${f.fact}」。正文寫到的內容是否與這條事實不同？`,
+          criteria: { true: `正文寫的與「${f.fact}」不同`, false: `正文寫的與「${f.fact}」相同，或沒有寫到` }
+        };
+      });
+      if (!Object.keys(questions).length) return Promise.resolve(null);
+      return callDecisions(questions, `【新章節正文】\n${clampBlock(prose, 6000)}`)
+        .then(answers => ({ group, answers }));
+    }));
+
+    const notes = [];
+    lastPatrolReport = [];
+    results.forEach((r, gi) => {
+      if (!r || !r.answers) return;
+      r.group.forEach((f, i) => {
+        const m = r.answers[`m${i}`]?.noul ?? 0;
+        const c = r.answers[`c${i}`]?.noul ?? 0;
+        lastPatrolReport.push({ fact: f.fact, source: f.source, mention: m, contradict: c });
+        if (m >= PATROL.mentionThreshold && c >= PATROL.contradictThreshold) {
+          notes.push(`上一回可能把「${f.topic}」寫錯了，正確應為：${f.fact}。本回以正確設定為準，必要時自然帶過，不要點破。`);
+        }
+      });
+      if (gi === 0) {
+        if ((r.answers.g_action?.noul ?? 1) < 0.3) {
+          notes.push(`上一回沒有確實寫出玩家選擇的行動「${clampBlock(actionLabel, 40)}」的結果，本回開頭先交代它的後果。`);
+        }
+        if ((r.answers.g_padding?.noul ?? 0) >= 0.8) {
+          notes.push('上一回有重複或灌水的段落，本回每一段都要推進劇情或提供新資訊。');
+        }
+      }
+    });
+    if (notes.length) console.info(`[Patrol] 糾察隊發現 ${notes.length} 項，將寫入下一回提示詞：`, notes);
+    return notes;
+  } catch (err) {
+    console.warn('[Patrol] 糾察隊檢查失敗（不影響遊玩）：', err);
+    return [];
+  }
+}
+
+/**
+ * 章節採用後立刻在背景啟動糾察，不阻塞畫面。
+ * 結果存進 saveState，下一回組提示詞時讀取；下一回若在糾察完成前就送出，最多等待片刻。
+ */
+let pendingPatrol = null;
+/** 最近一次糾察的逐條原始機率，供除錯（主控台輸入 lastPatrolReport 即可查看）。 */
+let lastPatrolReport = [];
+function scheduleContinuityPatrol(chapter, actionLabel) {
+  const memories = lastRetrievedMemories.slice();
+  const turn = Number(chapter?.turn) || 0;
+  pendingPatrol = runContinuityPatrol(chapter, actionLabel, memories).then(notes => {
+    if (state.saveState && Number(state.saveState.turnCount) === turn) {
+      state.saveState.patrolNotes = { turn, notes };
+      safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
+    }
+    return notes;
+  });
+}
+
+async function buildPatrolCorrectionBlock() {
+  if (pendingPatrol) {
+    await Promise.race([pendingPatrol, new Promise(r => setTimeout(r, 2500))]).catch(() => {});
+  }
+  const record = state.saveState?.patrolNotes;
+  const currentTurn = Number(state.saveState?.turnCount) || 0;
+  // 只採用「上一回」的糾察結果；更早的已經被那一回的生成處理過了
+  if (!record || record.turn !== currentTurn - 1 || !record.notes?.length) return '';
+  return `【連續性更正（糾察隊比對上一回正文發現；本回必須遵守）】\n${record.notes.map(n => `- ${n}`).join('\n')}\n`;
 }
 
 // =========================================================================
@@ -4103,7 +4381,9 @@ const S2T_CHAR_MAP = (() => {
     + '讯訊讶訝讽諷询詢详詳诚誠诊診嘱囑呛嗆咙嚨饶饒馋饞鬓鬢铃鈴锦錦镯鐲钮鈕铜銅'
     + '窝窩帘簾灿燦烂爛炼煉烁爍烧燒迹跡逊遜遥遙邮郵鸣鳴齐齊颅顱挠撓挞撻搀攙'
     // 港式與異體字形：繁體但非台灣慣用寫法
-    + '裏裡綫線衞衛爲為説說麪麵啓啟峯峰羣群温溫';
+    + '裏裡綫線衞衛爲為説說麪麵啓啟峯峰羣群温溫'
+    // 人名、地名與一般高頻字（排除在繁體中也合法的字：于云余松范系谷征等）
+    + '谦謙内內写寫亿億万萬丝絲丢丟两兩严嚴丧喪临臨丽麗举舉义義乌烏乐樂乔喬习習乡鄉乱亂争爭亏虧亚亞亩畝亵褻仅僅仑侖仓倉仪儀伞傘伟偉伪偽佣傭侠俠侥僥侨僑俭儉倾傾偿償储儲兑兌党黨兰蘭兴興养養兽獸冈岡册冊军軍冯馮减減凑湊凛凜凭憑凯凱凿鑿刘劉剂劑剑劍剧劇劝勸励勵劲勁勋勳匀勻华華协協卢盧卤滷卧臥却卻厂廠厌厭县縣参參叠疊吕呂吴吳呐吶咏詠哗嘩啬嗇啸嘯圆圓圣聖坝壩坠墜垄壟垒壘堕墮墙牆壮壯壳殼壶壺够夠夹夾奖獎奥奧娄婁娱娛婶嬸孙孫孪孿宠寵宪憲寝寢寿壽尧堯尴尷屉屜届屆属屬岂豈岗崗峡峽帜幟帧幀庄莊庙廟庞龐异異弃棄弥彌弯彎彦彥径徑怂慫怜憐恒恆恶惡悦悅惫憊惯慣慑懾懒懶戏戲扰擾拟擬拢攏拣揀拧擰挚摯挟挾捞撈捣搗掳擄掸撣掺摻搁擱摊攤撵攆敛斂斋齋斩斬旷曠昙曇晋晉晒曬机機枢樞枣棗柠檸栈棧栋棟桩樁椭橢榄欖横橫樱櫻欧歐歼殲殴毆毁毀毙斃汤湯沥瀝沦淪沪滬泼潑浆漿浇澆浏瀏涛濤涡渦渊淵渔漁湾灣溃潰溅濺滞滯滤濾滥濫滨濱潜潛潇瀟澜瀾点點烛燭烦煩狈狽狮獅狭狹猪豬猫貓献獻琐瑣疯瘋瘫癱盐鹽监監盖蓋瞒瞞矫矯矿礦码碼砖磚础礎碍礙窍竅竖豎竞競笋筍筛篩粮糧纱紗纲綱纹紋纺紡绅紳绊絆绒絨绘繪绩績绰綽综綜缀綴罢罷聋聾肿腫胆膽胜勝胶膠舰艦舱艙艰艱芦蘆苍蒼茧繭荐薦荡蕩莲蓮莹瑩萝蘿萤螢营營蓝藍蔼藹虏虜虑慮虚虛蚀蝕蚁蟻蛮蠻袭襲裤褲观觀规規誉譽讥譏训訓讳諱诀訣诈詐诫誡诸諸谅諒谍諜谣謠谱譜贞貞账帳贫貧贱賤贷貸贸貿贼賊赐賜赚賺赛賽赞讚赠贈趋趨踪蹤轩軒轰轟轿轎辅輔辉輝辈輩辑輯辖轄辞辭辩辯迈邁邓鄧酿釀鉴鑑钉釘钓釣钞鈔钦欽钩鉤铅鉛铭銘铲鏟铸鑄销銷锅鍋锡錫锤錘锯鋸锻鍛镇鎮闸閘阐闡陕陝雏雛静靜韦韋韧韌韩韓页頁顽頑颁頒颂頌颇頗颓頹颠顛飘飄饥飢饰飾饲飼饼餅驰馳驳駁驴驢驻駐骂罵骄驕骆駱骇駭骗騙骚騷鲁魯鸽鴿鹅鵝鹰鷹麦麥黄黃龟龜萧蕭汹洶';
   const map = new Map();
   for (let i = 0; i + 1 < pairs.length; i += 2) map.set(pairs[i], pairs[i + 1]);
   return map;
@@ -4386,6 +4666,7 @@ ${characterPromptBlock}
     "questProgress": "本回實際推進的任務狀態；沒有則留空字串"
   },
   "prose": "【800–1200 個中文字為建議範圍；完成一個有因果的戲劇節拍，保留具體餘波，不截斷、不灌水、不以旁白解釋潛台詞】",
+  "memoryNotes": [{ "topic": "【寫成「誰的什麼」，具體到人與物，16 字內，例如：祖母綠胸針放在哪、楊慕璃與徐令謙碰面的時間地點、韓正寰的職銜】", "fact": "【本回新確立、日後必須記得的事實，40 字內，寫清楚人名：承諾約定（時間地點）、物品去向、身分或秘密揭露、關係轉折】" }],
   "choices": [
     { "id": "A", "label": "[A] 【25–60 字：一個明確行動＋必要對白】", "risk": "low", "hint": "【10–24 字策略提示】" },
     { "id": "B", "label": "[B] 【25–60 字：不同策略的一個行動＋必要對白】", "risk": "medium", "hint": "【10–24 字策略提示】" },
@@ -4410,7 +4691,7 @@ ${characterPromptBlock}
   return { systemPrompt, userPrompt };
 }
 
-function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyList, summaryPool, saveState = state.saveState, retrievedMemoryBlock = '') {
+function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyList, summaryPool, saveState = state.saveState, retrievedMemoryBlock = '', patrolCorrectionBlock = '') {
   const isShura = profile.targetLead === '修羅場' || profile.targetLeadName === '修羅場';
   const leadKey = profile.targetLead || '01_徐令謙';
   
@@ -4488,6 +4769,7 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     "relationshipChanges": { "${profile.targetLeadName || '主要對象'}": 0 },
     "questProgress": "本回實際推進的任務狀態；沒有則留空字串"
   },
+  "memoryNotes": [{ "topic": "【寫成「誰的什麼」，具體到人與物，16 字內，例如：祖母綠胸針放在哪、楊慕璃與徐令謙碰面的時間地點、韓正寰的職銜】", "fact": "【本回新確立、日後必須記得的事實，40 字內，寫清楚人名：承諾約定（時間地點）、物品去向、身分或秘密揭露、關係轉折】" }],
   "choices": [
     { "id": "A", "label": "[A] 【25–60 字：一個明確行動＋必要對白】", "risk": "low", "hint": "【10–24 字提示】" },
     { "id": "B", "label": "[B] 【25–60 字：不同策略的一個行動＋必要對白】", "risk": "medium", "hint": "【10–24 字提示】" },
@@ -4505,6 +4787,7 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     dossierBlock,
     summaryBlock,
     retrievedMemoryBlock,
+    patrolCorrectionBlock,
     pinnedMemoryBlock,
     recentHistory,
     '',
@@ -4776,7 +5059,9 @@ async function startNewGameWithProfile(profile) {
 
   state.chapterData = initialChapter;
   initialChapter.stateSnapshot = JSON.parse(JSON.stringify(state.saveState || {}));
+  delete initialChapter.stateSnapshot.memoryBank;
   state.chapterHistoryList = [initialChapter];
+  rememberChapter(initialChapter);
   persistChapterHistory(state.chapterHistoryList);
   
   renderStoryStream(initialChapter);
@@ -4834,6 +5119,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
     try {
       // 先做語意檢索再組提示詞。失敗會回空字串，不會中斷這一回。
       const retrievedMemoryBlock = await buildRetrievedMemoryBlock(choiceLabel);
+      const patrolCorrectionBlock = await buildPatrolCorrectionBlock();
       const { systemPrompt, userPrompt } = buildNextTurnPrompt(
         state.saveState.turnCount,
         choiceId,
@@ -4842,7 +5128,8 @@ async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
         state.chapterHistoryList || [],
         state.saveState.summaryPool || '',
         state.saveState,
-        retrievedMemoryBlock
+        retrievedMemoryBlock,
+        patrolCorrectionBlock
       );
       
       // 將等待畫面縮成常駐狀態列，玩家仍可閱讀前文或隨時展開查看進度。
@@ -4894,10 +5181,13 @@ async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
     dismissError();
 
     state.chapterData = nextChapter;
+    rememberChapter(nextChapter);
     appendChapterToHistory(nextChapter, choiceLabel);
     renderStoryStream(nextChapter);
     renderSaveState();
     updateGameplayBreadcrumb();
+    // 背景糾察：不阻塞畫面，結果於下一回提示詞中生效
+    scheduleContinuityPatrol(nextChapter, choiceLabel);
 
     // ⚡ 每 5 回合自動在背景非同步更新滾動摘要池 (Summary Pool)
     if (state.saveState.turnCount % 5 === 0) {
@@ -4952,7 +5242,14 @@ function appendChapterToHistory(chapter, chosenLabel) {
   const record = Object.assign({}, chapter, {
     timestamp: new Date().toISOString(),
     chosenLabel: chosenLabel || '玩家行動',
-    stateSnapshot: JSON.parse(JSON.stringify(state.saveState || {}))
+    // 記憶庫不放進每章快照：它只會增長，12 份快照各存一份會撐爆 localStorage。
+    // 回溯時由 rememberChapter／檢索依回合數過濾，不需要快照還原。
+    stateSnapshot: (() => {
+      const snapshot = JSON.parse(JSON.stringify(state.saveState || {}));
+      delete snapshot.memoryBank;
+      delete snapshot.patrolNotes;
+      return snapshot;
+    })()
   });
   state.chapterHistoryList.push(record);
   state.chapterHistoryList = compactChaptersForMemory(state.chapterHistoryList);
@@ -6118,7 +6415,12 @@ async function rewindStoryToTurn(turn) {
   });
   if (!ok) return;
   if (!createCurrentStoryFork()) return;
+  // 快照不含記憶庫（見 appendChapterToHistory），回溯時沿用現有記憶庫並剔除「未來」的條目
+  const carriedMemory = getMemoryBank().slice();
   state.saveState = JSON.parse(JSON.stringify(target.stateSnapshot));
+  const restoredTurn = Number(state.saveState.turnCount) || Number(target.turn) || 1;
+  state.saveState.memoryBank = carriedMemory.filter(m => m.turn <= restoredTurn);
+  delete state.saveState.patrolNotes;
   state.chapterHistoryList = chapters.slice(0, index + 1);
   state.chapterData = state.chapterHistoryList[state.chapterHistoryList.length - 1];
   state.playerProfile = state.saveState?.meta?.playerProfile || state.playerProfile;
@@ -6849,8 +7151,10 @@ async function handleRegenerateTurn() {
       applyChapterStateChanges(regeneratedChapter, profile, 1);
       safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
       regeneratedChapter.stateSnapshot = JSON.parse(JSON.stringify(state.saveState || {}));
+      delete regeneratedChapter.stateSnapshot.memoryBank;
       state.chapterData = regeneratedChapter;
       state.chapterHistoryList = [regeneratedChapter];
+      rememberChapter(regeneratedChapter);
       persistChapterHistory(state.chapterHistoryList);
       renderStoryStream(regeneratedChapter);
       renderSaveState();

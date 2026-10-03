@@ -59,6 +59,15 @@ const EMBED_MAX_BATCH = 64;
 const EMBED_MAX_CHARS = 3000;
 
 /**
+ * 糾察隊（Decisions API）。span-01-lite 是行為評分分類器：不生成文字，
+ * 只回答「這段內容是否有某種問題」的機率。免費，但走的是獨立端點。
+ */
+const DECISIONS_UPSTREAM = 'https://openrouter.ai/api/alpha/decisions';
+const DECISION_MODELS = ['respan/span-01-lite'];
+const DECISION_MAX_QUESTIONS = 12;
+const DECISION_MAX_STATE_CHARS = 24000;
+
+/**
  * 允許的來源。前端部署到新網域時務必一起更新，否則會全面 403。
  * 注意 origin 不含路徑：GitHub Pages 的 project page 網址雖然是
  * https://toda-shinichi.github.io/TJPR/，但 origin 只有網域那一段。
@@ -494,6 +503,49 @@ export default {
 
     // 檢索用嵌入。與生成走同一組驗證，但不佔用生成佇列 ——
     // 嵌入跑在 Cloudflare 邊緣、不碰 OpenRouter 額度，排隊只會拖慢檢索。
+    if (new URL(request.url).pathname === '/decide') {
+      const auth = await authenticateRequest(request, env, viaSharedKey);
+      if (!auth.ok) {
+        return json({ error: { message: 'Valid login token required.' } },
+          auth.serverError ? 500 : 401, origin);
+      }
+      let payload;
+      try { payload = await request.json(); }
+      catch (ignore) { return json({ error: { message: 'Invalid JSON body.' } }, 400, origin); }
+      if (!DECISION_MODELS.includes(payload?.model)) {
+        return json({ error: { message: 'Decision model not allowed.' } }, 400, origin);
+      }
+      const questions = payload?.questions;
+      if (!questions || typeof questions !== 'object' || Array.isArray(questions)
+        || Object.keys(questions).length < 1 || Object.keys(questions).length > DECISION_MAX_QUESTIONS) {
+        return json({ error: { message: `questions 需為 1–${DECISION_MAX_QUESTIONS} 題的物件。` } }, 400, origin);
+      }
+      const stateText = typeof payload.state === 'string' ? payload.state : JSON.stringify(payload.state || '');
+      if (!stateText || stateText.length > DECISION_MAX_STATE_CHARS) {
+        return json({ error: { message: `state 需為 1–${DECISION_MAX_STATE_CHARS} 字。` } }, 400, origin);
+      }
+      // 只轉送已知欄位，不讓呼叫端夾帶其他參數到上游
+      const upstreamBody = { model: payload.model, questions, state: payload.state };
+      try {
+        const up = await fetch(DECISIONS_UPSTREAM, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${env.API_KEY}`,
+            'HTTP-Referer': 'https://toda-shinichi.github.io',
+            'X-Title': 'Undercurrent'
+          },
+          body: JSON.stringify(upstreamBody)
+        });
+        return new Response(await up.text(), {
+          status: up.status,
+          headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' }
+        });
+      } catch (err) {
+        return json({ error: { message: '糾察隊請求失敗：' + (err?.message || String(err)) } }, 502, origin);
+      }
+    }
+
     if (new URL(request.url).pathname === '/embed') {
       const auth = await authenticateRequest(request, env, viaSharedKey);
       if (!auth.ok) {
