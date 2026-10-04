@@ -931,4 +931,23 @@ assert.match(workerCode, /const JSON_MODE_DISABLED_MODELS = new Set\(\['tencent\
 const hyPinned = (workerCode.match(/'tencent\/hy3': \[([^\]]*)\]/) || [])[1] || '';
 ['novita', 'gmicloud', 'phala'].forEach(p => assert.ok(!hyPinned.includes(p), `hy3 釘選含露骨內容回空白的 ${p}`));
 
+
+// ── 情慾尺度：兩顆按鍵各自明確指示，露骨必須發生性行為 ──
+// 先前兩顆按鍵只換模型、提示詞相同，露骨模式實測正文只有 148–290 字而頻繁失敗
+const spicyBlock = vm.runInContext("buildContentModeBlock('spicy', true)", frontendContext);
+const normalBlock = vm.runInContext("buildContentModeBlock('normal', true)", frontendContext);
+const r18OffBlock = vm.runInContext("buildContentModeBlock('spicy', false)", frontendContext);
+assert.match(spicyBlock, /必須發生實際的性行為/, '露骨模式未要求必須發生性行為');
+assert.match(spicyBlock, /至少 700 字/, '露骨模式未要求篇幅');
+assert.match(spicyBlock, /不是要迴避或淡化情慾內容/, '未釐清文風守則的「克制」不等於迴避情慾');
+assert.match(normalBlock, /允許情慾與親密內容/, '一般模式未允許情慾內容');
+assert.match(normalBlock, /不使用性器官的名稱/, '一般模式未限制為文學筆法');
+assert.match(r18OffBlock, /不寫性愛場景/, '關閉 R-18 時仍可能寫性愛場景');
+assert.match(rootApp, /buildContentModeBlock\(state\.generationMode, profile\.allowR18\)/, '下一回提示詞未帶入情慾尺度');
+assert.match(rootApp, /buildContentModeBlock\('normal', profile\.allowR18\)/, '第一回提示詞未帶入情慾尺度');
+// 生成後驗證：沒有發生性行為就退回重寫
+const finalizeBody = rootApp.slice(rootApp.indexOf('async function finalizeChapter'), rootApp.indexOf('async function finalizeChapter') + 1200);
+assert.match(finalizeBody, /state\.generationMode === 'spicy'[\s\S]*verifySpicyIntercourse\(chapter\.prose\)/, '露骨章節未驗證是否發生性行為');
+assert.match(finalizeBody, /露骨章節沒有發生性行為/, '露骨章節未發生性行為時未退回');
+
 console.log('所有本機偵錯檢查皆已通過。');

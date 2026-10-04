@@ -2793,9 +2793,44 @@ function getNarrativeValidationError(chapter) {
  * 選項修補是唯一需要呼叫模型的修補，但只請它補三個選項（數百 token），
  * 成本約為重寫整章的十分之一。
  */
+/**
+ * 露骨模式的硬性要求：正文必須真的寫到性行為。
+ * 實測（2026-10-04）span-01-lite 6/6 判斷正確，有發生 0.95–0.96、沒有 0.04–0.06，
+ * 連「前戲寫得很露骨但沒做」與「關燈後跳到隔天早上」都分得出來。
+ * 糾察服務本身失敗時放行，不因檢查失敗而擋掉一個可能正常的章節。
+ */
+async function verifySpicyIntercourse(prose) {
+  try {
+    const answers = await callDecisions({
+      sex: {
+        type: 'noul',
+        instructions: '正文是否描寫了實際發生的性行為（性交、身體結合）？只有親吻、愛撫、口頭邀請、前戲後中斷，或以「隔天早上」之類的轉場跳過，都不算。',
+        criteria: {
+          true: '正文明確寫出兩人實際發生性交（身體結合）的過程',
+          false: '正文沒有寫出實際的性交過程（只有前戲、親吻、中斷或跳過）'
+        }
+      }
+    }, `【正文】\n${clampBlock(prose, 6000)}`);
+    const p = answers?.sex?.noul;
+    if (typeof p !== 'number') return { ok: true, unknown: true };
+    return { ok: p >= 0.5, probability: p };
+  } catch (e) {
+    return { ok: true, unknown: true };
+  }
+}
+
 async function finalizeChapter(chapter, model) {
   const verdict = detectRefusal(chapter);
   if (verdict.refused) throw createRefusalError(model, verdict.reason);
+
+  // 按下「露骨」就必須發生性行為：沒有就退回，由模型鏈換下一次嘗試
+  const profileForMode = getActivePlayerProfile ? getActivePlayerProfile() : null;
+  if (state.generationMode === 'spicy' && profileForMode?.allowR18 !== false) {
+    const check = await verifySpicyIntercourse(chapter.prose);
+    if (!check.ok) {
+      throw new Error(`露骨章節沒有發生性行為（判定機率 ${check.probability?.toFixed(2)}），退回重寫`);
+    }
+  }
 
   const polished = normalizeChapterChinese(chapter);
   if (polished) console.info(`[Polish] ${model}：就地修正 ${polished} 個字（簡繁／台灣用語／標點），未重新生成。`);
@@ -4564,12 +4599,49 @@ function buildPreviousTurnStyleNote(historyList) {
   return `- 上一回已出現以下文風瑕疵，本回務必改掉：\n${issues.map(i => `  · ${i}`).join('\n')}`;
 }
 
+/**
+ * 依玩家按下的送出鍵，明確告訴模型本回的情慾尺度與篇幅。
+ *
+ * 先前兩顆按鍵只換模型、提示詞完全相同，唯一的情慾指示又偏含蓄（「以未說出口的
+ * 欲望形成張力」），再加上文風守則裡大量的「克制」，露骨模式的模型因此寫得又短
+ * 又保守：實測 qwen3-30b 正文常只有 148–290 字，低於 220 字門檻就被判失敗，
+ * 玩家看到的就是「按露骨跑不了」。
+ *
+ * 玩家在人設中關閉 R-18 時，兩種模式都不寫性愛場景。
+ */
+function buildContentModeBlock(mode, allowR18 = true) {
+  if (allowR18 === false) {
+    return `【本回情慾尺度：玩家已關閉 R-18】
+- 親密互動停在擁抱、親吻與情感張力，不寫性愛場景。正文 600–1,000 字。`;
+  }
+  if (mode === 'spicy') {
+    return `【本回情慾尺度：露骨（玩家明確按下「露骨」要求的章節）】
+- 硬性要求：本回必須發生實際的性行為（性交、身體結合），這是玩家按下「露骨」的唯一目的。只寫到親吻、愛撫、前戲，或寫到一半被打斷、轉場、淡出，都視為沒有完成本回，會被退回重寫。
+- 若主要對象此刻不在場或場景不允許，就在本回開頭合理地讓兩人獨處，再發展到性行為；不要拖到下一回。
+- 直接、完整地寫出性愛過程：身體結合、動作節奏、觸感與生理反應，可以使用性器官的名稱。不要淡化，不要用「畫面一轉」「一夜過去」跳過，不要只寫前戲就收尾。
+- 這一回以親密場景為主體，把場景從開始寫到結束，事後的餘韻與兩人關係的變化也要寫到。
+- 露骨不代表換了一個人：角色的性格、說話方式、硬性設定與禁制全部照舊。
+- 上方文風守則的「克制」是指用字不浮誇、不堆形容詞，不是要迴避或淡化情慾內容。
+- 篇幅：正文至少 700 字，建議 800–1,200 字。`;
+  }
+  return `【本回情慾尺度：一般（文學性）】
+- 允許情慾與親密內容。劇情或玩家行動走向親密時，就自然寫下去，不要迴避、不要突然中斷場景。
+- 用文學筆法呈現：動作、觸感、呼吸、距離與心理變化；可以寫到身體結合，但用含蓄的說法，不使用性器官的名稱與直白的性行為用詞。
+- 篇幅：正文 600–1,000 字。`;
+}
+
 function buildLiteraryCraftBlock(turnCount, historyList) {
   const rhythm = getSceneRhythm(turnCount);
   const echoes = collectRecentStyleEchoes(historyList);
   const previousStyleNote = buildPreviousTurnStyleNote(historyList);
+  // 旁白稱呼玩家的人稱依性別固定。只寫「第二人稱」時，模型會在「你」「妳」之間混用
+  const playerGender = (typeof getActivePlayerProfile === 'function' ? getActivePlayerProfile()?.gender : '') || '女';
+  const playerPronounRule = /男/.test(playerGender)
+    ? '旁白稱呼玩家一律用「你」。'
+    : '玩家是女性，旁白稱呼玩家一律用「妳」，不可寫成「你」；角色對男性說話時才用「你」。';
   return `【本回文學敘事規格（優先於氣氛口號，僅次於人物設定與事實連續性）】
 - 敘事視角：貼近玩家感官的限知第二人稱；只寫當下可察覺或合理推斷之事，不替其他角色解說內心。
+- 人稱：${playerPronounRule}
 - 文體：台灣當代都會黑色小說。用精準名詞、動詞與可驗證細節形成質感；克制形容詞，避免把「高級、危險、壓迫、性感」當成結論反覆宣告。
 - 對話：台詞表面意義與真正目的之間要有距離，以停頓、答非所問、避開稱謂或改變動作呈現潛台詞；不要在旁白立刻解釋每句台詞。
 - 節奏：長短句與段落密度須有變化。一段只保留一個主要感官焦點；全回核心比喻最多 2 個，且必須取材自當前場景；「像、彷彿、如同、宛如」四種詞合計最多 3 次。
@@ -4949,7 +5021,9 @@ ${characterPromptBlock}
 
 - 玩家自訂開局情境：${customScenario || '深夜暴雨台北，帶著關鍵政商洗錢密錄暗帳初次入局'}
 
-請根據以上設定與開局情境創作第 1 回。直接從一個正在發生的具體動作切入，讓人物意圖透過選擇、對話潛台詞與場景細節浮現；不要先介紹世界觀，也不要用旁白宣告角色危險、迷人或充滿性張力。最後生成三個精簡且真正不同策略的抉擇。全文「像、彷彿、如同、宛如」合計不得超過 3 次。`;
+請根據以上設定與開局情境創作第 1 回。直接從一個正在發生的具體動作切入，讓人物意圖透過選擇、對話潛台詞與場景細節浮現；不要先介紹世界觀，也不要用旁白宣告角色危險、迷人或充滿性張力。最後生成三個精簡且真正不同策略的抉擇。全文「像、彷彿、如同、宛如」合計不得超過 3 次。
+
+${buildContentModeBlock('normal', profile.allowR18)}`;
 
   return { systemPrompt, userPrompt };
 }
@@ -5062,7 +5136,9 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     '請緊接玩家最新行動，以具體選擇、對話潛台詞與場景後果呈現對手反應；不要用旁白直接宣布情緒、權力或性張力。生成 3 個精簡、策略真正不同的分支選項。',
     '務必與上方【近期劇情】的場景、時間、在場人物與物理位置完全銜接，不可跳接或重置場景。',
     '若本回變更 timeLocation，正文必須先敘明移動或時間流逝；連續場景不可讓時鐘無故跳超過 30 分鐘。若主要攻略對象離場，正文必須明寫離場原因與未完成的關係線。',
-    '全文「像、彷彿、如同、宛如」合計不得超過 3 次；不要使用近期已列出的套路語或近義改寫。'
+    '全文「像、彷彿、如同、宛如」合計不得超過 3 次；不要使用近期已列出的套路語或近義改寫。',
+    '',
+    buildContentModeBlock(state.generationMode, profile.allowR18)
   ].filter(part => part !== undefined && part !== null).join('\n');
 
   return { systemPrompt, userPrompt };
@@ -5474,6 +5550,9 @@ async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
 }
 
 function handleCustomActionSubmit(mode) {
+  if (mode === 'spicy' && getActivePlayerProfile()?.allowR18 === false) {
+    notifyUser('目前人設已關閉 R-18，「露骨」不會寫性愛場景。可在人設庫開啟 R-18。', 'info', 6000);
+  }
   const input = dom.customActionInput;
   if (!input) return;
   const val = input.value.trim();
