@@ -271,7 +271,7 @@ assert.strictEqual((rootApp.match(/徐令謙在正式、政商場合稱「徐顧
 assert.doesNotMatch(xuLingqianLore, /深沉狠戾|高階獵食者|退路全被封死|凌虐般的懲戒|絕對支配權/, '徐令謙角色卡仍殘留兇狠控制型舊模板');
 assert.match(xuLingqianLore, /力量方向：他的危險與權勢只朝向外部威脅，絕不朝向玩家/, '徐令謙角色卡缺少力量方向規則');
 assert.match(xuLingqianLore, /給玩家充分自由，不監禁、不命令、不以安全之名剝奪選擇/, '徐令謙角色卡缺少自由與守護規則');
-assert.strictEqual((rootApp.match(/徐令謙專屬例外：他的張力來自風度、克制、可靠承擔與深情守護/g) || []).length, 2, '開局與續回提示詞未共同套用徐令謙戀愛校準');
+assert.strictEqual((rootApp.match(/徐令謙專屬例外：他的張力來自風度、可靠承擔與深情守護；想要玩家時會主動靠近與推進，但不預設威脅、羞辱、疼痛或強迫/g) || []).length, 2, '開局與續回提示詞未共同套用徐令謙戀愛校準');
 assert.match(rootApp, /徐令謙最新演繹校準（最高優先，覆蓋角色卡舊版用語）/, '缺少防止角色卡舊版用語覆蓋新版性格的最終校準');
 // 角色卡改由網站同網域提供，不再經 GAS／Drive；失敗時必須讓人看得到
 assert.doesNotMatch(rootApp, /action: 'lore\/get-character'/, '角色卡仍經 GAS 從 Drive 讀取');
@@ -305,7 +305,7 @@ assert.match(rootApp, /PRIMARY_MODEL: 'qwen\/qwen3-30b-a3b-instruct-2507'/, '露
 assert.strictEqual((rootApp.match(/800–1200 個中文字/g) || []).length, 4, '開局與續回的文學篇幅目標未完整更新');
 assert.doesNotMatch(rootApp, /字數上限強制執行|600~800 個中文字/, '前端提示詞仍殘留硬性字數上限');
 assert.match(rootApp, /完成一個實質改變局勢或關係的戲劇節拍[\s\S]*不截斷、不灌水、不套固定模板/, '開局提示詞缺少戲劇節拍與避免灌水規則');
-assert.match(rootApp, /完成一個有因果、會改變局勢或關係的戲劇節拍[\s\S]*不截斷、不灌水/, '續回提示詞缺少戲劇節拍與避免灌水規則');
+assert.match(rootApp, /每回都要有實質推進（關係更進一步、事件發生或真相揭露），不能整回停在試探、對峙或寒暄；不截斷、不灌水/, '續回提示詞缺少推進與避免灌水規則');
 assert.strictEqual((memoryPipelineCode.match(/800–1200 個中文字/g) || []).length, 3, '長期記憶管線的文學篇幅目標未完整更新');
 assert.doesNotMatch(memoryPipelineCode, /上限強制執行|600(?:~| 至 )800 個中文字/, '長期記憶管線仍殘留硬性字數上限');
 assert.match(rootApp, /recentTurns:\s*5/, '前端近期全文視窗不是 5 回');
@@ -453,9 +453,9 @@ assert.strictEqual(
   '前端兩條生成路徑的 max_tokens 未同步為 6144'
 );
 
-assert.strictEqual(vm.runInContext('getSceneRhythm(1).name', frontendContext), '潛流鋪陳', '第 1 回節奏角色錯誤');
-assert.strictEqual(vm.runInContext('getSceneRhythm(2).name', frontendContext), '言語試探', '第 2 回節奏角色錯誤');
-assert.strictEqual(vm.runInContext('getSceneRhythm(7).name', frontendContext), '潛流鋪陳', '場景節奏未按六回循環');
+assert.strictEqual(vm.runInContext('getSceneRhythm(1).name', frontendContext), '推進升溫', '第 1 回節奏角色錯誤');
+assert.strictEqual(vm.runInContext('getSceneRhythm(3).name', frontendContext), '親密升溫', '第 3 回節奏角色錯誤');
+assert.strictEqual(vm.runInContext('getSceneRhythm(6).name', frontendContext), '推進升溫', '場景節奏未按五回循環');
 assert.strictEqual(vm.runInContext("countLiterarySimiles('監視影像、圖像資料、攝像機')", frontendContext), 0, '一般影像名詞被誤判為比喻');
 assert.strictEqual(vm.runInContext("countLiterarySimiles('好像下雨，彷彿隔世，像一把傘')", frontendContext), 3, '真正的比喻訊號計數錯誤');
 assert.strictEqual(vm.runInContext("countRepeatedLiterarySentences('你沒動。燈熄了。你沒動。你沒動。')", frontendContext), 2, '重複句子計數錯誤');
@@ -984,5 +984,19 @@ assert.match(rootApp, /不要寫成一般愛情小說的坦白示愛/, '角色�
 });
 // 評審模型只限測試金鑰
 assert.match(workerCode, /const testOnlyAllowed = viaSharedKey && TEST_ONLY_MODELS\.includes\(input\.model\)/, '評審模型未限制為測試金鑰專用');
+
+
+// ── 男主主動性、在場與節奏（玩家回饋：一直登場退場、被動、節奏慢、要講超白話才推進）──
+assert.match(rootApp, /buildMaleLeadInitiativeBlock\(profile\.allowR18\)/, '提示詞結尾缺少男主主動性與在場規則');
+const initBlock = vm.runInContext('buildMaleLeadInitiativeBlock(true)', frontendContext);
+assert.match(initBlock, /男主對玩家有好感或慾望時要主動/, '缺少男主主動規則');
+assert.match(initBlock, /整回最多一句/, '未限制「妳想清楚」這類退讓台詞');
+assert.match(initBlock, /玩家挽留時一定留下/, '未規定挽留時要留下');
+assert.match(initBlock, /親密之後留下來過夜或溫存，不要做完就走/, '未規定事後不要離開');
+assert.match(initBlock, /不要由他自己喊停、送她回家或道晚安/, '未規定親吻升溫後不要自己喊停');
+assert.match(initBlock, /就是邀請，照這個方向推進/, '未要求解讀曖昧暗示');
+assert.doesNotMatch(rootApp, /本回必須延續其反應或明寫其離場／暫時分開/, '仍把離場當成預設選項');
+assert.doesNotMatch(rootApp, /name: '餘韻留白'|name: '潛流鋪陳'/, '節奏循環仍含放慢節奏的階段');
+assert.doesNotMatch(rootApp, /尊重玩家的選擇與界線，不強迫靠近、不封路/, '徐令謙校準仍要求被動');
 
 console.log('所有本機偵錯檢查皆已通過。');
