@@ -117,6 +117,9 @@ const ALLOWED_MODELS = [
 //   glm-5.2-thinking  拒絕 R-18、輸出簡體、文字重複損毀
 //   gpt-5.6-luna      未納入評測，暫不開放
 
+/** 只允許帶測試金鑰的請求使用：用來評估角色演繹品質的評審模型。 */
+const TEST_ONLY_MODELS = ['anthropic/claude-sonnet-5.5'];
+
 const MAX_TOKENS_CEILING = 6144;
 const MAX_BODY_BYTES = 128 * 1024;
 const AUTH_CACHE_TTL_SECONDS = 300;
@@ -255,7 +258,7 @@ async function readBoundedBody(request) {
   }
 }
 
-function validateAndNormalizeBody(raw) {
+function validateAndNormalizeBody(raw, viaSharedKey = false) {
   if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
     return { error: 'Request body too large.', status: 413 };
   }
@@ -268,7 +271,9 @@ function validateAndNormalizeBody(raw) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return { error: 'JSON body must be an object.', status: 400 };
   }
-  if (!input.model || !ALLOWED_MODELS.includes(input.model)) {
+  // 評審用模型只開放給測試金鑰（品質評估用），玩家的請求一律不能使用
+  const testOnlyAllowed = viaSharedKey && TEST_ONLY_MODELS.includes(input.model);
+  if (!input.model || (!ALLOWED_MODELS.includes(input.model) && !testOnlyAllowed)) {
     return { error: 'Model not allowed: ' + (input.model || '(empty)'), status: 400 };
   }
   if (!Array.isArray(input.messages) || input.messages.length < 1 || input.messages.length > 32) {
@@ -618,7 +623,7 @@ export default {
     } catch (error) {
       return json({ error: { message: error.status === 413 ? error.message : 'Unable to read request body.' } }, error.status || 400, origin);
     }
-    const normalized = validateAndNormalizeBody(raw);
+    const normalized = validateAndNormalizeBody(raw, viaSharedKey);
     if (normalized.error) return json({ error: { message: normalized.error } }, normalized.status, origin);
     const body = normalized.body;
 

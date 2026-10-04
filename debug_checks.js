@@ -950,4 +950,39 @@ const finalizeBody = rootApp.slice(rootApp.indexOf('async function finalizeChapt
 assert.match(finalizeBody, /state\.generationMode === 'spicy'[\s\S]*verifySpicyIntercourse\(chapter\.prose\)/, '露骨章節未驗證是否發生性行為');
 assert.match(finalizeBody, /露骨章節沒有發生性行為/, '露骨章節未發生性行為時未退回');
 
+
+// ── 角色演繹卡：依角色卡重建，取代與角色卡矛盾的舊資料 ──
+const voiceNorm = t => String(t || '').replace(/[「」『』“”"\s，。、！？…—\-：:；;,.!?]/g, '');
+const voiceDir = 'characters/voice';
+const voiceFiles = fs.readdirSync(voiceDir).filter(f => f.endsWith('.json'));
+assert.strictEqual(voiceFiles.length, 14, '演繹卡不足 14 位');
+for (const f of voiceFiles) {
+  const v = JSON.parse(fs.readFileSync(`${voiceDir}/${f}`, 'utf8'));
+  const card = voiceNorm(fs.readFileSync(`characters/${f.replace('.json', '.md')}`, 'utf8'));
+  for (const field of ['core', 'speech', 'tone', 'worldview', 'sexuality', 'courtship', 'actions', 'style']) {
+    assert.ok(String(v[field] || '').length >= 10, `${f} 缺少演繹面向：${field}`);
+  }
+  // 例句必須逐字出自角色卡（萃取時曾有模型自行編造台詞）
+  [...(v.examples?.public || []), ...(v.examples?.intimate || [])].forEach(e => {
+    assert.ok(card.includes(voiceNorm(e).slice(0, 14)), `${f} 的例句不是出自角色卡：${String(e).slice(0, 20)}`);
+  });
+}
+// 資料庫的香水、例句曾與角色卡矛盾（林政修：沉香老墨水 → Terre d'Hermès）
+const dbNow = vm.runInContext('OFFICIAL_DRIVE_CHARACTERS', frontendContext);
+assert.match(dbNow['06_林政修'].perfume, /Terre d'Hermès/, '林政修香水仍與角色卡矛盾');
+assert.match(dbNow['07_沈湛然'].watch, /LONGINES/, '沈湛然手錶仍與角色卡矛盾');
+assert.match(dbNow['01_徐令謙'].mbti, /摩羯座/, '徐令謙星座仍與角色卡矛盾');
+assert.match(dbNow['14_楊慕璃'].mbti, /INTJ（金牛座）/, '楊慕璃星座或 MBTI 錯誤');
+// 提示詞：演繹卡、結尾的角色演繹重點、旁白限定的用字規則
+assert.match(rootApp, /function formatVoiceProfile\(c, v, \{ compact = false \} = \{\}\)/, '缺少演繹卡格式化');
+assert.match(rootApp, /if \(voice\) return formatVoiceProfile\(c, voice, \{ compact \}\);/, '核心人設未優先使用演繹卡');
+assert.match(rootApp, /buildCharacterSpotlightBlock\(leadKey, activeNPCs\.map\(n => n\.id\)\)/, '提示詞結尾缺少角色演繹重點');
+assert.match(rootApp, /以上去 AI 腔與用字規則只管旁白/, '去 AI 腔規則未限定旁白，會磨平角色對白');
+assert.match(rootApp, /不要寫成一般愛情小說的坦白示愛/, '角色演繹重點未規範表達感情的方式');
+['若有似無的弧度', '不容忽視的重量', '手指在桌面輕敲'].forEach(t => {
+  assert.ok(rootApp.includes(`'${t}'`), `通用冷硬男主模板「${t}」未列入套路語`);
+});
+// 評審模型只限測試金鑰
+assert.match(workerCode, /const testOnlyAllowed = viaSharedKey && TEST_ONLY_MODELS\.includes\(input\.model\)/, '評審模型未限制為測試金鑰專用');
+
 console.log('所有本機偵錯檢查皆已通過。');

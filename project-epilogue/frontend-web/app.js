@@ -49,18 +49,18 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "fullName": "徐令謙（徐顧問 · 謙哥）",
     "age": "35歲",
     "title": "玄辰幫二把手 · 天裕會首領 · 德行事務所最高顧問",
-    "mbti": "INTJ（太陰坐命 / 天蠍座）",
+    "mbti": "INTJ（摩羯座）",
     "cars": "私人車：坦桑石藍 BMW X6 M60i；公務車：深銀灰色 BMW M760i xDrive（天裕會三玉隊駕駛）",
     "watch": "Omega De Ville Prestige 41 mm 黃金皮帶腕錶；復古圓眼鏡（工作與正式場合佩戴）",
     "residence": "台北市士林區天母一帶（低調靜謐宅邸）",
-    "perfume": "冷冽雪松、微苦煙草與高山茶香",
+    "perfume": "柑橘調、木質調、菸草香",
     "identityRole": "亞洲前三大黑幫「玄辰幫」二把手暨中樞堂口「天裕會」首領，黑白兩道地下秩序真正操盤人，冷靜自持的秩序操盤者。",
-    "personality": "冷靜、自持、紳士，喜怒不形於色卻充滿份量與吸引力。不油條、不浮誇、不逞兇鬥狠；對有興趣的女性維持風度、尊重自主，以克制形成張力。愛到深處極其專一深情，給她自由並默默備妥保險、退路與守護，力量永遠朝向外部風險而非她。",
+    "personality": "溫和紳士的黑道謀略家，以算計與承擔建立秩序。沉著冷靜、禮貌克制，聽起來舒服且令人信賴，帶有距離感但不冷漠。",
     "speechExamples": [
-      "「妳可以拒絕。我只希望妳知道全部代價後，再做決定。」",
+      "「妳可以拒絕。我只希望妳知道全部代價後再決定。」",
       "「去做妳想做的事，剩下的我來安排。」",
-      "「妳不欠我。幫妳，是我的選擇。」",
-      "「我不攔妳，但我會確保妳平安回來。」"
+      "「妳可以拒絕。我只希望妳知道全部代價後再決定。」",
+      "「去做妳想做的事，剩下的我來安排。」"
     ]
   },
   "02_韓正寰": {
@@ -69,18 +69,17 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "fullName": "韓正寰（韓主任 · 白日判官）",
     "age": "35歲",
     "title": "士林地檢署重大刑案專組主任檢察官 · 白日判官（全劇唯一檢察官）",
-    "mbti": "ISTJ（紫微破軍 / 摩羯座）",
+    "mbti": "ISTJ（處女座）",
     "cars": "公私皆用白色 Škoda Enyaq Coupe（低調嚴謹、不收受任何財閥配車）",
     "watch": "Seiko Presage 無釉有田燒限量工藝錶；Cerruti 1881 黑色皮帶",
     "residence": "台北市大安區（極簡無多餘雜物的單身公寓）",
-    "perfume": "乾淨皂香、薄荷與法袍剛熨燙過的味道",
+    "perfume": "Diptyque Tam Dao（檀道）",
     "identityRole": "士林地檢署重大刑案專組主任檢察官，司法界正義最後一道防線，代表國家司法公權力。",
-    "personality": "鋼鐵原則、油鹽不進、不畏強權。私下壓抑內斂，情慾極度深沉克制，動情時兼具司法審問般的壓迫感與近乎奉獻的偏執保護慾。",
+    "personality": "白日判官：以法律為刀、痛覺為真的極致控制者低沉、平穩、無波瀾，像宣讀判決書；但在逼問或支配時會微微上揚，帶著不容反駁的壓迫感。",
     "speechExamples": [
-      "「在我的偵查庭裡，只有證據和偽證，沒有灰色地帶。」",
-      "「妳現在的每一句喘息，都在我的筆錄監控之下。」",
-      "「把手放上來。回答我，看著我說實話。」",
-      "「如果這是一場罪，我會親手將妳逮捕，然後陪妳服刑。」"
+      "「抓一個開槍的人不難，難的是拉出那些從來不沾血，卻能讓整個城市聽命的人。」",
+      "「當我拍打你的皮膚，我是在確認你還活著；當我讓你感到痛苦，那是因為我正在接管你的靈魂。」",
+      "「法律是文明的枷鎖，而痛覺，是靈魂唯一的真話。但我對妳的佔有，超越了這兩者。」"
     ]
   },
   "03_邵翊衡": {
@@ -89,18 +88,18 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "fullName": "邵翊衡（邵顧問）",
     "age": "37歲",
     "title": "昱合策略創辦人暨執行長 · 政媒幕後操盤者 · 頂級輿情顧問 · 智庫政策顧問",
-    "mbti": "INTJ（七殺坐命 / 天蠍座）",
+    "mbti": "INTJ（天蠍座）",
     "cars": "私人車：黑曜金屬色 Porsche 911 Carrera 4 GTS；公務車：黑色 Audi A8（智庫配車，前國防部隨扈駕駛）",
     "watch": "Jaeger-LeCoultre 超薄大師系列腕錶；暗銀色細方框眼鏡",
     "residence": "台北市松山區敦化北路巷內頂樓 Penthouse；其他房產：內湖山上獨棟別墅",
-    "perfume": "沉穩木質調；喜好無糖黑咖啡與 Macallan Enigma / Hibiki 21",
+    "perfume": "木質調",
     "identityRole": "政商黑白兩道頂級輿情顧問與危機處理操盤手。表面是風度翩翩的策士，實為操弄人心、控制風向的無聲支配者。",
-    "personality": "溫文優雅、少見情緒波動，高度自律壓抑冷靜，用斯文禮貌包裝疏離。親密關係中溫柔緩慢具詩意，擅長引導對方主動臣服（「我碰妳不是因為妳濕，是因為妳沒說不行」）。",
+    "personality": "政媒操盤手，用理智包裹破碎，以資訊與策略掌控局勢。語氣溫和、冷靜、有距離感，帶著風度卻不失溫度，聽起來像策士在布局，不急不徐，卻有隱隱的壓迫感。",
     "speechExamples": [
-      "「我們不是來找共識的，是來決定——誰的立場更禁得起時間檢驗。」",
-      "「你可以不接受，但這不是選項，是現實。」",
+      "「我知道那邊想要什麼，但他們要的是畫面，不是結果。」",
+      "「如果連反對的聲音都不夠具體，那這方案就還沒成熟。」",
       "「我會讓妳自由，但不是放手，是因為我知道妳會回來。」",
-      "「把腿張開。這不是命令，是邀請。」"
+      "「我想進去，但我等妳點頭。現在告訴我，妳要我。說出來。」"
     ]
   },
   "04_楊紹宸": {
@@ -109,19 +108,18 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "fullName": "楊紹宸（楊副總 · 二哥）",
     "age": "28歲",
     "title": "弘楊集團副總 · 執行董事 · 物流貿易事業群總經理",
-    "mbti": "INTP（天機坐命，對宮太陰 / 處女座）",
+    "mbti": "INTP（處女座）",
     "cars": "私人車：鐵灰色 Audi RS7；公務車：黑色 Benz S680 配專屬司機（絕非邁巴赫）",
     "watch": "Blancpain Air Command 飛行員腕錶",
     "residence": "台北市士林區陽明山腰楊家大宅（與慕璃同住）；私人秘密公寓位於大直",
-    "perfume": "冷冽柑橘、杜松子與高級皮革香",
+    "perfume": "雪松、冷杉、岩蘭的木質調香水",
     "identityRole": "弘楊集團副總裁、執行董事兼物流貿易總經理，楊家次子，楊慕璃二哥。商場狠辣決絕、行事雷厲風行。",
-    "personality": "表面毒舌刻薄、挑剔難搞，實則對慕璃護短至極。極致的智力優越感，情慾佔有慾極度熾烈強勢，擅長用言語羞辱推拉掩飾深沉慾望。",
+    "personality": "弘楊集團副總，優雅攻防的智囊，笑著送你下地獄的獵豹。沉靜溫和，帶有距離感，聽起來禮貌好相處，卻隱含壓迫與掌控，像平靜湖面下的暗流。",
     "speechExamples": [
-      "「楊慕璃，妳是不是忘了整個弘楊的物流網是誰在掌控的？」",
-      "「過來，別讓我說第二次。」",
-      "「妳以為躲到別的男人身後，我就拿妳沒辦法了嗎？」",
-      "「不要急著下判斷，風向永遠比事實快一步。」",
-      "「別說妳沒準備好，妳現在連呼吸都在等我。」"
+      "「這不是誰對誰錯的問題，是誰比較知道什麼不能說。」",
+      "「我們不是要說服他，是讓他自己想出我們要的答案。」",
+      "「我會讓妳自由，但不是放手，是因為我知道妳會回來。」",
+      "「別說你沒準備好，你現在呼吸都在等我。」"
     ]
   },
   "05_徐宇寧": {
@@ -130,18 +128,18 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "fullName": "徐宇寧（徐院長 · 宇寧）",
     "age": "28歲",
     "title": "明隱牙醫診所院長 · 專職牙醫師 · 全國空氣手槍射擊高手",
-    "mbti": "ISFP（太陰坐命 / 天秤座）",
+    "mbti": "ISFP（天秤座）",
     "cars": "淺灰藍色 Volvo XC60（低調沈穩高安全，車上常備手工香氛噴霧）",
     "watch": "Nomos Glashütte Tangente Neomatik 39 Midnight Blue；單眼皮，笑起來眼尾微彎",
     "residence": "台北市大安區永康街一帶靜巷公寓（出身松山區）",
     "perfume": "Diptyque Philosykos（無花果木）與 Jo Malone 苦橙葉",
     "identityRole": "自營《明隱牙醫》診所院長兼主治牙醫師，徐令謙遠房堂弟，徐令謙、楊紹宸、沈湛然的牙醫，楊紹宸薇閣中學六年同窗。平日穿淺灰或深藍制服，私下穿亞麻襯衫。",
-    "personality": "冷靜自在、放鬆很 Chill、情緒穩定、爽朗陽光、溫柔細膩、氣質出眾。非常幽默且帶點調皮，撩人無形型＋情慾技巧型。擅長觀察情緒，在潛移默化中建立親密感。",
+    "personality": "溫柔細膩的牙醫，以氣味、節奏與細節，讓人不知不覺卸下心防。溫暖、陽光、輕柔，帶點調皮的幽默感，聽起來令人放鬆、安心，彷彿被溫柔包覆。",
     "speechExamples": [
-      "「放鬆，牙齒咬合稍微合上一點點就好……對，妳做得很好。」",
-      "「紹宸，你又忘記定期洗牙了？不過看你今天這火氣，牙齦應該在抗議了。」",
-      "「我只是個牙醫，動刀救命找湛然，但要讓妳今晚心情放鬆，我這裡隨時有現磨手沖咖啡。」",
-      "「別繃著臉了，笑一個嘛。眼尾彎起來的時候，妳比誰都好看。」"
+      "「你今天講話比平常慢一點」",
+      "「風有點大，下次幫你記得帶圍巾。」",
+      "「我知道妳現在全身都在發燙，還想假裝妳沒有感覺嗎？」",
+      "「我進來了。」"
     ]
   },
   "06_林政修": {
@@ -150,17 +148,18 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "fullName": "林政修（林次 · 次長）",
     "age": "41歲",
     "title": "法務部政務次長（林次）",
-    "mbti": "ESTJ / ENTJ（鹿港世家出身 / 處女座）",
+    "mbti": "ESTJ（摩羯座）",
     "cars": "曜石黑 Mercedes-Benz S-Class L 350d（公務配車）",
-    "watch": "低調頂級瑞士機械錶",
+    "watch": "Longines Master Collection",
     "residence": "台北市中正區高樓層華廈（老家彰化鹿港）",
-    "perfume": "沉香、菸草、老墨水香氣",
+    "perfume": "Terre d'Hermès",
     "identityRole": "法務部政務次長，人稱「林次」，政壇頂層權力核心掌舵者。舉手投足皆是國家機器級別的絕對權力壓迫感。",
-    "personality": "沉穩威嚴、城府極深、喜怒不形於色。對體制與權力結構了若指掌，習慣在高位俯瞰獵物，以國家大局與制度力量進行無形降維打擊。",
+    "personality": "以笑容與邏輯掌控全局的法務部政務次長，優雅而危險的秩序維護者。溫文儒雅、從容有禮，帶著笑意卻有不容置疑的權威感，聽起來令人卸下戒心，實則句句帶刺。",
     "speechExamples": [
-      "「在體制面前，沒有人能真正置身事外。」",
-      "「有些公文，簽下去就是一條人命；有些沈默，比判決更重。」",
-      "「過來。在這個房間裡，妳只需要聽從我的裁決。」"
+      "「我們當然樂意聽取各界的指教，但事實上，現行法規對於這一類問題早有明確規範，您可以再參考一下第十三條。」",
+      "「每個人的觀點都很寶貴，只是有時候，經驗本身未必能取代制度設計的初衷。」",
+      "「妳以為我不在乎，其實我只是在看妳想怎麼做。」",
+      "「不必跟我討價還價。我已經決定了，妳要的會比妳想像的還多。」"
     ]
   },
   "07_沈湛然": {
@@ -169,17 +168,18 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "fullName": "沈湛然（沈醫師 · 湛然）",
     "age": "36歲",
     "title": "台大醫院精神醫學部主治醫師 · 司法精神醫學權威（全劇唯一精神科主治醫師）",
-    "mbti": "INFJ（巨蟹座）",
+    "mbti": "INFJ（金牛座）",
     "cars": "私人車：極光鈦 Lexus ES 300h（車齡七年，維護極佳，車內乾淨沈靜）",
-    "watch": "Grand Seiko 經典機械錶",
+    "watch": "LONGINES CONQUEST HERITAGE",
     "residence": "台北市中山區行天宮站附近三房老公寓",
-    "perfume": "雪松、乾淨棉麻與極淡白茶香",
+    "perfume": "雪松、廣藿香、皮革與一點煙草混合的木質香",
     "identityRole": "台大醫院精神醫學部主治醫師、司法精神鑑定權威。",
-    "personality": "溫和內斂、極具共情力與洞察力。能一眼看穿人心深處的創傷與慾望，用最溫柔的言語進行精神層面的極限解構與救贖式愛撫。",
+    "personality": "以理性拆解人性、以溫柔包容失控的司法精神醫學權威。低穩、沉靜，帶有安全感和包容力，偶爾透出壓迫感。",
     "speechExamples": [
-      "「妳現在的防衛機制，是在害怕我，還是在害怕看清妳自己？」",
-      "「把眼睛閉上，感受心跳。在我這裡，妳不需要任何偽裝。」",
-      "「痛是真實的，但不要怕，我會陪妳一起走過去。」"
+      "「我並不期待你馬上說實話，但你有多堅持，等到那時候我都還在。」",
+      "「每個人都會說謊，但真正想被看見的人，會選擇什麼時候停下。」",
+      "「你不用逞強，我會在你想安靜的時候安靜，在你想哭的時候讓你哭完。」",
+      "「你可以回來，無論什麼時候。」"
     ]
   },
   "08_江瀚文": {
@@ -188,17 +188,18 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "fullName": "江瀚文（江總 · Ethan哥）",
     "age": "36歲",
     "title": "鼎曜媒體集團執行長 · 娛樂影視帝國掌門人",
-    "mbti": "ENTJ（獅子座）",
+    "mbti": "ENTJ（水瓶座）",
     "cars": "私人車：銀灰色 Aston Martin DBS；商務車：Benz Maybach",
-    "watch": "Audemars Piguet 皇家橡樹離岸型",
+    "watch": "TAG Heuer Carrera Chronograph搭配深藍皮革錶帶",
     "residence": "台北市中山區大直挑高河景頂級公寓",
     "perfume": "Tom Ford 烏木與琥珀奢華調",
     "identityRole": "鼎曜媒體集團執行長，操縱全台娛樂媒體、公關風向與影視資源的頂級資本家。風流倜儻、極具魅力與審美品味。",
-    "personality": "自信張揚、霸道而懂得享受生活。習慣用資本與資源作為籌碼，但在動真情時展現出無與倫比的寵溺與致命性張力。",
+    "personality": "媒體帝國的冷血掌門人，用控制與算計包裹一切。冷靜、銳利、帶有壓迫感，偶爾溫柔但總藏著算計。",
     "speechExamples": [
-      "「在我的鏡頭與媒體下，妳想成為誰，就能成為誰。」",
-      "「今晚的頭條留給別人，而妳，留給我。」",
-      "「別跟我談合約，現在我想跟妳談談私人條款。」"
+      "「每個人都有秘密，我只想知道你願意給我看多少。」",
+      "「想掩飾的細節，往往才是最真實的部分。」",
+      "「我一直在等一個人，哪怕只有一夜，讓我放心失控。」",
+      "「別忍耐了，你知道我最受不了你裝無所謂。」"
     ]
   },
   "09_吳衛廷": {
@@ -207,17 +208,18 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "fullName": "吳衛廷（衛廷哥 · 吳委員）",
     "age": "42歲",
     "title": "最大在野黨立法委員（台北市舊城區/萬華）· 國會喬王",
-    "mbti": "ESTP（萬華在地派系出身 / 白羊座）",
+    "mbti": "ESTP（金牛座）",
     "cars": "公務車：黑色 Toyota Alphard（極黑隔熱紙）；私人車：Mercedes-Benz E-Class Sedan",
-    "watch": "Rolex Submariner 黑水鬼",
+    "watch": "刮痕累累的半金勞力士",
     "residence": "台北市萬華區地方透天厝頂樓加蓋",
     "perfume": "淡淡菸草味、薄荷爽身水與熱炒店的草莽男人味",
     "identityRole": "最大在野黨立法委員、立法院司法及法制委員會委員、國會喬王，說話草莽、台語夾雜。",
-    "personality": "豪爽講義氣、接地氣、深諳基層人心與利益交換。看似粗獷實則心思縝密，對認定的人無條件護短、敢為其提刀擋槍。",
+    "personality": "萬華出身的草莽立委，用江湖氣與基層智慧在國會殺出一條血路。粗獷、圓融、帶有基層智慧，笑裡藏刀，中氣十足，偶爾流露野獸般的警告意味。",
     "speechExamples": [
-      "「幹，誰敢動妳一根寒毛，林北讓他走不出萬華！」",
-      "「這條法案能不能過我說了算，但妳今晚要不要跟我走，妳自己選。」",
-      "「少在那邊跟我咬文嚼字，老子要的就是妳這句話。」"
+      "「次長，你那套標準放在冷氣房裡很完美啦，但搬到菜市場裡，是會逼死人的。規矩是死人定的，活人總要吃飯吧？不給飯吃，你是要逼我掀桌嗎？」",
+      "「幹，少跟我來這套。大家出來混都是混口飯吃，沒有什麼是坐下來喝杯高粱喬不攏的。如果不攏……（點燃打火機）那就看誰的酒瓶比較硬了。」",
+      "「外面那些烏煙瘴氣的麻煩事我去幹，妳只要乖乖待在我身邊就好。天塌下來，有我吳衛廷頂著，輪不到妳來操心。」",
+      "「嫌我俗？靠北，我就俗啊，但我疼妳是真的。林政修只會跟妳講道理，邵翊衡只會算計妳，外面那些穿西裝的哪個有我耐操？我只知道妳現在是我的，誰敢動妳一下，我讓他連台北市都待不下去。」"
     ]
   },
   "10_徐承勳": {
@@ -226,17 +228,18 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "fullName": "徐承勳（副總統 · 徐先生）",
     "age": "47歲",
     "title": "中華民國副總統 · 科技經濟巨擘 · 頂層掌權人",
-    "mbti": "ENTJ（紫微天相 / 摩羯座）",
+    "mbti": "ENTJ（摩羯座）",
     "cars": "公務車：深黑色 Audi A8 L Security 防彈裝甲車；私人車：克爾巴阡灰 Jaguar F-Type COUPÉ R75",
-    "watch": "朗格 A. Lange & Söhne Zeitwerk；極細鈦金屬無框眼鏡",
+    "watch": "A. Lange & Söhne (朗格) Zeitwerk；極細鈦金屬無框眼鏡",
     "residence": "台北市大安區仁愛路副總統官邸；信義區智慧頂級豪宅",
-    "perfume": "高級檀香、冷冽雪茄與頂級白茶香",
+    "perfume": "Penhaligon's The Tragedy of Lord George (喬治勳爵的悲劇)",
     "identityRole": "中華民國副總統，國家權力最巔峰掌舵者之一，苗栗客家書香門第出身，兼具科技巨擘背景與政治最高手腕。",
-    "personality": "極端理性、冷靜深沉、掌控全局的絕對上位者。外表溫文儒雅收斂鋒芒，實則是對自我與他人要求極端嚴苛的掌局者。",
+    "personality": "被架空的副總統，以頂尖大腦與情報網在體制內外進行無形絞殺的極致博弈者。冷靜、深沉、優雅，帶著上位者的威嚴與壓迫感，偶爾流露幽默與諷刺，但從不失控。",
     "speechExamples": [
-      "「國家的秩序由我維護，而妳的安全，由我親自負責。」",
-      "「有些棋子一旦落下，就沒有收回的餘地——包括妳我。」",
-      "「到我身邊來。站在這裡，妳才能看清整個局勢。」"
+      "「江總，新聞自由是國家給的，希望鼎曜的頭版，對得起國家的期待。」",
+      "「我們可以在灰色地帶遊走，但絕對不能越界違法。這攸關你我的政治生命。」",
+      "「妳這裡好緊」",
+      "「妳流好多水」"
     ]
   },
   "11_徐耀南": {
@@ -247,15 +250,16 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "title": "榮南營造集團董事長（榮南王）· 中台灣營建霸主",
     "mbti": "ENTJ-A（獅子座）",
     "cars": "公務車：絲絨棕 Mercedes-Benz S450 4Matic L（專屬司機駕駛）",
-    "watch": "百達翡麗 Patek Philippe 黃金腕錶",
+    "watch": "Patek Philippe Calatrava 5227G（工作日）；Rolex Day-Date 40 白金藍面（假日）",
     "residence": "台中市南屯區七期重劃區豪宅主宅",
-    "perfume": "老沉香、高級威士忌與濃烈雪茄香",
+    "perfume": "Tom Ford Oud Wood（平日）；Maison Francis Kurkdjian Baccarat Rouge 540（夜晚或私密場合）",
     "identityRole": "榮南營造集團董事長，中台灣營造業教父，徐若宸之父。白手起家、霸道狠絕、氣場雄渾。",
-    "personality": "說一不二的傳統威權大家長。重情重義但控制欲極強，信奉力量與實力，對看重的人給予頂級的庇護與沉重的壓迫感。",
+    "personality": "從工地爬上金字塔的台中營造霸主，以掌控為信仰的權力型人物。冷峻威嚴，帶著壓迫感，像在審視對方。",
     "speechExamples": [
-      "「在中台灣這塊地上，只要我徐耀南點頭，就沒人敢搖頭。」",
-      "「年輕人有野心是好事，但在我面前，先學會怎麼站穩。」",
-      "「榮南的門檻很高，但只要妳跨進來，誰也動不了妳。」"
+      "「這個味道我記得。」",
+      "「掌控比愛更可靠。」",
+      "「這個味道我記得。」",
+      "「妳屬於我。」"
     ]
   },
   "12_徐若宸": {
@@ -264,13 +268,13 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "fullName": "徐若宸（若宸 · 小徐總）",
     "age": "22歲",
     "title": "榮南營造家族長子 · 中興大學企業管理研究所研究生 · 營業部實習",
-    "mbti": "ISFJ / ISTJ（金牛座）",
+    "mbti": "金牛座",
     "cars": "金屬莫蘭迪綠色 Volkswagen T-Roc（父親所贈）",
     "watch": "簡約知性腕錶；雙眼皮大眼，微帶鳳眼",
     "residence": "台中市南屯區七期重劃區豪宅",
     "perfume": "清新柑橘、白麝香與剛洗淨的純棉襯衫香",
     "identityRole": "榮南營造家族長子，徐耀南之子，溫哥華私校/UBC畢業，現就讀中興企管所並在家族實習。",
-    "personality": "斯文清瘦、乾淨知性、有家教且克制禮貌。在嚴格家教下長大，內心渴望掙脫父權束縛，動情時兼具少年純情與壓抑已久的叛逆執著。",
+    "personality": "榮南營造接班人，溫和禁慾的壓抑長子溫和、謙遜，聽起來平靜有教養，但偶爾流露壓抑的遲疑或感嘆。",
     "speechExamples": [
       "「我不想只做我父親安排好的繼承人，我想用我自己的方式保護妳。」",
       "「別走……今晚留下來，不要讓我一個人面對這棟大房子。」",
@@ -283,17 +287,18 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "fullName": "徐予澈（藝名徐泰希 / 化名 Hans）",
     "age": "29歲",
     "title": "亞洲頂級男團 HapSTer 門面主唱兼領舞",
-    "mbti": "INFJ（太陽坐命 / 天秤座）",
+    "mbti": "INFJ（天秤座）",
     "cars": "保姆車：銀色 Benz V-Class；私用車：消光磁灰 Benz G500；收藏車：米白色 Volvo 1800S",
     "watch": "Cartier 腕錶；舞台與私下造型配戴銀鏈耳環與復古圓框眼鏡",
     "residence": "新北市新莊區高級社區（低調隱密）",
-    "perfume": "溫潤琥珀、小荳蔻與舞台燈光烘烤後的迷幻香氣",
+    "perfume": "私下木質調、麝香調；舞台前噴的是更濃烈的辛香調",
     "identityRole": "風靡亞洲的頂級男團「HapSTer」主唱兼領舞，舞台上萬人矚目的頂流巨星，私下渴望真實平靜的靈魂。",
-    "personality": "台下眼神柔軟細膩、極具同理心；舞台上魅力四射、眼神霸氣。對外界築起厚重防備，一旦對人敞開心扉便展現出極致深情與無助依賴。",
+    "personality": "舞台上是性張力本體，私下是呆萌慢熱的大男孩。溫潤慵懶，帶點傻氣與真誠，容易害羞臉紅，語無倫次時會結巴。",
     "speechExamples": [
-      "「在所有人眼裡我是徐泰希，但在妳面前，我只是徐予澈。」",
-      "「舞台上的掌聲再響，如果台下沒有妳，一切都沒有意義。」",
-      "「抱緊我，別讓我醒過來。」"
+      "「那個......是工作啦」",
+      "「別看別看」",
+      "「剛剛那個算不算告白」",
+      "「欸等等,妳是不是又在騙我」"
     ]
   },
   "14_楊慕璃": {
@@ -308,7 +313,7 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "residence": "陽明山腰楊家大宅（與兩位哥哥同住）；新莊副都心高樓私人豪宅",
     "perfume": "天然動情體香，偏好金萱茶與不甜香檳，不喝咖啡",
     "identityRole": "楊家三房獨生女，台大法律/北大犯罪所畢業，弘楊集團公關總監。遊走於政商多方勢力間的頂級智性大女主。",
-    "personality": "外表嬌小甜美自帶少女感，內心極度冷靜果決、智商超群。深諳權謀博弈與人心弱點，在多方勢力爭奪中保持獨立與掌控。",
+    "personality": "表面冷靜鋒利、內裡溫柔細膩的楊家三房獨生女，以智慧與美貌在重男輕女的家族中站穩腳步。冷靜理性中帶著溫柔，語氣輕柔卻有鋒利感，聽起來從容不迫、帶有距離感，但偶爾流露俏皮與體貼。",
     "speechExamples": [
       "「各位哥哥與長輩們爭奪這盤大棋，可曾問過我的意願？」",
       "「既然入了這局，就別怪我按照我的規則來玩。」"
@@ -3143,6 +3148,30 @@ const PERSONA = {
 const characterCardCache = new Map();
 /** id -> [{ id, text }]，切好的片段 */
 const characterChunkCache = new Map();
+/**
+ * id -> 演繹卡（characters/voice/*.json）。依言談、思想、優先順序、語氣、用字、情慾特質、
+ * 追求方式、慣常行動、形式風格整理，全部依據角色卡；例句經逐字比對，必定出自角色卡。
+ */
+const characterVoiceCache = new Map();
+
+async function fetchCharacterVoice(id) {
+  if (characterVoiceCache.has(id)) return characterVoiceCache.get(id);
+  const file = 'voice/' + encodeURIComponent(id) + '.json';
+  for (const base of CHARACTER_CARD_PATHS) {
+    try {
+      const res = await fetch(base + file, { cache: 'no-cache' });
+      if (res.ok) {
+        const voice = await res.json();
+        if (voice && voice.speech) { characterVoiceCache.set(id, voice); return voice; }
+      }
+    } catch (e) { /* 換下一個路徑 */ }
+  }
+  return null;
+}
+
+function getCharacterVoice(id) {
+  return characterVoiceCache.get(id) || null;
+}
 /** 本回挑好的片段，供同步組裝提示詞時讀取 */
 let preparedPersonaChunks = {};
 let characterCardFailureNotified = false;
@@ -3211,6 +3240,7 @@ async function fetchCharacterLore(ids, options = {}) {
   let count = 0;
   const missing = [];
   await Promise.all(wanted.map(async id => {
+    fetchCharacterVoice(id).catch(() => {});
     const md = await fetchCharacterCardText(id);
     if (md) {
       characterCardCache.set(id, md);
@@ -3260,7 +3290,7 @@ async function preparePersonaContext(leadKey, npcIds, sceneQuery, turnCount) {
   const ids = [leadKey, ...(npcIds || []).slice(0, LORE_TIER2_LIMIT)].filter(k => k && OFFICIAL_DRIVE_CHARACTERS[k]);
   if (!ids.length) return;
   try {
-    await fetchCharacterLore(ids);
+    await Promise.all([fetchCharacterLore(ids), ...ids.map(id => fetchCharacterVoice(id).catch(() => null))]);
     const query = clampBlock(String(sceneQuery || ''), 400);
     if (!query) return;
     const recalibrate = turnCount >= LORE_RECALIBRATE_EVERY && turnCount % LORE_RECALIBRATE_EVERY === 0;
@@ -4095,7 +4125,10 @@ async function runContinuityPatrol(chapter, actionLabel, memories) {
     const personaPromise = personaTargets.length ? (() => {
       const q = {};
       personaTargets.forEach((c, i) => {
-        const persona = `${c.title || ''}。${c.personality}${c.speechExamples?.[0] ? ' 例句：' + c.speechExamples[0] : ''}`;
+        const v = getCharacterVoice(c.key);
+        const persona = v
+          ? `${v.core} 語氣：${v.tone} 言談：${v.speech}${v.ooc?.length ? ' 絕不會：' + v.ooc.slice(0, 3).join('；') : ''}`
+          : `${c.title || ''}。${c.personality}${c.speechExamples?.[0] ? ' 例句：' + c.speechExamples[0] : ''}`;
         q[`v${i}`] = {
           type: 'noul',
           instructions: `角色設定：${c.name}——${clampBlock(persona, 260)}\n正文中${c.name}的說話語氣與用詞，是否明顯不符合這個設定？`,
@@ -4120,7 +4153,10 @@ async function runContinuityPatrol(chapter, actionLabel, memories) {
         lastPatrolReport.push({ fact: `${c.name} 語氣／行為`, source: '人設', mention: 1, contradict: Math.max(v, b) });
         if (v >= PATROL.personaThreshold || b >= PATROL.personaThreshold) {
           const what = [v >= PATROL.personaThreshold ? '說話語氣' : '', b >= PATROL.personaThreshold ? '行為態度' : ''].filter(Boolean).join('與');
-          notes.push(`上一回${c.name}的${what}偏離人設。本回回到設定：${clampBlock(c.personality, 80)}${c.speechExamples?.[0] ? '（語調參考：' + c.speechExamples[0] + '）' : ''}`);
+          const v = getCharacterVoice(c.key);
+          const target = v ? `${v.tone} ${v.speech}` : c.personality;
+          const ref = v?.examples?.intimate?.[0] || v?.examples?.public?.[0] || c.speechExamples?.[0];
+          notes.push(`上一回${c.name}的${what}偏離人設。本回回到設定：${clampBlock(target, 110)}${ref ? '（語調參考：「' + String(ref).replace(/^「|」$/g, '') + '」）' : ''}`);
         }
       });
     }
@@ -4397,8 +4433,49 @@ function detectActiveNPCs(lastProseText, playerChoice, primaryLeadKey, defaultSu
  * 三層角色提示詞組裝器 (Tier 1 主角 / Tier 2 在場配角 / Tier 3 世界名冊)
  * 具備 100% 原始人設檔案全量細節對標能力（座車、手錶、住所、語氣、關係）
  */
-/** 精簡核心人設：每回都帶，是角色卡片段之外的骨架。 */
+/**
+ * 演繹卡：讓角色「寫起來像他本人」的核心資料。
+ * 先前每回送進提示詞的核心人設與角色卡大量矛盾（例：林政修的角色卡是優雅斯文、
+ * 面帶微笑、笑著說狠話，資料庫卻寫成「沉穩威嚴、喜怒不形於色」，例句也不是角色卡的），
+ * 盲測顯示所有角色的機鋒、詩意、戲謔都被磨平，寫成同一種直接溫和的男人。
+ */
+function formatVoiceProfile(c, v, { compact = false } = {}) {
+  const list = arr => (Array.isArray(arr) ? arr.filter(Boolean) : []);
+  const examples = [...list(v.examples?.public).slice(0, compact ? 1 : 3), ...list(v.examples?.intimate).slice(0, compact ? 1 : 3)];
+  if (compact) {
+    return [
+      `- ${c.fullName || c.name}（${c.title || ''}）：${v.core || ''}`,
+      `  言談與語氣：${v.speech || ''} ${v.tone || ''}`,
+      list(v.diction?.avoids).length ? `  絕不會用：${list(v.diction.avoids).join('、')}` : '',
+      list(v.ooc).length ? `  崩壞警訊：${list(v.ooc).slice(0, 3).join('；')}` : '',
+      examples.length ? `  語調參考：${examples.map(e => `「${e.replace(/^「|」$/g, '')}」`).join(' ')}` : ''
+    ].filter(Boolean).join('\n');
+  }
+  const f = v.facts || {};
+  return [
+    `- 姓名與稱謂：${c.fullName || c.name}（${c.age || ''}${f.mbti ? '，' + f.mbti : ''}${f.zodiac ? '，' + f.zodiac : ''}）`,
+    `- 職銜：${c.title || ''}｜座車：${f.car || c.cars || ''}`,
+    `- 一句話定位：${v.core || ''}`,
+    `- 言談：${v.speech || ''}`,
+    `- 語氣：${v.tone || ''}`,
+    `- 用字：慣用 ${list(v.diction?.uses).join('、') || '—'}；絕不會用 ${list(v.diction?.avoids).join('、') || '—'}`,
+    `- 思想：${v.worldview || ''}`,
+    `- 優先順序：${list(v.priorities).join(' ＞ ')}`,
+    `- 情慾特質：${v.sexuality || ''}`,
+    `- 追求方式：${v.courtship || ''}`,
+    `- 慣常行動：${v.actions || ''}`,
+    `- 形式風格：${v.style || ''}`,
+    list(v.writingCues).length ? `- 寫法提示：\n${list(v.writingCues).map(x => `  * ${x}`).join('\n')}` : '',
+    v.contrast ? `- 不要寫得像別人：${v.contrast}` : '',
+    list(v.ooc).length ? `- 崩壞警訊（出現即為寫錯）：\n${list(v.ooc).map(x => `  * ${x}`).join('\n')}` : '',
+    examples.length ? `- 角色卡原句（只供揣摩語調，不得在正文中照抄或改幾個字重用）：\n${examples.map(e => `  * 「${e.replace(/^「|」$/g, '')}」`).join('\n')}` : ''
+  ].filter(Boolean).join('\n');
+}
+
+/** 精簡核心人設：每回都帶，是角色卡片段之外的骨架。有演繹卡時一律以演繹卡為準。 */
 function formatCoreProfile(c, { compact = false } = {}) {
+  const voice = c?.key ? getCharacterVoice(c.key) : null;
+  if (voice) return formatVoiceProfile(c, voice, { compact });
   const examples = (c.speechExamples || []).slice(0, compact ? 1 : 4).map(ex => `  * ${ex}`).join('\n');
   const lines = [
     `- 姓名與稱謂：${c.fullName || c.name}（${c.age || ''}${c.mbti ? '，' + c.mbti : ''}）`,
@@ -4502,7 +4579,9 @@ const LITERARY_CLICHE_PATTERNS = [
   '唇角勾起', '嘴角勾起', '心跳如鼓', '看穿靈魂', '無形的網', '無形的牆',
   '蟄伏的獸', '危險又迷人', '不容置疑', '不容拒絕', '宣告主權',
   '喉結滾動', '指尖微顫', '呼吸一滯', '渾身一僵', '電流竄過',
-  '眼神銳利如刀', '銳利如刀刃', '眼神像刀', '未引爆的計時器', '未引爆計時器'
+  '眼神銳利如刀', '銳利如刀刃', '眼神像刀', '未引爆的計時器', '未引爆計時器',
+  // 讓所有男主變成同一個人的通用反應
+  '若有似無的弧度', '不容忽視的重量', '手指在桌面輕敲', '目光沉靜'
 ];
 
 const SCENE_RHYTHM_CYCLE = [
@@ -4609,6 +4688,32 @@ function buildPreviousTurnStyleNote(historyList) {
  *
  * 玩家在人設中關閉 R-18 時，兩種模式都不寫性愛場景。
  */
+/**
+ * 本回角色演繹重點：放在提示詞結尾（模型注意力最強的位置）。
+ * 演繹卡本身放在系統提示詞前段，盲測顯示單靠它壓不過其他通用規則，
+ * 角色最有特色的那一面（機鋒、詩意、戲謔、諷刺）仍會被磨平成「語氣直接」。
+ */
+function buildCharacterSpotlightBlock(leadKey, npcIds = []) {
+  const keys = [leadKey, ...npcIds].filter((k, i, a) => k && a.indexOf(k) === i).slice(0, 3);
+  const parts = keys.map((key, idx) => {
+    const v = getCharacterVoice(key);
+    const c = OFFICIAL_DRIVE_CHARACTERS[key];
+    if (!v || !c) return '';
+    const cues = (v.writingCues || []).slice(0, idx === 0 ? 3 : 2).map(x => `  * ${x}`).join('\n');
+    const ooc = (v.ooc || []).slice(0, idx === 0 ? 3 : 2).map(x => `  * 不要：${x}`).join('\n');
+    // 不在結尾放角色卡原句：實測模型會直接把原句抄進對白，長局裡同一句話會一再出現
+    return [
+      `${c.name}：${v.tone}`,
+      cues,
+      v.courtship ? `  * 表達好感與感情的方式（照這個來，不要寫成一般愛情小說的坦白示愛）：${v.courtship}` : '',
+      ooc,
+      // 不要求對白數量：話少、靠行動表達的角色若被逼著多說，反而會把心事說破
+      idx === 0 ? `  * 他的對白要讓人不看名字也聽得出是他；他最有特色的那一面要寫出來，不要寫成通用的「冷靜、直接、克制」男主，也不要讓他用不屬於他的方式表露感情。` : ''
+    ].filter(Boolean).join('\n');
+  }).filter(Boolean);
+  return parts.length ? `【本回角色演繹重點】\n${parts.join('\n')}` : '';
+}
+
 function buildContentModeBlock(mode, allowR18 = true) {
   if (allowR18 === false) {
     return `【本回情慾尺度：玩家已關閉 R-18】
@@ -4643,7 +4748,8 @@ function buildLiteraryCraftBlock(turnCount, historyList) {
 - 敘事視角：貼近玩家感官的限知第二人稱；只寫當下可察覺或合理推斷之事，不替其他角色解說內心。
 - 人稱：${playerPronounRule}
 - 文體：台灣當代都會黑色小說。用精準名詞、動詞與可驗證細節形成質感；克制形容詞，避免把「高級、危險、壓迫、性感」當成結論反覆宣告。
-- 對話：台詞表面意義與真正目的之間要有距離，以停頓、答非所問、避開稱謂或改變動作呈現潛台詞；不要在旁白立刻解釋每句台詞。
+- 對話：每位角色的台詞照他自己的演繹卡寫——有人迂迴、有人直接、有人幽默、有人帶刺，說話方式、句型與用字必須一聽就知道是誰。不要在旁白立刻解釋每句台詞。
+- 角色差異化：不同角色不得共用同一套反應模板。「沉默不語、目光沉靜地凝視、手指輕敲桌面、嘴角勾起若有似無的弧度、語氣平淡卻帶著不容忽視的重量」是通用的冷硬男主模板，除非該角色的演繹卡明確如此，否則不要用。角色最有特色的那一面（機鋒、戲謔、詩意、溫暖、粗獷、羞澀）要寫出來，不要磨平成「冷靜克制」。
 - 節奏：長短句與段落密度須有變化。一段只保留一個主要感官焦點；全回核心比喻最多 2 個，且必須取材自當前場景；「像、彷彿、如同、宛如」四種詞合計最多 3 次。
 - 交稿前靜默自檢：逐字搜尋「像、彷彿、如同、宛如」，合計超過 3 次就刪減；這是硬性上限，不是建議。
 - 避免機械重複：同一句話、同一物件狀態或「你＋動作」句型不得換字反覆描述；除非是刻意設計的唯一一次回聲，完整句子不可重複。
@@ -4655,7 +4761,8 @@ function buildLiteraryCraftBlock(turnCount, historyList) {
 - 通用反套路：避免使用「${LITERARY_CLICHE_PATTERNS.join('、')}」及其近義改寫；若確有必要，整回最多只能出現其中一項。
 - 近期三回已出現、尤其不可再用：${echoes.length ? echoes.join('、') : '無；仍須遵守通用反套路'}。
 - 去 AI 腔：「不是…而是／與其說…不如說／看似…實則／你以為…其實」這類對比翻轉句整回最多 1 次；不寫把具體物件接到人生、命運、靈魂、救贖的昇華句與金句；三個詞或三個短句同構連排最多 1 次。
-- 用字：國中生看得懂。不用生冷文藝詞（氤氳、繾綣、旖旎、婆娑、靜謐、澄澈、寂寥等），重的情緒用輕的字；不用心理勵志腔（被看見、接住、安放、療癒、與自己和解）。
+- 旁白用字：國中生看得懂。不用生冷文藝詞（氤氳、繾綣、旖旎、婆娑、靜謐、澄澈、寂寥等），重的情緒用輕的字；不用心理勵志腔（被看見、接住、安放、療癒、與自己和解）。
+- 以上去 AI 腔與用字規則只管旁白。角色的對白一律照他的演繹卡：該有修辭、雙關、詩意、諷刺、粗話或台語的角色，對白就要有，不要被旁白規則磨平。
 - 台灣用語與字形：捷運、計程車、影片、訊息、品質、立刻；裡、著、為、溫；標點一律全形，引號用「」，刪節號用……。
 - 驚嘆號與破折號只用在對白裡：旁白不用驚嘆號，旁白破折號整回最多 2 處。${previousStyleNote ? '\n' + previousStyleNote : ''}
 - 三個選項各自只寫「一個明確行動＋必要的一句話」，label 建議 25–60 字，hint 建議 10–24 字；不要把選項寫成另一段正文。`;
@@ -5137,6 +5244,10 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     '務必與上方【近期劇情】的場景、時間、在場人物與物理位置完全銜接，不可跳接或重置場景。',
     '若本回變更 timeLocation，正文必須先敘明移動或時間流逝；連續場景不可讓時鐘無故跳超過 30 分鐘。若主要攻略對象離場，正文必須明寫離場原因與未完成的關係線。',
     '全文「像、彷彿、如同、宛如」合計不得超過 3 次；不要使用近期已列出的套路語或近義改寫。',
+    // 人稱規則在系統提示詞前段也有，但露骨鏈的 qwen3-30b 對前段規則遵守較差，結尾再強調一次
+    /男/.test(profile.gender || '') ? '旁白稱呼玩家一律用「你」。' : '玩家是女性：旁白稱呼玩家一律用「妳」，不可寫成「你」。',
+    '',
+    isShura ? '' : buildCharacterSpotlightBlock(leadKey, activeNPCs.map(n => n.id)),
     '',
     buildContentModeBlock(state.generationMode, profile.allowR18)
   ].filter(part => part !== undefined && part !== null).join('\n');
