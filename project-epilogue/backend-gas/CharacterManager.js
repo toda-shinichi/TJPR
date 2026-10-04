@@ -20,7 +20,7 @@ var CharacterManager = (function() {
       id: "01_徐令謙",
       name: "徐令謙",
       file: "01_徐令謙.md",
-      aliases: ["徐令謙", "徐顧問", "謙哥", "徐二少", "令謙", "天裕會", "德行事務所"],
+      aliases: ["徐令謙", "徐顧問", "謙哥", "令謙", "天裕會", "德行事務所"],
       role: "玄辰幫二把手 · 天裕會中樞 · 幕後操盤者",
       oneLiner: "冷靜自持、極有分寸的政商秩序操盤者，工作場合戴復古圓眼鏡，座車坦桑石藍 BMW X6 / 深銀灰 BMW M760i；不必提高音量便有十足份量，對所愛之人給予自由並默默承擔一切風險。"
     },
@@ -28,8 +28,8 @@ var CharacterManager = (function() {
       id: "02_韓正寰",
       name: "韓正寰",
       file: "02_韓正寰.md",
-      aliases: ["韓正寰", "韓檢", "韓主任", "正寰", "士林地檢署", "白日判官"],
-      role: "士林地檢署重大刑案主任檢察官 · 白日判官",
+      aliases: ["韓正寰", "韓檢", "正寰", "士林地檢署", "白日判官"],
+      role: "士林地檢署檢察官 · 白日判官",
       oneLiner: "冷峻禁慾的司法利刃，無眼鏡、短油頭法袍，座車白色 Škoda Enyaq Coupe，在正義守護與私慾佔有邊界極限拉扯。"
     },
     {
@@ -117,8 +117,8 @@ var CharacterManager = (function() {
       name: "徐予澈",
       file: "13_徐予澈.md",
       aliases: ["徐予澈", "徐泰希", "泰希", "予澈", "Hans", "HapSTer"],
-      role: "亞洲頂級男團 HapSTer 門面主唱兼領舞（藝名徐泰希）",
-      oneLiner: "台上極限魅惑、私下溫潤細膩的頂流偶像（配戴銀鏈耳環與造型復古圓眼鏡，座車 Benz V-Class / Benz G500 / Volvo 1800S）。"
+      role: "亞洲頂級男團 HapSTer 主唱兼領舞（藝名徐泰希）",
+      oneLiner: "台上極限魅惑、私下呆萌慢熱又粗線條的頂流偶像（沒有戴眼鏡，私下出門戴墨鏡，座車 Benz V-Class / Benz G500 / Volvo 1800S）。"
     }
   ];
 
