@@ -2846,6 +2846,8 @@ async function finalizeChapter(chapter, model) {
   const polished = normalizeChapterChinese(chapter);
   if (polished) console.info(`[Polish] ${model}：就地修正 ${polished} 個字（簡繁／台灣用語／標點），未重新生成。`);
 
+  await repairPassiveEnding(chapter, model);
+
   await repairChapterStructure(chapter, model);
   const structureError = getNarrativeValidationError(chapter);
   if (structureError) throw new Error(`模型章節結構不完整：${structureError}`);
@@ -2862,6 +2864,55 @@ async function finalizeChapter(chapter, model) {
     console.info(`[Literary Quality] ${model}：${literaryError} —— 保留本章，將於下一回提示詞中點名修正。`);
   }
   return chapter;
+}
+
+/**
+ * 結尾「把決定權推回給玩家」的句型。提示詞已經禁止，但模型仍常以
+ * 「他沒有催促，等著妳的下一步」「妳可以慢慢想」「我送妳回去」收尾
+ * （2026-10-05 模擬：被動判定的回合幾乎都落在最後兩段）。
+ */
+const PASSIVE_ENDING_PATTERN = /沒有催促|沒有催|不催|等著妳|等妳(的)?(決定|回答|反應|開口|下一步|點頭)|等她(的)?(決定|回答|反應|開口|下一步|點頭)|妳可以(慢慢想|決定|選擇)|不用現在回答|想清楚|再打給我|送妳回去|送妳一程|要上來嗎|如果妳願意|兩個選擇|妳選哪一個|要不要跟/;
+
+/**
+ * 只改寫最後兩段，不重跑整回：偵測到等待句型才呼叫一次短請求，
+ * 失敗或改寫不合格就保留原文。
+ */
+async function repairPassiveEnding(chapter, model) {
+  const prose = String(chapter?.prose || '');
+  const paragraphs = prose.split(/\n+/);
+  const tailIndexes = [];
+  for (let i = paragraphs.length - 1; i >= 0 && tailIndexes.length < 2; i -= 1) {
+    if (paragraphs[i].trim()) tailIndexes.unshift(i);
+  }
+  if (!tailIndexes.length) return false;
+  const tail = tailIndexes.map(i => paragraphs[i]).join('\n\n');
+  if (!PASSIVE_ENDING_PATTERN.test(tail)) return false;
+
+  const repairModel = state.generationMode === 'spicy' ? model : LLM_CONFIG.SUMMARY_MODEL;
+  try {
+    const raw = await requestWorkerCompletion({
+      model: repairModel,
+      system: '你是女性向情慾小說的編修。只改寫使用者給的最後兩段正文，用台灣繁體中文，直接輸出改寫後的兩段，不加說明。',
+      user: `以下是一回正文的最後兩段。男主角在結尾停下來等女主角決定、把選擇推回給她，或要送她回去。
+
+請改寫：保留人物、場景、語氣、人稱（女主角是「妳」）與篇幅；刪掉「沒有催促」「等著妳的決定」「妳可以慢慢想」「我送妳回去」「要上來嗎」這類等待或退場的寫法，改成他已經做出的行動（直接帶她走、留下來、吻她、替她決定去哪），結尾停在他的行動上。不要新增人物或改變情節走向。
+
+${tail}`,
+      maxTokens: 900,
+      temperature: 0.5,
+      timeoutMs: 45000
+    });
+    const rewritten = polishTaiwaneseText(String(raw || '').trim());
+    if (!rewritten || rewritten.length < tail.length * 0.5 || rewritten.length > tail.length * 1.8) return false;
+    const newParagraphs = rewritten.split(/\n+/).filter(line => line.trim());
+    paragraphs.splice(tailIndexes[0], paragraphs.length - tailIndexes[0], ...newParagraphs);
+    chapter.prose = paragraphs.join('\n\n');
+    console.info(`[Ending] ${repairModel}：改寫結尾的等待句型，未重跑整回。`);
+    return true;
+  } catch (error) {
+    console.warn('[Ending] 結尾改寫失敗，保留原文：', error?.message || error);
+    return false;
+  }
 }
 
 /** 補齊可推斷的結構欄位；只有正文過短這類無法推斷的問題才留給上層重跑。 */
@@ -4603,7 +4654,8 @@ const LITERARY_CLICHE_PATTERNS = [
   // 讓所有男主變成同一個人的通用反應
   '若有似無的弧度', '不容忽視的重量', '手指在桌面輕敲', '目光沉靜',
   // 讓男主停在等待、把決定權推回玩家的寫法
-  '沒有催促', '拒絕的空間', '妳不用現在回答', '我可以等', '安靜地等', '等她決定', '等妳決定'
+  '沒有催促', '拒絕的空間', '妳不用現在回答', '我可以等', '安靜地等', '等她決定', '等妳決定',
+  '等著妳的決定', '等妳的決定', '兩個選擇', '妳可以選擇', '沒有追問', '等著妳自己', '沒有逼妳', '想清楚了', '送妳回去', '再打給我', '要上來嗎', '如果妳願意'
 ];
 
 const SCENE_RHYTHM_CYCLE = [
@@ -4752,6 +4804,10 @@ function buildMaleLeadInitiativeBlock(allowR18 = true) {
 - 玩家釋出邀請時，這一回他一定要做出一個明確的主動行為並做完：吻她、把她拉進懷裡、解開她的安全帶把她拉過來、抱起她、把她帶進屋裡。不要碰一下手背就收回、不要停在「等她開口」。
 - 玩家已經釋出邀請時，不要再確認她的意願（不問「妳確定？」「可以嗎？」「妳想要嗎？」）——她的行動就是答案。
 - 不要寫等待與退讓：「沒有催促」「給她留了拒絕的空間」「妳不用現在回答」「我可以等」「安靜地等她」「要她親口說」「妳想清楚」「我不會勉強妳」「等妳準備好」這類句子整回最多一句。只有玩家明確拒絕時才停下來。
+- 結尾不要交給她選：不要以男主給她二選一（「妳可以下車，或是……」「妳有兩個選擇」）、「他等著妳的決定」「他沒有逼妳，只是等著」收尾。章節最後一個畫面是他已經做出的行動（已經帶她上樓、已經吻下去、已經替她決定去哪），三個選項是她怎麼回應他，不是要不要接受他。
+- 他想知道什麼就直接問到底或直接行動，不要寫「他沒有追問，等她自己開口」；也不要用一個等她回答的問句收尾（「妳可以告訴我……」「明天妳會來嗎？」）。
+- 不要寫「妳想清楚了就打給我」「超過時間就當妳放棄」「我送妳回去」：這些都是把她推開或退場。玩家沒說要回家，他就把她帶在身邊，帶去下一個地方。
+- 不要用「遞名片、留電話，說等妳想好再打」然後離開來結束相遇：名片可以給，但他人不走。也不要問「要上來嗎？」「如果妳願意，我送妳」——他直接說「上來」「跟我走」，然後帶她走。
 - 解讀暗示：玩家的曖昧行動（不下車、不道晚安、靠近、凝視、說不想一個人、選了偏親密的選項）就是邀請，照這個方向推進${allowR18 === false ? '（玩家已關閉 R-18，停在擁抱與親吻）' : ''}，不需要玩家講白話。
 - 在場與停留：他在場時預設留下、延續相處，不要以「該走了」「還有公事」收尾。玩家挽留時一定留下（可以把車停好、打電話交代公事、脫下外套）。親密之後留下來過夜或溫存，不要做完就走。親吻或親密升溫之後要順勢延續（跟她上樓、帶她回他的住處、繼續下去），不要由他自己喊停、送她回家或道晚安。只有發生無法推辭的緊急事件才離開，而且要先鋪陳。
 - 三個選項：一個推進主線、一個大膽推進與他的關係或親密、一個高風險破局。至少一個選項必須是與他之間的感情或親密行動（靠近、觸碰、吻、留下、邀約）；他不在場時，改為去找他或約他見面。不可以三個都是調查、查帳或公事。`;

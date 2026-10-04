@@ -1065,4 +1065,9 @@ assert.match(rootApp, /allowDominantPlot: document\.getElementById\('form-allow-
 assert.match(vm.runInContext(`buildPacingBlock({ allowR18: true, allowDominantPlot: true }, {}, 1)`, frontendContext), /不必等到熟識/, '強勢主導未放寬初識期節奏');
 assert.match(vm.runInContext(`buildPacingBlock({ allowR18: true }, {}, 1)`, frontendContext), /先不接吻、不上床/, '未勾選時初識期節奏被放寬');
 
+// 結尾把決定權推回給玩家時只改寫最後兩段
+assert.ok(vm.runInContext(`PASSIVE_ENDING_PATTERN.test('他沒有催促，只是等著妳的決定。')`, frontendContext), '未偵測等待結尾');
+assert.ok(!vm.runInContext(`PASSIVE_ENDING_PATTERN.test('他扣住妳的手腕，帶妳上樓。')`, frontendContext), '主動結尾被誤判');
+assert.match(rootApp, /await repairPassiveEnding\(chapter, model\);/, '結尾改寫未接入 finalizeChapter');
+
 console.log('所有本機偵錯檢查皆已通過。');
