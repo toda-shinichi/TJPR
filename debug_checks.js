@@ -171,6 +171,8 @@ frontendContext.__stateDeltaSave = {
   relationships: { '徐令謙': 96 },
   questFlags: {}
 };
+// 好感度目前以 FEATURES.favorability 關閉，但計算邏輯保留以便恢復：測試時暫時開啟
+vm.runInContext('FEATURES.favorability = true', frontendContext);
 vm.runInContext(`applyStateDelta(__stateDeltaSave, {
   hpChange: -10,
   sanityChange: -7,
@@ -182,6 +184,7 @@ vm.runInContext(`applyStateDelta(__stateDeltaSave, {
 assert.strictEqual(vm.runInContext('__stateDeltaSave.protagonist.hp', frontendContext), 0, 'HP 已為 0 時被錯誤重設為 100');
 assert.strictEqual(vm.runInContext('__stateDeltaSave.protagonist.sanity', frontendContext), 85, '理智值變動未套用');
 assert.strictEqual(vm.runInContext('__stateDeltaSave.relationships["徐令謙"]', frontendContext), 100, '好感值未夾制到 0–100');
+vm.runInContext('FEATURES.favorability = false', frontendContext);
 assert.strictEqual(vm.runInContext('__stateDeltaSave.inventory[0].id', frontendContext), 'new_usb', '物品增減未正確套用');
 assert.strictEqual(vm.runInContext('__stateDeltaSave.questFlags.latest_update', frontendContext), '取得金流證據', '任務進度未持久化');
 
@@ -271,7 +274,16 @@ assert.strictEqual((rootApp.match(/徐令謙在正式、政商場合稱「徐顧
 assert.doesNotMatch(xuLingqianLore, /深沉狠戾|高階獵食者|退路全被封死|凌虐般的懲戒|絕對支配權/, '徐令謙角色卡仍殘留兇狠控制型舊模板');
 assert.match(xuLingqianLore, /力量方向：他的危險與權勢只朝向外部威脅，絕不朝向玩家/, '徐令謙角色卡缺少力量方向規則');
 assert.match(xuLingqianLore, /給玩家充分自由，不監禁、不命令、不以安全之名剝奪選擇/, '徐令謙角色卡缺少自由與守護規則');
-assert.strictEqual((rootApp.match(/徐令謙專屬例外：他的張力來自風度、可靠承擔與深情守護；想要玩家時會主動靠近與推進，但不預設威脅、羞辱、疼痛或強迫/g) || []).length, 2, '開局與續回提示詞未共同套用徐令謙戀愛校準');
+assert.strictEqual((rootApp.match(/徐令謙專屬例外：克制、壓抑、紀律嚴明，唯獨面對玩家會控制不住；傲嬌卻主動，會要求、請求、彆扭地撒嬌，但不命令、不威脅、不強迫，只守護/g) || []).length, 2, '開局與續回提示詞未共同套用徐令謙戀愛校準');
+// 作者指示（2026-10-05）：徐令謙克制紀律，但面對玩家會失控、傲嬌、主動；不得再以「妳可以拒絕」把決定權推回
+const xuVoice = JSON.parse(fs.readFileSync('characters/voice/01_徐令謙.json', 'utf8'));
+assert.match(xuVoice.courtship, /傲嬌|反話/, '徐令謙演繹卡缺少傲嬌');
+assert.ok(!xuVoice.writingCues.some(c => /妳可以拒絕』這類給予選擇權/.test(c)), '徐令謙演繹卡仍要求多用「妳可以拒絕」');
+// 戀愛為核心、所有男主對玩家有好感、邀請時不再確認意願
+const initBlock2 = vm.runInContext('buildMaleLeadInitiativeBlock(true)', frontendContext);
+assert.match(initBlock2, /本作以情慾與戀愛為核心/, '未定位情慾戀愛為核心');
+assert.match(initBlock2, /每一位男主都對玩家有好感/, '未規定男主對玩家有好感');
+assert.match(initBlock2, /不要再確認她的意願/, '未禁止邀請後再確認意願');
 assert.match(rootApp, /徐令謙最新演繹校準（最高優先，覆蓋角色卡舊版用語）/, '缺少防止角色卡舊版用語覆蓋新版性格的最終校準');
 // 角色卡改由網站同網域提供，不再經 GAS／Drive；失敗時必須讓人看得到
 assert.doesNotMatch(rootApp, /action: 'lore\/get-character'/, '角色卡仍經 GAS 從 Drive 讀取');
@@ -290,12 +302,12 @@ const chunks = vm.runInContext("splitCharacterCard('# 測試\\n\\n⚖️ 基本�
 assert.ok(chunks.length >= 2 && chunks.every(c => c.length <= 560), '角色卡切段長度異常');
 assert.match(
   vm.runInContext("finishCharacterBlocks([], '01_徐令謙', [])", frontendContext),
-  /權勢與危險只用來處理外部威脅，絕不朝向玩家/,
+  /權勢與危險只用來處理外部威脅[^。]*絕不朝向玩家/,
   '徐令謙作為主角時未套用最終演繹校準'
 );
 assert.match(
   vm.runInContext("finishCharacterBlocks([], '修羅場', [])", frontendContext),
-  /給予自由，而不是把保護變成控制/,
+  /唯獨面對玩家，他會控制不住/,
   '修羅場模式未套用徐令謙最終演繹校準'
 );
 assert.doesNotMatch(rootApp, /text-\[#d8dbe6\]/, '最新回合仍使用深色主題遺留的低對比淺字');
@@ -499,7 +511,9 @@ assert.match(workerCode, /MAX_TOKENS_CEILING = 6144/, 'Worker 的 max_tokens 夾
 // ── 全域排隊機制 ──
 // 上游額度是所有玩家共用的，Worker 是唯一匯流點，排隊必須放在那裡。
 assert.match(workerCode, /export class RpmQueue/, 'Worker 缺少 Durable Object 排隊器');
-assert.match(workerCode, /QUEUE_MIN_INTERVAL_MS = 1500/, '排隊間隔未隨 OpenRouter 放寬');
+assert.match(workerCode, /QUEUE_MIN_INTERVAL_MS = 50;/, '全域排隊間隔未解除封測人數限制');
+assert.match(workerCode, /RATE_LIMIT = \{ windowSeconds: 60, maxRequests: 15 \}/, '每位玩家 RPM 不是 15');
+assert.match(workerCode, /QUEUE_UPSTREAM_BACKOFF_MS = 5000;/, '上游 429 全域退避仍過長');
 assert.match(workerCode, /QUEUE_MAX_WAIT_MS = 180000/, '排隊上限不是 180 秒');
 assert.match(workerCode, /acquireQueueSlot\(env, request\.headers\.get\('X-Queue-Ticket'\)\)/, 'Worker 未在轉發前以預約票券取得排隊時段');
 assert.match(workerCode, /X-Queue-Ticket/, 'Worker 排隊未使用不可插隊的預約票券');
@@ -998,5 +1012,57 @@ assert.match(initBlock, /就是邀請，照這個方向推進/, '未要求解讀
 assert.doesNotMatch(rootApp, /本回必須延續其反應或明寫其離場／暫時分開/, '仍把離場當成預設選項');
 assert.doesNotMatch(rootApp, /name: '餘韻留白'|name: '潛流鋪陳'/, '節奏循環仍含放慢節奏的階段');
 assert.doesNotMatch(rootApp, /尊重玩家的選擇與界線，不強迫靠近、不封路/, '徐令謙校準仍要求被動');
+
+
+// ── 節奏依關係階段、防止原地打轉、逐回摘要不可編造名字（10 回合模擬發現）──
+assert.match(rootApp, /buildPacingBlock\(profile, saveState, turnCount\)/, '提示詞缺少依關係階段的節奏規則');
+vm.runInContext('FEATURES.favorability = true', frontendContext);
+assert.strictEqual(vm.runInContext("getRelationshipStage({targetLeadName:'韓正寰'}, {relationships:{韓正寰:10}}, 9)", frontendContext), 'meet', '好感度低時未判為初識');
+assert.strictEqual(vm.runInContext("getRelationshipStage({targetLeadName:'韓正寰'}, {relationships:{韓正寰:60}}, 2)", frontendContext), 'love', '好感度高時未判為戀愛');
+vm.runInContext('FEATURES.favorability = false', frontendContext);
+// 好感度關閉時：節奏只依回合數，忽略殘留的好感度資料
+assert.strictEqual(vm.runInContext("getRelationshipStage({targetLeadName:'韓正寰'}, {relationships:{韓正寰:90}}, 2)", frontendContext), 'meet', '好感度關閉時仍依好感度判斷階段');
+assert.strictEqual(vm.runInContext("getRelationshipStage({targetLeadName:'韓正寰'}, {}, 5)", frontendContext), 'flirt', '無好感度時未依回合數判斷');
+const pacing = vm.runInContext("buildPacingBlock({targetLeadName:'韓正寰'}, {}, 1)", frontendContext);
+assert.match(pacing, /同一個場景最多延續 3 回/, '缺少防止原地打轉規則');
+assert.match(pacing, /不要重複同一個邀約或同一句試探/, '缺少玩家沉默時打破僵局的規則');
+assert.match(rootApp, /只能使用上述人名或正文中明確出現的人名，不可編造名字/, '逐回摘要未禁止編造名字');
+assert.doesNotMatch(rootApp, /"「妳可以拒絕。/, '資料庫仍有「妳可以拒絕」例句');
+
+
+// ── 好感度暫時移除（FEATURES.favorability = false）──
+assert.match(rootApp, /const FEATURES = \{\s*favorability: false\s*\}/, '好感度未關閉');
+const promptNoFav = vm.runInContext(`(() => {
+  state.saveState = { turnCount: 3, meta: { currentAct: 1 }, relationships: { 徐令謙: 80 }, memoryBank: [] };
+  const prof = { name: '楊慕璃', gender: '女', targetLead: '01_徐令謙', targetLeadName: '徐令謙', supportingLeads: [] };
+  const r = buildNextTurnPrompt(3, 'A', '看著他', prof, [{ turn: 2, prose: '他在那裡。', chosenLabel: '見面' }], '', state.saveState, '', '');
+  return r.systemPrompt + r.userPrompt;
+})()`, frontendContext);
+assert.doesNotMatch(promptNoFav, /favorabilityDelta|relationshipChanges|好感度累積|好感度變動/, '好感度關閉時提示詞仍要求或帶入好感度');
+assert.match(html, /id="relationships-section"/, '好感度區塊缺少可隱藏的容器');
+
+// 曖昧期不可要求「等玩家明確邀請」（會讓男主卡在門口等她決定）；選項至少一個是感情行動
+assert.doesNotMatch(rootApp, /性愛則等玩家釋出明確邀請/, '曖昧期仍要求男主等玩家明確邀請');
+assert.match(vm.runInContext('buildMaleLeadInitiativeBlock(true)', frontendContext), /不可以三個都是調查、查帳或公事/, '選項未強制包含感情行動');
+
+// 整段照抄前文須重跑，一般措辭重複不重跑
+assert.match(rootApp, /const COPIED_PROSE_ECHO_CHARS = 80;/, '缺少照抄門檻');
+const copied = '他把外套披在她肩上，轉身關上窗，雨聲一下子遠了。她看著他的背影，想起酒會上他替她擋下的那杯酒，還有他說話時刻意壓低的聲音。走廊盡頭的燈閃了兩下，樓下傳來車門關上的悶響，她把手機翻過來蓋在桌上，假裝沒看見那封剛進來的訊息，指尖卻一直停在杯緣上。';
+assert.ok(vm.runInContext(`getLongestRecentLiteraryEcho(${JSON.stringify(copied + '後來她笑了。')}, [{ prose: ${JSON.stringify(copied)} }])`, frontendContext) >= 80, '照抄前文未被偵測');
+assert.ok(vm.runInContext(`getLongestRecentLiteraryEcho('他把外套披在她肩上，然後離開。', [{ prose: ${JSON.stringify(copied)} }])`, frontendContext) < 80, '一般措辭重複被誤判為照抄');
+
+// 強勢主導劇情：玩家勾選且開啟 R-18 才啟用
+assert.match(html, /id="form-allow-dominant"(?![^>]*checked)/, '強勢主導勾選框缺失或預設勾選');
+assert.equal(vm.runInContext(`buildDominantPlotBlock({ allowR18: true })`, frontendContext), '', '未勾選時不應注入強勢主導規則');
+assert.equal(vm.runInContext(`buildDominantPlotBlock({ allowR18: false, allowDominantPlot: true })`, frontendContext), '', '關閉 R-18 時強勢主導應失效');
+const dominantBlock = vm.runInContext(`buildDominantPlotBlock({ allowR18: true, allowDominantPlot: true })`, frontendContext);
+assert.match(dominantBlock, /不需要玩家先明確邀請/, '強勢主導規則缺少免邀請');
+assert.match(dominantBlock, /清醒、願意並且回應/, '強勢主導規則缺少性愛當下的意願界線');
+assert.match(dominantBlock, /不寫下藥、灌醉後發生關係、暴力強迫/, '強勢主導規則缺少禁止項');
+assert.match(rootApp, /buildDominantPlotBlock\(profile\),\n    '',\n    buildPacingBlock/, '強勢主導規則未接入每回提示詞');
+assert.match(rootApp, /allowDominantPlot: document\.getElementById\('form-allow-dominant'\)\?\.checked === true,\n      customScenario/, '開局表單未讀取強勢主導');
+
+assert.match(vm.runInContext(`buildPacingBlock({ allowR18: true, allowDominantPlot: true }, {}, 1)`, frontendContext), /不必等到熟識/, '強勢主導未放寬初識期節奏');
+assert.match(vm.runInContext(`buildPacingBlock({ allowR18: true }, {}, 1)`, frontendContext), /先不接吻、不上床/, '未勾選時初識期節奏被放寬');
 
 console.log('所有本機偵錯檢查皆已通過。');

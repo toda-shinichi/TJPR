@@ -94,8 +94,13 @@ const ALLOWED_ORIGINS = [
   'http://127.0.0.1:8731'
 ];
 
-/** 每個 IP 在時間窗內允許的請求數 */
-const RATE_LIMIT = { windowSeconds: 60, maxRequests: 12 };
+/**
+ * 每個 IP（約等於每位玩家）每分鐘允許的生成類請求數。
+ * 一回約 2–6 次（正文生成、模型備援、逐回摘要、偶爾的選項修補與摘要池）；
+ * 記憶檢索（/embed）與糾察隊（/decide）不經過這道限制。
+ * 注意：同一個對外 IP 後的多位玩家（例如同一辦公室）會共用這個額度。
+ */
+const RATE_LIMIT = { windowSeconds: 60, maxRequests: 15 };
 
 /** 允許前端指定的模型白名單。避免有人拿這個端點去跑任意昂貴模型。 */
 const ALLOWED_MODELS = [
@@ -374,7 +379,7 @@ export class RpmQueue {
     if (url.pathname === '/defer') {
       const requestedBackoff = Number(request.headers.get('X-Backoff-Ms'));
       const backoffMs = Number.isFinite(requestedBackoff)
-        ? Math.max(QUEUE_MIN_INTERVAL_MS, Math.min(requestedBackoff, 120000))
+        ? Math.max(QUEUE_MIN_INTERVAL_MS, Math.min(requestedBackoff, 15000))
         : QUEUE_UPSTREAM_BACKOFF_MS;
       const ticket = crypto.randomUUID();
       let cursor = now + backoffMs;
@@ -463,12 +468,19 @@ export class RpmQueue {
 /**
  * 兩次上游請求的最小間隔。
  * 舊上游是全域共用 5 RPM，所以必須拉到 16 秒；OpenRouter 改為依額度計費、
- * 速率上限高出兩個數量級，佇列的作用退化為「避免瞬間湧入」的節流閥，
- * 因此縮到 1.5 秒 —— 再高只是白白讓玩家空等。
+ * 速率上限高出兩個數量級，佇列的作用退化為「避免瞬間湧入」的節流閥。
+ *
+ * 2026-10-05 解除封測「最多 3 人同時在線」的設計：1.5 秒的間隔等於全站每分鐘
+ * 40 次，人一多就排隊。改為 50 毫秒（基本上不限制同時人數），每位玩家的用量
+ * 改由 RATE_LIMIT（每分鐘 15 次）控管。
  */
-const QUEUE_MIN_INTERVAL_MS = 1500;
-/** 上游仍回 429 時的預設全域退避，退避完成後仍維持每格 16 秒。 */
-const QUEUE_UPSTREAM_BACKOFF_MS = 30000;
+const QUEUE_MIN_INTERVAL_MS = 50;
+/**
+ * 上游回 429 時的全域退避。先前是 30 秒且會把所有等待者往後平移 ——
+ * 某個供應商限流時，全站玩家會一起被拖慢，多次累積就超過上限而回「排隊已滿」。
+ * 縮短為 5 秒；各模型另有多家釘選供應商與備援模型可接手。
+ */
+const QUEUE_UPSTREAM_BACKOFF_MS = 5000;
 /** 佇列超過這個長度就請玩家稍後再試，而不是無限等下去。 */
 const QUEUE_MAX_WAIT_MS = 180000;
 

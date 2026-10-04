@@ -15,8 +15,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./tailwind.generated.css?v=f70ed1b1e5">
-  <link rel="stylesheet" href="./style.css?v=f70ed1b1e5">
+  <link rel="stylesheet" href="./tailwind.generated.css?v=34b9e0558e">
+  <link rel="stylesheet" href="./style.css?v=34b9e0558e">
   <style>
     /* 線條 icon（取代 emoji）：跟著文字大小與顏色走 */
     .ui-icon { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; flex-shrink: 0;
@@ -526,6 +526,14 @@
           <input type="checkbox" id="form-allow-r18" checked class="w-4 h-4 accent-brand-gold cursor-pointer">
         </div>
 
+        <div class="creator-advanced-field flex items-center justify-between p-3 rounded-lg bg-brand-card border border-brand-border">
+          <label for="form-allow-dominant" class="cursor-pointer pr-3">
+            <div class="font-bold text-white text-xs">強勢主導劇情（需開啟 R-18）</div>
+            <div class="text-[11px] text-slate-400">勾選即表示妳確認接受：男主可不經明確邀請主動推進到性愛，劇情可含權勢、設局、權謀、誘惑與魅惑。性愛當下女主角仍是願意的。</div>
+          </label>
+          <input type="checkbox" id="form-allow-dominant" class="w-4 h-4 accent-brand-gold cursor-pointer shrink-0">
+        </div>
+
         <div class="creator-advanced-field">
           <label class="block font-bold text-slate-300 mb-1">玩家個人雷區 / 禁忌標籤</label>
           <input type="text" id="form-player-taboos" value="禁止暴力侮辱，無特定雷區" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white text-xs focus:border-brand-gold focus:outline-none">
@@ -826,7 +834,7 @@
     <div class="flex justify-between items-center pb-3 border-b border-brand-border">
       <h2 class="font-serif font-bold text-base text-white flex items-center gap-2">
         <span class="text-brand-gold"><svg class="ui-icon" aria-hidden="true"><use href="#i-chart"></use></svg></span>
-        角色狀態與好感度
+        角色狀態
       </h2>
       <button id="close-drawer-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer touch-target" aria-label="關閉狀態面板">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -844,8 +852,8 @@
       </div>
     </div>
 
-    <!-- 男主好感度矩陣 -->
-    <div class="bg-brand-card p-3.5 rounded-xl border border-brand-border space-y-2">
+    <!-- 男主好感度矩陣（FEATURES.favorability 關閉時由 JS 隱藏） -->
+    <div id="relationships-section" class="bg-brand-card p-3.5 rounded-xl border border-brand-border space-y-2">
       <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">男主關係與好感度</h3>
       <div id="relationships-list" class="space-y-1.5 text-xs text-slate-300">
         <!-- JS 動態生成好感條 -->
@@ -1164,6 +1172,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=f70ed1b1e5" defer></script>
+    <script src="app.js?v=34b9e0558e" defer></script>
 </body>
 </html>

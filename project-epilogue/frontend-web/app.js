@@ -57,9 +57,7 @@ const OFFICIAL_DRIVE_CHARACTERS = {
     "identityRole": "亞洲前三大黑幫「玄辰幫」二把手暨中樞堂口「天裕會」首領，黑白兩道地下秩序真正操盤人，冷靜自持的秩序操盤者。",
     "personality": "溫和紳士的黑道謀略家，以算計與承擔建立秩序。沉著冷靜、禮貌克制，聽起來舒服且令人信賴，帶有距離感但不冷漠。",
     "speechExamples": [
-      "「妳可以拒絕。我只希望妳知道全部代價後再決定。」",
       "「去做妳想做的事，剩下的我來安排。」",
-      "「妳可以拒絕。我只希望妳知道全部代價後再決定。」",
       "「去做妳想做的事，剩下的我來安排。」"
     ]
   },
@@ -1956,6 +1954,15 @@ const GENERATION_MODES = {
 };
 const DEFAULT_GENERATION_MODE = 'normal';
 
+/**
+ * 功能開關。
+ * favorability：好感度系統（2026-10-05 依作者指示暫時移除）。關閉時提示詞不再要求模型計算好感度、
+ * 不再累積與顯示好感度；程式碼保留，改回 true 即可恢復。
+ */
+const FEATURES = {
+  favorability: false
+};
+
 const NARRATIVE_MODELS = Object.values(GENERATION_MODES).flatMap(m => [
   m.PRIMARY_MODEL,
   ...m.FALLBACK_MODELS.map(e => (typeof e === 'string' ? e : e.model))
@@ -2824,6 +2831,9 @@ async function verifySpicyIntercourse(prose) {
   }
 }
 
+/** 與近期回合連續相同達此字數（去標點後）即視為照抄。 */
+const COPIED_PROSE_ECHO_CHARS = 80;
+
 async function finalizeChapter(chapter, model) {
   const verdict = detectRefusal(chapter);
   if (verdict.refused) throw createRefusalError(model, verdict.reason);
@@ -2843,6 +2853,13 @@ async function finalizeChapter(chapter, model) {
   await repairChapterStructure(chapter, model);
   const structureError = getNarrativeValidationError(chapter);
   if (structureError) throw new Error(`模型章節結構不完整：${structureError}`);
+
+  // 整段照抄前文是「內容沒寫出來」，不是風格瑕疵：10 回合模擬中曾有一回幾乎逐字複製上一回。
+  // 一般措辭重複約 12–30 字（交給下一回提醒），連續 80 字以上相同才視為照抄並重跑。
+  const echo = getLongestRecentLiteraryEcho(chapter.prose, state.chapterHistoryList);
+  if (echo >= COPIED_PROSE_ECHO_CHARS) {
+    throw new Error(`正文照抄近期回合（連續 ${echo} 字相同），退回重寫`);
+  }
 
   const literaryError = getLiteraryValidationError(chapter, state.chapterHistoryList);
   if (literaryError) {
@@ -3452,6 +3469,7 @@ function buildPlayerProfileBlock(profile) {
     `- 【雷區禁忌 · 絕對避免】：${p.taboos || '無特定雷區'}`,
     `- 攻略模式：${isShura ? '全勢力修羅場' : (p.targetLeadName || '徐令謙')}`,
     `- 成人情慾模式 (R-18)：${p.allowR18 === false ? '關閉（純情權謀 PG-15）' : '開啟'}`,
+    `- 強勢主導劇情：${isDominantPlotEnabled(p) ? '已勾選同意' : '未勾選'}`,
     `- 【性別代名詞】：請嚴格依玩家性別（${p.gender || '女'}）使用正確人稱（男性用「他」、女性用「她」、非二元用合適稱謂）。`
   ];
   if (p.customScenario) {
@@ -3688,7 +3706,7 @@ function applyStateDelta(saveState, rawDelta) {
   }
   st.inventory = st.inventory.slice(-60);
   st.relationships = isPlainObject(st.relationships) ? st.relationships : {};
-  Object.keys(delta.relationshipChanges).forEach(name => {
+  if (FEATURES.favorability) Object.keys(delta.relationshipChanges).forEach(name => {
     const current = Number(st.relationships[name]);
     st.relationships[name] = Math.max(0, Math.min(100, (Number.isFinite(current) ? current : 0) + delta.relationshipChanges[name]));
   });
@@ -3717,7 +3735,7 @@ function applyChapterStateChanges(chapter, profile, turn) {
   if (intoxication !== null) state.saveState.status.tipsy = Math.max(0, Math.min(100, Math.round(intoxication)));
 
   const leadName = profile?.targetLeadName || profile?.targetLead || '徐令謙';
-  if (normalizedDelta.relationshipChanges[leadName] === undefined) {
+  if (FEATURES.favorability && normalizedDelta.relationshipChanges[leadName] === undefined) {
     const favDelta = Number(sp.favorabilityDelta);
     if (Number.isFinite(favDelta)) {
       state.saveState.relationships = isPlainObject(state.saveState.relationships) ? state.saveState.relationships : {};
@@ -3753,7 +3771,7 @@ function buildLiveStateBlock(saveState, profile) {
   const relEntries = Object.keys(rels)
     .map(k => [k, Number(rels[k])])
     .filter(([, v]) => isFinite(v));
-  if (relEntries.length) {
+  if (FEATURES.favorability && relEntries.length) {
     const leadName = profile && profile.targetLeadName;
     // 主攻對象排最前面，其餘依好感度由高到低
     relEntries.sort((a, b) => (b[0] === leadName ? 1 : 0) - (a[0] === leadName ? 1 : 0) || b[1] - a[1]);
@@ -4216,9 +4234,15 @@ function rememberTurnSummary(turn, text) {
 }
 
 async function generateTurnSummary(chapter) {
+  // 正文多半只用「他」「妳」稱呼，摘要模型曾因此自行編造名字（「周聿」「林靖」「陳默」），
+  // 而這些摘要會寫進記憶庫與時間軸，必須明確告知人物是誰
+  const profile = typeof getActivePlayerProfile === 'function' ? getActivePlayerProfile() : {};
+  const playerName = profile?.name || '女主角';
+  const leadName = profile?.targetLeadName && profile.targetLeadName !== '修羅場' ? profile.targetLeadName : '';
+  const cast = `女主角（玩家，正文中的「妳」）是${playerName}${leadName ? `；主要男主角（正文中的「他」）是${leadName}` : ''}。`;
   const raw = await requestWorkerCompletion({
     model: LLM_CONFIG.SUMMARY_MODEL,
-    system: '用台灣繁體中文寫一句 50 字以內的本回摘要：誰、做了什麼、結果如何。寫清楚人名，不寫形容與評論，只輸出那一句。',
+    system: `用台灣繁體中文寫一句 50 字以內的本回摘要：誰、做了什麼、結果如何。${cast}只能使用上述人名或正文中明確出現的人名，不可編造名字。不寫形容與評論，只輸出那一句。`,
     user: `玩家行動：${clampBlock(chapter.chosenLabel || '', 80)}\n\n本回正文：\n${clampBlock(chapter.prose, 2400)}`,
     maxTokens: 150,
     temperature: 0.2,
@@ -4565,10 +4589,10 @@ function finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs) {
     blocks.push('');
     blocks.push(`=== 【徐令謙最新演繹校準（最高優先，覆蓋角色卡舊版用語）】 ===
 若前方人物卡或快取文字與本段衝突，一律視為舊版並以本段為準：
-1. 徐令謙冷靜、自持、有分寸且具紳士風度；語句簡潔、不油條、不浮誇、不吼叫、不以逞兇鬥狠展示份量。
-2. 他對玩家的吸引力來自可靠、篤定與不動聲色的照顧。想要她時會主動——主動靠近、主動吻、主動留下來——方式紳士而篤定，不用命令、威脅或羞辱換取服從。
-3. 情感加深後，他會深情且堅定地支持玩家想做的事，主動承擔風險，默默備妥保險、退路與秘密守護；給予自由，而不是把保護變成控制。
-4. 他的權勢與危險只用來處理外部威脅，絕不朝向玩家；不預設羞辱、疼痛或強迫。玩家明確拒絕時他會停下，但不會把每一步都推回給她決定。`);
+1. 徐令謙對所有人都克制、壓抑、紀律嚴明；語句簡潔、不油條、不浮誇、不吼叫、不以逞兇鬥狠展示份量。
+2. 唯獨面對玩家，他會控制不住。他用自己的方式主動：嘴上繞圈、說反話（「我只是順路」「別誤會」），行動卻一步不退——主動出現、主動靠近、主動吻她、主動留下。
+3. 他會傲嬌地要求、低聲請求、偶爾彆扭地撒嬌，繞了一圈仍清楚說出他想要什麼；不要讓他停在「妳可以拒絕」「等妳決定」。
+4. 紳士而篤定：不命令、不威脅、不強迫；他的權勢與危險只用來處理外部威脅、守護她，絕不朝向玩家。不預設羞辱、疼痛或強迫。`);
   }
 
   return blocks.join('\n');
@@ -4583,7 +4607,7 @@ const LITERARY_CLICHE_PATTERNS = [
   // 讓所有男主變成同一個人的通用反應
   '若有似無的弧度', '不容忽視的重量', '手指在桌面輕敲', '目光沉靜',
   // 讓男主停在等待、把決定權推回玩家的寫法
-  '沒有催促', '拒絕的空間', '妳不用現在回答', '我可以等', '安靜地等'
+  '沒有催促', '拒絕的空間', '妳不用現在回答', '我可以等', '安靜地等', '等她決定', '等妳決定'
 ];
 
 const SCENE_RHYTHM_CYCLE = [
@@ -4727,12 +4751,65 @@ function buildCharacterSpotlightBlock(leadKey, npcIds = []) {
  */
 function buildMaleLeadInitiativeBlock(allowR18 = true) {
   return `【男主的主動性與在場（女性向情慾遊戲的核心）】
+- 本作以情慾與戀愛為核心，商戰、政治、權謀與職場是背景與阻力。每一位男主都對玩家有好感：依劇情進展與初始設定，從心動、喜歡到愛戀，初識時也已經被她吸引。每一回都要扣回他與玩家的感情線，不要讓整回只剩公事或權謀。
 - 男主對玩家有好感或慾望時要主動：主動靠近、主動觸碰、主動吻、主動索求、主動把關係往前推，方式照他自己的個性。不要讓玩家每一步都得先開口。
 - 玩家釋出邀請時，這一回他一定要做出一個明確的主動行為並做完：吻她、把她拉進懷裡、解開她的安全帶把她拉過來、抱起她、把她帶進屋裡。不要碰一下手背就收回、不要停在「等她開口」。
+- 玩家已經釋出邀請時，不要再確認她的意願（不問「妳確定？」「可以嗎？」「妳想要嗎？」）——她的行動就是答案。
 - 不要寫等待與退讓：「沒有催促」「給她留了拒絕的空間」「妳不用現在回答」「我可以等」「安靜地等她」「要她親口說」「妳想清楚」「我不會勉強妳」「等妳準備好」這類句子整回最多一句。只有玩家明確拒絕時才停下來。
 - 解讀暗示：玩家的曖昧行動（不下車、不道晚安、靠近、凝視、說不想一個人、選了偏親密的選項）就是邀請，照這個方向推進${allowR18 === false ? '（玩家已關閉 R-18，停在擁抱與親吻）' : ''}，不需要玩家講白話。
 - 在場與停留：他在場時預設留下、延續相處，不要以「該走了」「還有公事」收尾。玩家挽留時一定留下（可以把車停好、打電話交代公事、脫下外套）。親密之後留下來過夜或溫存，不要做完就走。親吻或親密升溫之後要順勢延續（跟她上樓、帶她回他的住處、繼續下去），不要由他自己喊停、送她回家或道晚安。只有發生無法推辭的緊急事件才離開，而且要先鋪陳。
-- 三個選項：一個推進主線、一個大膽推進與他的關係或親密、一個高風險破局。`;
+- 三個選項：一個推進主線、一個大膽推進與他的關係或親密、一個高風險破局。至少一個選項必須是與他之間的感情或親密行動（靠近、觸碰、吻、留下、邀約）；他不在場時，改為去找他或約他見面。不可以三個都是調查、查帳或公事。`;
+}
+
+/**
+ * 依關係階段調整節奏。10 回合模擬（2026-10-05）顯示節奏兩極：
+ * 有的角色初識當晚就接吻回家（Sonnet：「缺少試探與猶豫的鋪墊」），
+ * 有的十回都停在同一個窗邊反覆邀約（「原地打轉」）。
+ * 階段依好感度判斷；沒有好感度資料時依回合數。按下「露骨」時以露骨規則為準。
+ */
+function getRelationshipStage(profile, saveState, turnCount) {
+  const lead = profile?.targetLeadName;
+  const score = FEATURES.favorability ? Number(saveState?.relationships?.[lead]) : NaN;
+  if (Number.isFinite(score)) return score >= 55 ? 'love' : score >= 25 ? 'flirt' : 'meet';
+  const t = Number(turnCount) || 1;
+  return t >= 9 ? 'love' : t >= 4 ? 'flirt' : 'meet';
+}
+
+function buildPacingBlock(profile, saveState, turnCount) {
+  const stage = getRelationshipStage(profile, saveState, turnCount);
+  const stageText = {
+    meet: '初識期：他已經被她吸引，主動製造相處機會、言語撩撥、做越界的小動作（靠近、觸碰、替她撥頭髮、主動聯絡她）。這個階段先不接吻、不上床，除非玩家主動要求或按下「露骨」。',
+    meetDominant: '初識期：他已經被她吸引，主動製造相處機會、言語撩撥、做越界的小動作。玩家已勾選強勢主導劇情：氣氛或局勢推到了，他可以設局、用籌碼或魅力直接把她帶到吻與床上，不必等到熟識。',
+    // 不寫「等玩家明確邀請」：被動玩家永遠不會明確邀請，模擬中男主因此卡在門口「等她決定」連續五回
+    flirt: '曖昧期：主動靠近與觸碰、接吻，確認彼此在意，吃醋與佔有慾浮現；親密升溫時由他順勢推進，不要停在門口等她決定（一般模式下寫到身體結合時用文學筆法）。',
+    love: '戀愛期：兩人已互相承認心意，親密與情慾是日常的一部分，他會主動索求。'
+  }[stage === 'meet' && isDominantPlotEnabled(profile) ? 'meetDominant' : stage];
+  return `【節奏】
+- 目前關係階段：${stageText}
+- 每回往前推一步，不要跳級，也不要原地打轉。
+- 同一個場景最多延續 3 回；第 3 回之後要轉場，或讓事件把兩人帶往下一步。
+- 玩家沒有回應或只是沉默時，男主不要重複同一個邀約或同一句試探；改由他直接行動（帶她離開、留下來、吻她、換個地方、說出他想要什麼）。
+- 不要重複近兩回用過的動作、道具或句子（例如同樣的小動作、同樣的邀約）。
+- 主要男主不在場時，最多缺席一回：下一回要讓他回到場景（他主動來找她、約她見面、出現在她身邊），不要只剩傳訊息或電話；三個選項中至少一個是去找他或讓他出現。`;
+}
+
+/**
+ * 玩家在開局勾選「強勢主導劇情」才啟用（需同時開啟 R-18）。
+ * 男主可以不等明確邀請就把關係推到性愛，手段可含權勢、設局、權謀、誘惑；
+ * 性愛當下女主角仍是清醒、願意並回應的。
+ */
+function isDominantPlotEnabled(profile) {
+  return profile?.allowR18 !== false && profile?.allowDominantPlot === true;
+}
+
+function buildDominantPlotBlock(profile) {
+  if (!isDominantPlotEnabled(profile)) return '';
+  return `【強勢主導劇情（玩家已在開局勾選同意，屬於本作的劇情創作設定）】
+- 親密不需要玩家先明確邀請：劇情、氣氛、情慾張力或玩家指令推到合適的時候，男主可以自己發動，直接把關係推到性愛，不必先問、不必等她開口。
+- 可以用權勢落差、職場上下、設局、權謀、交易籌碼、誘惑與魅惑把兩人帶到這一步：他布局讓她只能與他獨處、拿籌碼跟她談條件、用魅力讓她招架不住、把她逼到退無可退。
+- 界線：進入性愛時，女主角是清醒、願意並且回應的——她可以被算計、被逼到牆角、被撩到失守，但最後是她自己迎上去。不寫下藥、灌醉後發生關係、暴力強迫，也不寫她明確拒絕後繼續。
+- 主導方式照各男主的演繹卡：演繹卡禁止的手段（例如徐令謙不命令、不威脅、不強迫）照樣禁止，他用他自己的方式強勢。
+- 玩家雷區優先於本設定。`;
 }
 
 function buildContentModeBlock(mode, allowR18 = true) {
@@ -4768,7 +4845,7 @@ function buildLiteraryCraftBlock(turnCount, historyList) {
   return `【本回文學敘事規格（優先於氣氛口號，僅次於人物設定與事實連續性）】
 - 敘事視角：貼近玩家感官的限知第二人稱；只寫當下可察覺或合理推斷之事，不替其他角色解說內心。
 - 人稱：${playerPronounRule}
-- 文體：台灣當代都會黑色小說。用精準名詞、動詞與可驗證細節形成質感；克制形容詞，避免把「高級、危險、壓迫、性感」當成結論反覆宣告。
+- 文體：女性向情慾戀愛小說，以台北都會的商戰、政治與權謀為背景。用精準名詞、動詞與可驗證細節形成質感；克制形容詞，避免把「高級、危險、壓迫、性感」當成結論反覆宣告。
 - 對話：每位角色的台詞照他自己的演繹卡寫——有人迂迴、有人直接、有人幽默、有人帶刺，說話方式、句型與用字必須一聽就知道是誰。不要在旁白立刻解釋每句台詞。
 - 角色差異化：不同角色不得共用同一套反應模板。「沉默不語、目光沉靜地凝視、手指輕敲桌面、嘴角勾起若有似無的弧度、語氣平淡卻帶著不容忽視的重量」是通用的冷硬男主模板，除非該角色的演繹卡明確如此，否則不要用。角色最有特色的那一面（機鋒、戲謔、詩意、溫暖、粗獷、羞澀）要寫出來，不要磨平成「冷靜克制」。
 - 節奏：長短句與段落密度須有變化。一段只保留一個主要感官焦點；全回核心比喻最多 2 個，且必須取材自當前場景；「像、彷彿、如同、宛如」四種詞合計最多 3 次。
@@ -5090,14 +5167,13 @@ ${CHARACTER_IDENTITY_FIREWALL}
 ${literaryCraftBlock}
 
 請嚴格遵守《情慾文學指引》與《系統核心指令》：
-1. 風格與成人情慾（R-18）：以人物意圖、選擇後果、五感細節與未說出口的欲望形成張力，並結合權謀殺伐與多方博弈；使用純台灣繁體中文。
-   - 徐令謙專屬例外：他的張力來自風度、可靠承擔與深情守護；想要玩家時會主動靠近與推進，但不預設威脅、羞辱、疼痛或強迫。
+1. 核心與成人情慾（R-18）：本作以情慾與戀愛為核心，商戰、政治、權謀與職場為背景與阻力。以人物慾望、主動、五感細節形成張力；使用純台灣繁體中文。
+   - 徐令謙專屬例外：克制、壓抑、紀律嚴明，唯獨面對玩家會控制不住；傲嬌卻主動，會要求、請求、彆扭地撒嬌，但不命令、不威脅、不強迫，只守護。
 2. 【正文篇幅目標】prose 建議 800–1200 個中文字，依場景需要自然增減。完成一個實質改變局勢或關係的戲劇節拍，不必每回高潮或封口；不截斷、不灌水、不套固定模板。
 3. 【數值真實性運算規則】：
    - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
    - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，數值必須保持 0！
-   - favorabilityDelta（好感度變動 -5~+10）：依據主角言行魅力與交鋒魄力給予增減（初次見面展現膽識給予 +2~+5）。
-   - 【線索與籌碼】：只有正文中真的取得、查證、曝光或交付的資訊才能寫入 intelDelta。新增線索必須說明來源與用途；沒有變動時回傳空陣列，嚴禁憑空塞入通用道具。
+${FEATURES.favorability ? '   - favorabilityDelta（好感度變動 -5~+10）：依據主角言行魅力與交鋒魄力給予增減（初次見面展現膽識給予 +2~+5）。\n' : ''}   - 【線索與籌碼】：只有正文中真的取得、查證、曝光或交付的資訊才能寫入 intelDelta。新增線索必須說明來源與用途；沒有變動時回傳空陣列，嚴禁憑空塞入通用道具。
 4. 【三層角色設定集】：
 ${characterPromptBlock}
 
@@ -5110,9 +5186,7 @@ ${characterPromptBlock}
     "tensionLabel": "【依 tension 數值原創描述，如：高壓對峙 · 步步緊逼】",
     "intoxication": 0,
     "intoxicationLabel": "完全清醒",
-    "favorabilityDelta": 【依主角言行給 -5~+10 整數】,
-    "favorabilityReason": "【原因說明】",
-    "outfit": "角色著裝神態（依主角性別與職業原創高級迷人穿搭、香氣與神態）",
+${FEATURES.favorability ? '    "favorabilityDelta": 【依主角言行給 -5~+10 整數】,\n    "favorabilityReason": "【原因說明】",\n' : ''}    "outfit": "角色著裝神態（依主角性別與職業原創高級迷人穿搭、香氣與神態）",
     "interaction": "肢體接觸與眼神距離",
     "rumors": "台北政媒黑白兩道最新暗流傳聞"
   },
@@ -5125,8 +5199,7 @@ ${characterPromptBlock}
     "sanityChange": 0,
     "itemsAdded": [],
     "itemsRemoved": [],
-    "relationshipChanges": { "${profile.targetLeadName || '主要對象'}": 0 },
-    "questProgress": "本回實際推進的任務狀態；沒有則留空字串"
+${FEATURES.favorability ? `    "relationshipChanges": { "${profile.targetLeadName || '主要對象'}": 0 },\n` : ''}    "questProgress": "本回實際推進的任務狀態；沒有則留空字串"
   },
   "prose": "【800–1200 個中文字為建議範圍；完成一個有因果的戲劇節拍，保留具體餘波，不截斷、不灌水、不以旁白解釋潛台詞】",
   "memoryNotes": [{ "topic": "【寫成「誰的什麼」，具體到人與物，16 字內，例如：祖母綠胸針放在哪、楊慕璃與徐令謙碰面的時間地點、韓正寰的職銜】", "fact": "【本回新確立、日後必須記得的事實，40 字內，寫清楚人名：承諾約定（時間地點）、物品去向、身分或秘密揭露、關係轉折】" }],
@@ -5145,11 +5218,13 @@ ${characterPromptBlock}
 - 身世背景：${profile.background || '遊走於台北政商黑白兩道'}
 - 外貌特徵：${profile.appearance || '隨機（請原創專屬高級迷人穿搭、體香與神態）'}
 - 禁忌標籤：${profile.taboos || '無'}
-- 成人情慾模式 (R-18)：開啟
+- 成人情慾模式 (R-18)：開啟${isDominantPlotEnabled(profile) ? '\n- 強勢主導劇情：已勾選同意' : ''}
 
 - 玩家自訂開局情境：${customScenario || '深夜暴雨台北，帶著關鍵政商洗錢密錄暗帳初次入局'}
 
 請根據以上設定與開局情境創作第 1 回。直接從一個正在發生的具體動作切入，讓人物意圖透過選擇、對話潛台詞與場景細節浮現；不要先介紹世界觀，也不要用旁白宣告角色危險、迷人或充滿性張力。最後生成三個精簡且真正不同策略的抉擇。全文「像、彷彿、如同、宛如」合計不得超過 3 次。
+
+${buildDominantPlotBlock(profile)}
 
 ${buildContentModeBlock('normal', profile.allowR18)}`;
 
@@ -5191,16 +5266,15 @@ ${literaryCraftBlock}
 
 請嚴格遵守《情慾文學指引》與《系統核心指令》：
 1. 嚴格依據玩家最新行動推進。prose 建議 800–1200 個中文字，依場景自然增減；每回都要有實質推進（關係更進一步、事件發生或真相揭露），不能整回停在試探、對峙或寒暄；不截斷、不灌水。
-2. 描寫要求：以人物選擇、實際風險、距離變化、對話潛台詞及具體感官細節形成成人情慾與權力博弈；不得只提高形容詞強度，使用純台灣繁體中文。
-   - 徐令謙專屬例外：他的張力來自風度、可靠承擔與深情守護；想要玩家時會主動靠近與推進，但不預設威脅、羞辱、疼痛或強迫。
+2. 描寫要求：本作以情慾與戀愛為核心，權謀與職場是背景與阻力。以人物慾望、主動、距離變化、對話潛台詞及具體感官細節推動感情線；不得只提高形容詞強度，使用純台灣繁體中文。
+   - 徐令謙專屬例外：克制、壓抑、紀律嚴明，唯獨面對玩家會控制不住；傲嬌卻主動，會要求、請求、彆扭地撒嬌，但不命令、不威脅、不強迫，只守護。
 3. 絕不重複前篇標題與對話；每回必須產生新資訊、選擇代價或關係偏移，但不必機械式升級衝突。
 3-A. 【時空連續性】本回必須從上一回最後的時間、地點與人物物理位置接續。若 timeLocation 改變，prose 必須明寫離開、移動、抵達或時間流逝的過程；嚴禁狀態面板靜默跳到新地點。連續對話或同一場景原則上只能自然推進數分鐘；若時鐘跳動超過 30 分鐘，正文必須明確交代經過多久與期間發生何事，不得自行從深夜跳到凌晨數小時後。
 3-B. 【核心人物連續性】主要攻略對象若上一回仍在場，本回預設他仍在場並延續互動。只有發生無法推辭的緊急事件時才可離開，且必須先鋪陳；不得無故消失、換人或重置彼此已知情報。
 4. 【數值真實性運算規則】：
    - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
    - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，微醺度保持原值或隨時間代謝衰減 5%！
-   - favorabilityDelta（好感度變動 -5~+10）：依據主角此舉是否合乎該男主性格給予增減（精準博弈 +2~+5，重大浪漫/致命共犯 +8~+10，失誤冒犯 -2~-5）。
-   - 【線索與籌碼狀態機】：只能操作【當前數值狀態】列出的可用線索 ID。正文真的取得新線索才放入 intelDelta.add；使用、公開、交付、證偽既有線索時，必須在 intelDelta.update 更新 status 或 confidence。沒有變動時兩個陣列都留空。
+${FEATURES.favorability ? '   - favorabilityDelta（好感度變動 -5~+10）：依據主角此舉是否合乎該男主性格給予增減（精準博弈 +2~+5，重大浪漫/致命共犯 +8~+10，失誤冒犯 -2~-5）。' + '\n' : ''}   - 【線索與籌碼狀態機】：只能操作【當前數值狀態】列出的可用線索 ID。正文真的取得新線索才放入 intelDelta.add；使用、公開、交付、證偽既有線索時，必須在 intelDelta.update 更新 status 或 confidence。沒有變動時兩個陣列都留空。
 5. 【三層角色設定集】：
 ${characterPromptBlock}
 ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象')}
@@ -5215,9 +5289,7 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     "tensionLabel": "高壓對峙",
     "intoxication": 0,
     "intoxicationLabel": "清醒",
-    "favorabilityDelta": 4,
-    "favorabilityReason": "機鋒應對擊中軟肋",
-    "outfit": "角色著裝神態",
+${FEATURES.favorability ? '    "favorabilityDelta": 4,\n    "favorabilityReason": "機鋒應對擊中軟肋",\n' : ''}    "outfit": "角色著裝神態",
     "interaction": "肢體與眼神互動狀態",
     "rumors": "政媒暗流傳聞"
   },
@@ -5230,8 +5302,7 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     "sanityChange": 0,
     "itemsAdded": [],
     "itemsRemoved": [],
-    "relationshipChanges": { "${profile.targetLeadName || '主要對象'}": 0 },
-    "questProgress": "本回實際推進的任務狀態；沒有則留空字串"
+${FEATURES.favorability ? `    "relationshipChanges": { "${profile.targetLeadName || '主要對象'}": 0 },\n` : ''}    "questProgress": "本回實際推進的任務狀態；沒有則留空字串"
   },
   "memoryNotes": [{ "topic": "【寫成「誰的什麼」，具體到人與物，16 字內，例如：祖母綠胸針放在哪、楊慕璃與徐令謙碰面的時間地點、韓正寰的職銜】", "fact": "【本回新確立、日後必須記得的事實，40 字內，寫清楚人名：承諾約定（時間地點）、物品去向、身分或秘密揭露、關係轉折】" }],
   "choices": [
@@ -5272,6 +5343,10 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
     '',
     // 放在角色演繹重點之後：演繹卡的「克制、給選擇權」描述不得壓過主動性
     buildMaleLeadInitiativeBlock(profile.allowR18),
+    '',
+    buildDominantPlotBlock(profile),
+    '',
+    buildPacingBlock(profile, saveState, turnCount),
     '',
     buildContentModeBlock(state.generationMode, profile.allowR18)
   ].filter(part => part !== undefined && part !== null).join('\n');
@@ -5357,6 +5432,7 @@ async function handleCharacterCreationSubmit(e) {
       targetLeadName: selectedOption?.getAttribute('data-name') || '徐令謙',
       supportingLeads: supportingLeads,
       allowR18: document.getElementById('form-allow-r18')?.checked !== false,
+      allowDominantPlot: document.getElementById('form-allow-dominant')?.checked === true,
       customScenario: document.getElementById('form-custom-scenario')?.value?.trim() || ''
     };
 
@@ -5894,7 +5970,7 @@ function renderStoryStream(activeChapter) {
           <span class="font-mono font-bold text-amber-300">${escapeHtml(activeChapter.statusPanel?.intoxication !== undefined ? activeChapter.statusPanel.intoxication : 0)}%</span>
           <span class="text-[10px] text-amber-400/80">(${escapeHtml(activeChapter.statusPanel?.intoxicationLabel || '清醒')})</span>
         </div>
-        ${activeChapter.statusPanel?.favorabilityDelta ? `
+        ${FEATURES.favorability && activeChapter.statusPanel?.favorabilityDelta ? `
         <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/70 border border-emerald-700/50 text-emerald-200">
           <span>好感變動：</span>
           <span class="font-mono font-bold text-emerald-300">${activeChapter.statusPanel.favorabilityDelta > 0 ? '+' : ''}${escapeHtml(activeChapter.statusPanel.favorabilityDelta)} pts</span>
@@ -6545,6 +6621,7 @@ function loadProfilePresetIntoForm(presetKey) {
   setFormValue('form-player-taboos', profile.taboos || '無');
   setFormValue('form-target-lead', profile.targetLead || '01_徐令謙');
   setFormValue('form-allow-r18', profile.allowR18 !== false);
+  setFormValue('form-allow-dominant', profile.allowDominantPlot === true);
   setFormValue('form-custom-scenario', profile.customScenario || '');
 }
 
@@ -6566,6 +6643,7 @@ function saveCurrentFormAsPreset() {
     targetLead: targetSelect.value,
     targetLeadName: selectedOption?.getAttribute('data-name') || '徐令謙',
     allowR18: document.getElementById('form-allow-r18').checked,
+    allowDominantPlot: document.getElementById('form-allow-dominant')?.checked === true,
     customScenario: document.getElementById('form-custom-scenario').value.trim()
   };
 
@@ -6830,7 +6908,7 @@ function renderMemoryCenter() {
       <h4 class="font-serif font-bold text-brand-gold">目前狀態快照</h4>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div class="p-3 rounded-xl bg-brand-card border border-brand-border"><span class="text-slate-500">時空地點</span><div class="mt-1 text-slate-700">${escapeHtml(sp.timeLocation || '尚未記錄')}</div></div>
-        <div class="p-3 rounded-xl bg-brand-card border border-brand-border"><span class="text-slate-500">角色關係</span><div class="mt-1 text-slate-700">${escapeHtml(Object.entries(rels).map(([k,v]) => `${k} ${v}/100`).join('、') || '尚未記錄')}</div></div>
+        ${FEATURES.favorability ? `<div class="p-3 rounded-xl bg-brand-card border border-brand-border"><span class="text-slate-500">角色關係</span><div class="mt-1 text-slate-700">${escapeHtml(Object.entries(rels).map(([k,v]) => `${k} ${v}/100`).join('、') || '尚未記錄')}</div></div>` : ''}
       </div>
     </section>
     <section class="space-y-2"><h4 class="font-serif font-bold text-brand-gold">玩家釘選的重要記憶（${pinned.length}）</h4>${pinnedHtml}</section>
@@ -7428,6 +7506,7 @@ function openCharacterCreationModal() {
       setFormValue('form-target-lead', profile.targetLead || '01_徐令謙');
       handleTargetLeadChange();
       setFormValue('form-allow-r18', profile.allowR18 !== false);
+      setFormValue('form-allow-dominant', profile.allowDominantPlot === true);
       setFormValue('form-custom-scenario', profile.customScenario || '');
     }
   }
@@ -7499,9 +7578,11 @@ function renderSaveState() {
 
   const profile = getActivePlayerProfile();
   if (dom.profileCardName) dom.profileCardName.textContent = `${profile.name || '女主'}（${profile.age || '24'}歲 · ${profile.profession || '政商人士'}）`;
-  if (dom.profileCardLead) dom.profileCardLead.textContent = `攻略對象：${profile.targetLeadName || '修羅場'} ｜ R-18：${profile.allowR18 ? '開啟' : '關閉'}`;
+  if (dom.profileCardLead) dom.profileCardLead.textContent = `攻略對象：${profile.targetLeadName || '修羅場'} ｜ R-18：${profile.allowR18 ? '開啟' : '關閉'}${isDominantPlotEnabled(profile) ? ' ｜ 強勢主導：開啟' : ''}`;
 
-  if (dom.relationshipsList) {
+  const relationshipsSection = document.getElementById('relationships-section');
+  if (relationshipsSection) relationshipsSection.hidden = !FEATURES.favorability;
+  if (FEATURES.favorability && dom.relationshipsList) {
     dom.relationshipsList.innerHTML = '';
     const rels = state.saveState.relationships || {};
     

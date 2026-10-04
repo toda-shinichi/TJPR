@@ -38,12 +38,12 @@ async function main() {
     run('syncStateToGoogleDriveCloud = () => {}');
     const work = run('triggerRollingSummaryUpdate(5)');
     run(mutation); const expected = run('state.saveState.summaryPool');
-    pending.resolve(Response.json({ success: true, data: {content: '這是一份足夠長的新摘要，不能覆寫切換後或已改寫的故事。'} }));
+    pending.resolve(new Response('data: ' + JSON.stringify({choices:[{delta:{content:'這是一份足夠長的新摘要，不能覆寫切換後或已改寫的故事。'}}]}) + '\n\ndata: [DONE]\n\n', {status: 200}));
     await work; assert.equal(run('state.saveState.summaryPool'), expected);
   }
   {
     const {context, run} = setup();
-    context.fetch = async () => Response.json({success: true, data: {content: '這是一份足夠長且有效的摘要，必須保存到目前的故事進度中。'}});
+    context.fetch = async () => new Response('data: ' + JSON.stringify({choices:[{delta:{content:'這是一份足夠長且有效的摘要，必須保存到目前的故事進度中。'}}]}) + '\n\ndata: [DONE]\n\n', {status: 200});
     run('syncStateToGoogleDriveCloud = () => {}');
     await run('triggerRollingSummaryUpdate(5)');
     assert.match(run('state.saveState.summaryPool'), /有效的摘要/);
