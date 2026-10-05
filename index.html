@@ -15,8 +15,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./tailwind.generated.css?v=a17f679d7a">
-  <link rel="stylesheet" href="./style.css?v=a17f679d7a">
+  <link rel="stylesheet" href="./tailwind.generated.css?v=db6eeaafd7">
+  <link rel="stylesheet" href="./style.css?v=db6eeaafd7">
   <style>
     /* 線條 icon（取代 emoji）：跟著文字大小與顏色走 */
     .ui-icon { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; flex-shrink: 0;
@@ -398,6 +398,14 @@
           <svg class="ui-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> 立即註冊並進入遊戲
         </button>
       </form>
+
+      <details id="privacy-note" class="mt-4 text-[11px] text-slate-500">
+        <summary class="cursor-pointer select-none hover:text-slate-300">隱私說明</summary>
+        <div class="mt-2 space-y-1.5 leading-relaxed text-slate-400">
+          <p>《暗流》每一回的 AI 生成都有實際費用，目前由子桓個人負擔。為了掌握使用量、讓遊戲更順，後台會記錄技術資料：帳號、使用時間、使用的模型、token 數與花費。</p>
+          <p>後台不會記錄你的人設、開局設定與遊戲內容。遊戲進行時，劇情內容會送到 AI 模型產生下一回；雲端存檔會存在你的存檔資料夾，只用來讓你換裝置接著玩。</p>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -1172,6 +1180,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=a17f679d7a" defer></script>
+    <script src="app.js?v=db6eeaafd7" defer></script>
 </body>
 </html>

@@ -227,6 +227,45 @@ async function runOfflineTests() {
   assert.strictEqual(lateB.proceed, false, '兩張逾期票被同時放行');
   assert.ok(lateB.waitMs > 0 && lateB.ticket === 'late-b', '第二張逾期票未保留並延後');
 
+  // 用量記錄：串流原樣轉送，結束後寫入玩家、模型、token 與費用
+  {
+    const writes = [];
+    const fakeDb = {
+      prepare(sql) { return { bind: (...args) => ({ sql, args, all: async () => ({ results: [] }) }), all: async () => ({ results: [] }) }; },
+      async batch(statements) { writes.push(...statements); }
+    };
+    const pending = [];
+    const ctx = { waitUntil: p => pending.push(p) };
+    const sse = 'data: {"choices":[{"delta":{"content":"嗨"}}]}\n\n'
+      + 'data: {"choices":[],"usage":{"prompt_tokens":120,"completion_tokens":30,"cost":0.0012}}\n\ndata: [DONE]\n\n';
+    globalThis.fetch = async (url, options) => {
+      if (String(url) === AUTH_VERIFY_URL) return Response.json({ success: true, data: { valid: true, userId: 'u9', email: 'p@example.com' } });
+      assert.deepStrictEqual(JSON.parse(options.body).usage, { include: true }, '上游請求未要求回傳用量');
+      return new Response(sse, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    };
+    const usageEnv = { ...baseEnv, USAGE_DB: fakeDb };
+    res = await worker.fetch(post(validPayload, { 'X-Request-Kind': 'chapter' }), usageEnv, ctx);
+    assert.strictEqual(await res.text(), sse, '串流內容被用量記錄改動');
+    await Promise.all(pending);
+    const insert = writes.find(w => w.sql.startsWith('INSERT INTO usage'));
+    assert.ok(insert, '未寫入用量紀錄');
+    assert.deepStrictEqual(insert.args.slice(1, 8), ['u9', 'p@example.com', 'chapter', validPayload.model, 120, 30, 0.0012], '用量紀錄欄位錯誤');
+    assert.ok(!JSON.stringify(insert.args).includes('"content"'), '用量紀錄不應含有提示詞內容');
+
+    // 管理後台：非管理員 403，管理員 200
+    const adminReq = token => new Request('https://worker.test/admin/stats', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Origin: ALLOWED_ORIGIN, 'X-Undercurrent-Token': token }, body: '{}'
+    });
+    const adminEnv = { ...usageEnv, ADMIN_EMAIL: 'todashinchi@gmail.com' };
+    globalThis.fetch = async () => Response.json({ success: true, data: { valid: true, userId: 'u9', email: 'p@example.com' } });
+    res = await worker.fetch(adminReq(VALID_TOKEN), adminEnv, ctx);
+    assert.strictEqual(res.status, 403, '非管理員可以看後台');
+    globalThis.fetch = async () => Response.json({ success: true, data: { valid: true, userId: 'admin', email: 'TodaShinchi@gmail.com' } });
+    res = await worker.fetch(adminReq('epi_' + 'a'.repeat(32)), adminEnv, ctx);
+    assert.strictEqual(res.status, 200, '管理員無法看後台');
+    assert.ok(Array.isArray((await res.json()).data.users), '後台統計格式錯誤');
+  }
+
   globalThis.fetch = nativeFetch;
   console.log('Worker 離線契約測試全部通過。');
 }

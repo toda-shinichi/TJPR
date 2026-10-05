@@ -4,6 +4,7 @@ compatibility_date = "2026-08-20"
 
 [vars]
 AUTH_VERIFY_URL = "https://script.google.com/macros/s/AKfycby-MudkbcVPAfVDZk2B1zznDlOfjnJOqMB2A3586Ct3ZGq_CUNteKe1lZ4bbw8HwqS9sw/exec"
+ADMIN_EMAIL = "todashinchi@gmail.com"
 
 # API_KEY 是 secret，絕不寫在這個檔案裡。設定方式：
 #   npx wrangler secret put API_KEY
@@ -36,3 +37,10 @@ new_sqlite_classes = ["RpmQueue"]
 # 所以嵌入不與生成同源，改由 Cloudflare Workers AI 就地提供 —— 不需要第二把金鑰。
 [ai]
 binding = "AI"
+
+# 用量記錄（2026-10-05 建立）：每次生成請求記下玩家、時間、模型、token 數與費用，
+# 供管理後台使用。只記技術資料，不存任何提示詞或遊戲內容。
+[[d1_databases]]
+binding = "USAGE_DB"
+database_name = "tjpr-usage"
+database_id = "ebcbf822-1448-4fd1-9c06-713769bc9721"

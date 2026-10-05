@@ -2351,7 +2351,9 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
       armStallTimer();
       const workerHeaders = {
         'Content-Type': 'application/json',
-        'X-Undercurrent-Token': state.token || ''
+        'X-Undercurrent-Token': state.token || '',
+        // 用量記錄用：正文回合計入回合數與遊玩時段
+        'X-Request-Kind': 'chapter'
       };
       if (queueTicket) workerHeaders['X-Queue-Ticket'] = queueTicket;
       const response = await fetch(workerUrl, {
@@ -3037,7 +3039,7 @@ async function requestWorkerCompletion({ model, system, user, maxTokens = 800, t
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
     try {
-      const headers = { 'Content-Type': 'application/json', 'X-Undercurrent-Token': state.token || '' };
+      const headers = { 'Content-Type': 'application/json', 'X-Undercurrent-Token': state.token || '', 'X-Request-Kind': 'aux' };
       if (ticket) headers['X-Queue-Ticket'] = ticket;
       const body = {
         model,

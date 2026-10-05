@@ -25,7 +25,7 @@ const ROOT = path.resolve(__dirname, '..');
 const DEPLOY_DIR = path.join(ROOT, 'project-epilogue', 'frontend-web');
 const HTML = path.join(ROOT, 'index.html');
 const ASSETS = ['app.js', 'style.css', 'tailwind.generated.css'];
-const SYNCED = ['app.js', 'index.html', 'style.css', 'tailwind.generated.css'];
+const SYNCED = ['app.js', 'index.html', 'admin.html', 'style.css', 'tailwind.generated.css'];
 
 const checkOnly = process.argv.includes('--check');
 

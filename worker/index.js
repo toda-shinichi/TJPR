@@ -133,7 +133,7 @@ function corsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': origin || ALLOWED_ORIGINS[0],
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Undercurrent-Token, X-Undercurrent-Key, X-Queue-Ticket',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Undercurrent-Token, X-Undercurrent-Key, X-Queue-Ticket, X-Request-Kind',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin'
   };
@@ -207,7 +207,12 @@ async function authenticateRequest(request, env, viaSharedKey) {
   const cacheKey = 'auth:' + await sha256Hex(token);
   if (env.RATE_LIMIT_KV) {
     try {
-      if (await env.RATE_LIMIT_KV.get(cacheKey)) return { ok: true, cached: true };
+      // 快取內容是 {userId,email}；舊版快取值為 '1'（沒有身分），視為未命中重新驗證
+      const cached = await env.RATE_LIMIT_KV.get(cacheKey);
+      if (cached && cached !== '1') {
+        const who = JSON.parse(cached);
+        return { ok: true, cached: true, userId: who.userId || '', email: who.email || '' };
+      }
     } catch (err) {
       console.warn('認證快取讀取失敗: ' + err.message);
     }
@@ -225,12 +230,15 @@ async function authenticateRequest(request, env, viaSharedKey) {
     }
     if (env.RATE_LIMIT_KV) {
       try {
-        await env.RATE_LIMIT_KV.put(cacheKey, '1', { expirationTtl: AUTH_CACHE_TTL_SECONDS });
+        await env.RATE_LIMIT_KV.put(cacheKey, JSON.stringify({
+          userId: result.data.userId || '',
+          email: result.data.email || ''
+        }), { expirationTtl: AUTH_CACHE_TTL_SECONDS });
       } catch (err) {
         console.warn('認證快取寫入失敗: ' + err.message);
       }
     }
-    return { ok: true, userId: result.data.userId || '' };
+    return { ok: true, userId: result.data.userId || '', email: result.data.email || '' };
   } catch (err) {
     console.warn('登入權杖驗證失敗: ' + err.message);
     return { ok: false, reason: 'auth-service-unavailable', serverError: true };
@@ -520,8 +528,158 @@ async function deferQueueSlot(env, retryMs) {
   }
 }
 
+// =========================================================================
+// 用量記錄與管理後台
+// 只記技術資料（玩家、時間、模型、token 數、費用），不存提示詞、人設或遊戲內容。
+// =========================================================================
+
+const REQUEST_KINDS = new Set(['chapter', 'aux', 'decide']);
+/** 兩次正文回合相隔超過這個時間，視為新的一段遊玩。 */
+const SESSION_GAP_MS = 30 * 60 * 1000;
+/** 每段遊玩最後一回的閱讀時間（最後一次請求之後仍在閱讀）。 */
+const SESSION_TAIL_MS = 3 * 60 * 1000;
+const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+
+function identityOf(auth) {
+  if (auth.viaSharedKey) return { userId: 'test-shared-key', email: '（測試金鑰）' };
+  return { userId: auth.userId || 'unknown', email: auth.email || '' };
+}
+
+async function recordUsage(env, entry) {
+  if (!env.USAGE_DB) return;
+  try {
+    await env.USAGE_DB.batch([
+      env.USAGE_DB.prepare(
+        'INSERT INTO usage (ts, user_id, email, kind, model, prompt_tokens, completion_tokens, cost, status, duration_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)'
+      ).bind(entry.ts, entry.userId, entry.email || null, entry.kind, entry.model || null,
+        entry.promptTokens || 0, entry.completionTokens || 0, entry.cost || 0, entry.status || 0, entry.durationMs || 0),
+      env.USAGE_DB.prepare(
+        'INSERT INTO players (user_id, email, first_seen, last_seen) VALUES (?1, ?2, ?3, ?3) ON CONFLICT(user_id) DO UPDATE SET last_seen = excluded.last_seen, email = COALESCE(excluded.email, players.email)'
+      ).bind(entry.userId, entry.email || null, entry.ts)
+    ]);
+  } catch (err) {
+    console.warn('用量記錄寫入失敗: ' + err.message);
+  }
+}
+
+/**
+ * 原樣轉送 SSE，同時撈出最後一個 usage 區塊。回傳 [轉送用的串流, 串流結束時取得 usage 的 Promise]。
+ */
+function tapStreamUsage(stream) {
+  let resolveUsage;
+  const usagePromise = new Promise(resolve => { resolveUsage = resolve; });
+  if (!stream) { resolveUsage(null); return [stream, usagePromise]; }
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let usage = null;
+  const scan = line => {
+    if (!line.startsWith('data: ') || !line.includes('"usage"')) return;
+    try {
+      const payload = JSON.parse(line.slice(6));
+      if (payload && payload.usage) usage = payload.usage;
+    } catch (ignore) { /* 不完整片段 */ }
+  };
+  const tapped = stream.pipeThrough(new TransformStream({
+    transform(chunk, controller) {
+      controller.enqueue(chunk);
+      buffer += decoder.decode(chunk, { stream: true });
+      let index;
+      while ((index = buffer.indexOf('\n')) >= 0) {
+        scan(buffer.slice(0, index).trim());
+        buffer = buffer.slice(index + 1);
+      }
+    },
+    flush() {
+      scan(buffer.trim());
+      resolveUsage(usage);
+    }
+  }));
+  return [tapped, usagePromise];
+}
+
+function splitSessions(timestamps) {
+  const sessions = [];
+  timestamps.forEach(ts => {
+    const last = sessions[sessions.length - 1];
+    if (last && ts - last.end <= SESSION_GAP_MS) {
+      last.end = ts;
+      last.turns += 1;
+    } else {
+      sessions.push({ start: ts, end: ts, turns: 1 });
+    }
+  });
+  return sessions.map(s => ({ ...s, durationMs: s.end - s.start + SESSION_TAIL_MS }));
+}
+
+async function buildAdminStats(env) {
+  const db = env.USAGE_DB;
+  const now = Date.now();
+  const [players, totals, chapters, models] = await Promise.all([
+    db.prepare('SELECT user_id, email, first_seen, last_seen FROM players').all(),
+    db.prepare(`SELECT user_id, COUNT(*) AS requests,
+        SUM(CASE WHEN kind = 'chapter' AND status BETWEEN 200 AND 299 THEN 1 ELSE 0 END) AS turns,
+        SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens,
+        SUM(cost) AS cost FROM usage GROUP BY user_id`).all(),
+    db.prepare(`SELECT user_id, ts FROM usage WHERE kind = 'chapter' AND status BETWEEN 200 AND 299
+        AND ts >= ?1 ORDER BY user_id, ts`).bind(now - 90 * 24 * 3600 * 1000).all(),
+    db.prepare(`SELECT model, COUNT(*) AS requests, SUM(prompt_tokens + completion_tokens) AS tokens,
+        SUM(cost) AS cost FROM usage GROUP BY model ORDER BY cost DESC`).all()
+  ]);
+  const byUser = new Map();
+  (players.results || []).forEach(p => byUser.set(p.user_id, {
+    userId: p.user_id, email: p.email || '', firstSeen: p.first_seen, lastSeen: p.last_seen,
+    online: now - p.last_seen <= ONLINE_WINDOW_MS,
+    requests: 0, turns: 0, promptTokens: 0, completionTokens: 0, cost: 0, sessions: [], totalPlayMs: 0
+  }));
+  (totals.results || []).forEach(t => {
+    const u = byUser.get(t.user_id);
+    if (!u) return;
+    Object.assign(u, {
+      requests: t.requests || 0, turns: t.turns || 0,
+      promptTokens: t.prompt_tokens || 0, completionTokens: t.completion_tokens || 0, cost: t.cost || 0
+    });
+  });
+  const tsByUser = new Map();
+  (chapters.results || []).forEach(r => {
+    if (!tsByUser.has(r.user_id)) tsByUser.set(r.user_id, []);
+    tsByUser.get(r.user_id).push(r.ts);
+  });
+  tsByUser.forEach((list, userId) => {
+    const u = byUser.get(userId);
+    if (!u) return;
+    const sessions = splitSessions(list);
+    u.totalPlayMs = sessions.reduce((sum, s) => sum + s.durationMs, 0);
+    u.sessions = sessions.slice(-10).reverse();
+  });
+  const users = [...byUser.values()].sort((a, b) => b.lastSeen - a.lastSeen);
+  return {
+    generatedAt: now,
+    onlineWindowMinutes: ONLINE_WINDOW_MS / 60000,
+    sessionGapMinutes: SESSION_GAP_MS / 60000,
+    users,
+    models: models.results || []
+  };
+}
+
+async function handleAdmin(request, env, origin, viaSharedKey) {
+  const auth = await authenticateRequest(request, env, viaSharedKey);
+  if (!auth.ok || viaSharedKey) {
+    return json({ error: { message: '請先登入管理員帳號。' } }, auth.serverError ? 503 : 401, origin);
+  }
+  const adminEmail = String(env.ADMIN_EMAIL || '').trim().toLowerCase();
+  if (!adminEmail || String(auth.email || '').trim().toLowerCase() !== adminEmail) {
+    return json({ error: { message: '這個帳號沒有管理權限。' } }, 403, origin);
+  }
+  if (!env.USAGE_DB) return json({ error: { message: '尚未設定用量資料庫。' } }, 500, origin);
+  try {
+    return json({ success: true, data: await buildAdminStats(env) }, 200, origin);
+  } catch (error) {
+    return json({ error: { message: '統計查詢失敗：' + error.message } }, 500, origin);
+  }
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const { ok: originOk, origin, reason, viaSharedKey } = resolveOrigin(request, env);
 
     if (request.method === 'OPTIONS') {
@@ -536,6 +694,10 @@ export default {
 
     // 檢索用嵌入。與生成走同一組驗證，但不佔用生成佇列 ——
     // 嵌入跑在 Cloudflare 邊緣、不碰 OpenRouter 額度，排隊只會拖慢檢索。
+    if (new URL(request.url).pathname === '/admin/stats') {
+      return handleAdmin(request, env, origin, viaSharedKey);
+    }
+
     if (new URL(request.url).pathname === '/decide') {
       const auth = await authenticateRequest(request, env, viaSharedKey);
       if (!auth.ok) {
@@ -570,7 +732,19 @@ export default {
           },
           body: JSON.stringify(upstreamBody)
         });
-        return new Response(await up.text(), {
+        const text = await up.text();
+        let usage = null;
+        try { usage = JSON.parse(text).usage || null; } catch (ignore) { /* 非 JSON 錯誤訊息 */ }
+        const who = identityOf(auth);
+        const logEntry = recordUsage(env, {
+          ts: Date.now(), userId: who.userId, email: who.email, kind: 'decide', model: payload.model,
+          promptTokens: usage ? usage.prompt_tokens || 0 : 0,
+          completionTokens: usage ? usage.completion_tokens || 0 : 0,
+          cost: usage ? Number(usage.cost) || 0 : 0,
+          status: up.status, durationMs: 0
+        });
+        if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(logEntry);
+        return new Response(text, {
           status: up.status,
           headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' }
         });
@@ -705,6 +879,9 @@ export default {
       });
     }
 
+    const startedAt = Date.now();
+    const requestKind = REQUEST_KINDS.has(request.headers.get('X-Request-Kind'))
+      ? request.headers.get('X-Request-Kind') : 'aux';
     try {
       const upstream = await fetch(UPSTREAM, {
         method: 'POST',
@@ -720,7 +897,9 @@ export default {
           provider: resolveProviderRouting(body.model, normalized.requestedProvider, viaSharedKey),
           reasoning: resolveReasoning(body.model, normalized.requestedReasoning, viaSharedKey),
           // 部分模型的供應商在強制 JSON 下會輸出壞掉的 JSON（見 JSON_MODE_DISABLED_MODELS），對它們略過
-          response_format: JSON_MODE_DISABLED_MODELS.has(body.model) ? undefined : normalized.responseFormat
+          response_format: JSON_MODE_DISABLED_MODELS.has(body.model) ? undefined : normalized.responseFormat,
+          // 讓串流最後一個區塊帶回 token 數與實際費用，供用量記錄使用
+          usage: { include: true }
         })
       });
 
@@ -756,7 +935,23 @@ export default {
       const upstreamType = upstream.headers.get('content-type')
         || (upstream.ok ? 'text/event-stream' : 'application/json');
 
-      return new Response(upstream.body, {
+      const [forwardBody, usagePromise] = upstream.ok ? tapStreamUsage(upstream.body) : [upstream.body, Promise.resolve(null)];
+      const who = identityOf(auth);
+      const logEntry = usagePromise.then(usage => recordUsage(env, {
+        ts: startedAt,
+        userId: who.userId,
+        email: who.email,
+        kind: requestKind,
+        model: body.model,
+        promptTokens: usage ? usage.prompt_tokens : 0,
+        completionTokens: usage ? usage.completion_tokens : 0,
+        cost: usage ? Number(usage.cost) || 0 : 0,
+        status: upstream.status,
+        durationMs: Date.now() - startedAt
+      }));
+      if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(logEntry);
+
+      return new Response(forwardBody, {
         status: upstream.status,
         headers: Object.assign(
           { 'Content-Type': upstreamType, 'Cache-Control': 'no-store' },

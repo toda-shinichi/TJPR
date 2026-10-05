@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>暗流 管理後台</title>
+<style>
+  :root {
+    --bg: #0d0f14; --card: #161a22; --line: #262c38; --text: #e7e9ee; --muted: #8b93a3;
+    --gold: #c9a45c; --green: #4fbf8a; --red: #e06c6c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.6 -apple-system, "PingFang TC", "Noto Sans TC", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 4px; color: var(--gold); }
+  h2 { font-size: 15px; margin: 28px 0 10px; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .card .k { color: var(--muted); font-size: 12px; }
+  .card .v { font-size: 22px; font-weight: 600; margin-top: 2px; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+  table { width: 100%; border-collapse: collapse; min-width: 760px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.player { cursor: pointer; }
+  tr.player:hover td { background: #1b2029; }
+  tr.detail td { background: #12151c; white-space: normal; color: var(--muted); font-size: 12px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--line); }
+  .dot.on { background: var(--green); }
+  .notice { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-top: 16px; }
+  .error { border-color: var(--red); color: var(--red); }
+  a { color: var(--gold); }
+  button { background: transparent; color: var(--gold); border: 1px solid var(--gold); border-radius: 6px; padding: 4px 12px; cursor: pointer; font: inherit; font-size: 12px; }
+  .row { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row">
+    <div>
+      <h1>暗流 管理後台</h1>
+      <div class="sub" id="updated">載入中……</div>
+    </div>
+    <button id="refresh" type="button">重新整理</button>
+  </div>
+  <div id="status"></div>
+  <div id="content" hidden>
+    <div class="cards" id="cards"></div>
+
+    <h2>正在玩（最近 <span id="online-window">5</span> 分鐘有活動）</h2>
+    <div id="online" class="sub"></div>
+
+    <h2>玩家</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>玩家</th><th>最後活動</th><th>首次出現</th>
+          <th class="num">回合數</th><th class="num">遊玩段數</th><th class="num">總時數</th>
+          <th class="num">輸入 token</th><th class="num">輸出 token</th><th class="num">花費（美元）</th>
+        </tr></thead>
+        <tbody id="players"></tbody>
+      </table>
+    </div>
+    <p class="sub">點一下玩家可以看最近 10 段遊玩時段。兩次正文回合相隔超過 <span id="gap">30</span> 分鐘算新的一段；每段加計最後一回的 3 分鐘閱讀時間。</p>
+
+    <h2>各模型用量</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>模型</th><th class="num">請求數</th><th class="num">token</th><th class="num">花費（美元）</th></tr></thead>
+        <tbody id="models"></tbody>
+      </table>
+    </div>
+
+    <p class="sub" style="margin-top:20px">
+      這裡只列出 2026 年 10 月 5 日開始記錄後，登入並遊玩過的玩家。完整註冊名單在
+      <a href="https://docs.google.com/spreadsheets/d/1lP2etciUuoE4JYfJcuDVZt9XcrdYm6409Wb9hH8DN1s/edit" target="_blank" rel="noopener">Google 試算表的 Users 工作表</a>。
+    </p>
+  </div>
+</main>
+<script>
+(function () {
+  var WORKER = 'https://tjpr-llm-proxy.todashinchi.workers.dev/admin/stats';
+  var TZ = 'Asia/Taipei';
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); };
+  var num = function (n) { return Number(n || 0).toLocaleString('zh-TW'); };
+  var usd = function (n) { return '$' + Number(n || 0).toFixed(4); };
+  var time = function (ts) {
+    if (!ts) return '—';
+    return new Date(ts).toLocaleString('zh-TW', { timeZone: TZ, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+  };
+  var ago = function (ts) {
+    var m = Math.round((Date.now() - ts) / 60000);
+    if (m < 1) return '剛剛';
+    if (m < 60) return m + ' 分鐘前';
+    if (m < 1440) return Math.round(m / 60) + ' 小時前';
+    return Math.round(m / 1440) + ' 天前';
+  };
+  var duration = function (ms) {
+    var m = Math.round((ms || 0) / 60000);
+    if (m < 60) return m + ' 分';
+    return Math.floor(m / 60) + ' 時 ' + (m % 60) + ' 分';
+  };
+  var label = function (u) { return u.email || u.userId; };
+  var token = function () { try { return localStorage.getItem('undercurrent_auth_token') || ''; } catch (e) { return ''; } };
+
+  function showStatus(html, isError) {
+    $('status').innerHTML = html ? '<div class="notice' + (isError ? ' error' : '') + '">' + html + '</div>' : '';
+  }
+
+  function render(data) {
+    var users = data.users || [];
+    var players = users.filter(function (u) { return u.userId !== 'test-shared-key'; });
+    var online = players.filter(function (u) { return u.online; });
+    var sum = function (list, key) { return list.reduce(function (s, u) { return s + Number(u[key] || 0); }, 0); };
+    var allCost = sum(users, 'cost');
+    var testUser = users.find(function (u) { return u.userId === 'test-shared-key'; });
+    $('cards').innerHTML = [
+      ['玩家數', num(players.length)],
+      ['正在玩', num(online.length)],
+      ['玩家回合數', num(sum(players, 'turns'))],
+      ['玩家花費', usd(sum(players, 'cost'))],
+      ['測試花費', usd(testUser ? testUser.cost : 0)],
+      ['總花費', usd(allCost)]
+    ].map(function (c) { return '<div class="card"><div class="k">' + c[0] + '</div><div class="v">' + c[1] + '</div></div>'; }).join('');
+
+    $('online-window').textContent = data.onlineWindowMinutes || 5;
+    $('gap').textContent = data.sessionGapMinutes || 30;
+    $('online').innerHTML = online.length
+      ? online.map(function (u) { return '<span class="dot on"></span>' + esc(label(u)) + '（' + ago(u.lastSeen) + '）'; }).join('　')
+      : '目前沒有人在玩。';
+
+    $('players').innerHTML = users.map(function (u, i) {
+      var sessions = (u.sessions || []).map(function (s) {
+        return time(s.start) + ' 起，' + duration(s.durationMs) + '，' + s.turns + ' 回';
+      }).join('<br>') || '還沒有正文回合。';
+      return '<tr class="player" data-i="' + i + '">' +
+        '<td><span class="dot' + (u.online ? ' on' : '') + '"></span>' + esc(label(u)) + '</td>' +
+        '<td>' + ago(u.lastSeen) + '</td><td>' + time(u.firstSeen) + '</td>' +
+        '<td class="num">' + num(u.turns) + '</td><td class="num">' + num((u.sessions || []).length) + '</td>' +
+        '<td class="num">' + duration(u.totalPlayMs) + '</td>' +
+        '<td class="num">' + num(u.promptTokens) + '</td><td class="num">' + num(u.completionTokens) + '</td>' +
+        '<td class="num">' + usd(u.cost) + '</td></tr>' +
+        '<tr class="detail" data-for="' + i + '" hidden><td colspan="9">' + sessions + '</td></tr>';
+    }).join('') || '<tr><td colspan="9" class="sub">還沒有任何紀錄。</td></tr>';
+
+    $('models').innerHTML = (data.models || []).map(function (m) {
+      return '<tr><td>' + esc(m.model || '—') + '</td><td class="num">' + num(m.requests) + '</td><td class="num">' + num(m.tokens) + '</td><td class="num">' + usd(m.cost) + '</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="sub">還沒有任何紀錄。</td></tr>';
+
+    $('updated').textContent = '更新於 ' + time(data.generatedAt) + '（台北時間），每分鐘自動更新';
+    $('content').hidden = false;
+  }
+
+  $('players').addEventListener('click', function (e) {
+    var row = e.target.closest('tr.player');
+    if (!row) return;
+    var detail = document.querySelector('tr.detail[data-for="' + row.dataset.i + '"]');
+    if (detail) detail.hidden = !detail.hidden;
+  });
+
+  function load() {
+    var t = token();
+    if (!t) {
+      $('updated').textContent = '';
+      showStatus('請先在<a href="./">遊戲首頁</a>用管理員帳號登入，再回到這一頁。', true);
+      return;
+    }
+    fetch(WORKER, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Undercurrent-Token': t }, body: '{}' })
+      .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          var msg = (res.body && res.body.error && res.body.error.message) || '無法取得資料。';
+          showStatus(esc(msg) + ' 若剛換帳號，請回<a href="./">遊戲首頁</a>重新登入。', true);
+          return;
+        }
+        showStatus('');
+        render(res.body.data || {});
+      })
+      .catch(function (err) { showStatus('連線失敗：' + esc(err.message), true); });
+  }
+
+  $('refresh').addEventListener('click', load);
+  load();
+  setInterval(load, 60000);
+})();
+</script>
+</body>
+</html>
