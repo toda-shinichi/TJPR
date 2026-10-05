@@ -8,6 +8,7 @@
 const CONFIG = {
   // 應用程式基本資訊
   APP_NAME: '《暗流》沉浸式互動文字RPG引擎',
+  ADMIN_EMAIL: 'todashinchi@gmail.com', // 管理後台唯一可讀註冊名單的帳號
   VERSION: '1.0.0',
   ENV: 'production',
 

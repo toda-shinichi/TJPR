@@ -58,7 +58,7 @@
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>玩家</th><th>最後活動</th><th>首次出現</th>
+          <th>玩家</th><th>註冊時間</th><th>最後活動</th><th>雲端存檔</th>
           <th class="num">回合數</th><th class="num">遊玩段數</th><th class="num">總時數</th>
           <th class="num">輸入 token</th><th class="num">輸出 token</th><th class="num">花費（美元）</th>
         </tr></thead>
@@ -76,14 +76,16 @@
     </div>
 
     <p class="sub" style="margin-top:20px">
-      這裡只列出 2026 年 10 月 5 日開始記錄後，登入並遊玩過的玩家。完整註冊名單在
-      <a href="https://docs.google.com/spreadsheets/d/1lP2etciUuoE4JYfJcuDVZt9XcrdYm6409Wb9hH8DN1s/edit" target="_blank" rel="noopener">Google 試算表的 Users 工作表</a>。
+      註冊名單與雲端存檔狀態來自
+      <a href="https://docs.google.com/spreadsheets/d/1lP2etciUuoE4JYfJcuDVZt9XcrdYm6409Wb9hH8DN1s/edit" target="_blank" rel="noopener">Google 試算表的 Users 工作表</a>
+      與各玩家的雲端存檔資料夾；回合數、時數、token 與花費從 2026 年 10 月 5 日開始記錄。
     </p>
   </div>
 </main>
 <script>
 (function () {
   var WORKER = 'https://tjpr-llm-proxy.todashinchi.workers.dev/admin/stats';
+  var GAS = 'https://script.google.com/macros/s/AKfycby-MudkbcVPAfVDZk2B1zznDlOfjnJOqMB2A3586Ct3ZGq_CUNteKe1lZ4bbw8HwqS9sw/exec';
   var TZ = 'Asia/Taipei';
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); };
@@ -94,6 +96,7 @@
     return new Date(ts).toLocaleString('zh-TW', { timeZone: TZ, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
   };
   var ago = function (ts) {
+    if (!ts) return '—';
     var m = Math.round((Date.now() - ts) / 60000);
     if (m < 1) return '剛剛';
     if (m < 60) return m + ' 分鐘前';
@@ -112,15 +115,45 @@
     $('status').innerHTML = html ? '<div class="notice' + (isError ? ' error' : '') + '">' + html + '</div>' : '';
   }
 
+  /** 把 Google 註冊名單（全部註冊者）併進 Worker 的用量統計（有遊玩紀錄者）。 */
+  function mergeRoster(stats, roster) {
+    var byId = {};
+    (stats.users || []).forEach(function (u) { byId[u.userId] = u; });
+    (roster || []).forEach(function (r) {
+      var u = byId[r.userId];
+      if (!u) {
+        u = byId[r.userId] = { userId: r.userId, email: r.email, lastSeen: 0, online: false, requests: 0, turns: 0,
+          promptTokens: 0, completionTokens: 0, cost: 0, sessions: [], totalPlayMs: 0 };
+      }
+      u.email = u.email || r.email;
+      u.registeredAt = r.createdAt ? Date.parse(r.createdAt) : 0;
+      u.lastLogin = r.lastActive ? Date.parse(r.lastActive) : 0;
+      u.save = { has: r.hasSave, updatedAt: r.saveUpdatedAt ? Date.parse(r.saveUpdatedAt) : 0, turn: r.turnCount, error: r.saveError };
+    });
+    stats.users = Object.keys(byId).map(function (k) { return byId[k]; }).sort(function (a, b) {
+      return Math.max(b.lastSeen || 0, b.lastLogin || 0) - Math.max(a.lastSeen || 0, a.lastLogin || 0);
+    });
+    return stats;
+  }
+
+  function saveCell(u) {
+    if (!u.save) return '—';
+    if (u.save.error) return '<span style="color:var(--red)">讀取錯誤</span>';
+    if (!u.save.has) return '沒有';
+    return (u.save.turn != null ? '第 ' + u.save.turn + ' 回，' : '') + ago(u.save.updatedAt);
+  }
+
   function render(data) {
     var users = data.users || [];
     var players = users.filter(function (u) { return u.userId !== 'test-shared-key'; });
+    var withSave = players.filter(function (u) { return u.save && u.save.has; });
     var online = players.filter(function (u) { return u.online; });
     var sum = function (list, key) { return list.reduce(function (s, u) { return s + Number(u[key] || 0); }, 0); };
     var allCost = sum(users, 'cost');
     var testUser = users.find(function (u) { return u.userId === 'test-shared-key'; });
     $('cards').innerHTML = [
-      ['玩家數', num(players.length)],
+      ['註冊玩家', num(players.length)],
+      ['有雲端存檔', num(withSave.length)],
       ['正在玩', num(online.length)],
       ['玩家回合數', num(sum(players, 'turns'))],
       ['玩家花費', usd(sum(players, 'cost'))],
@@ -135,17 +168,20 @@
       : '目前沒有人在玩。';
 
     $('players').innerHTML = users.map(function (u, i) {
+      var saveError = u.save && u.save.error ? '雲端存檔讀取錯誤：' + esc(u.save.error) + '<br>' : '';
       var sessions = (u.sessions || []).map(function (s) {
         return time(s.start) + ' 起，' + duration(s.durationMs) + '，' + s.turns + ' 回';
       }).join('<br>') || '還沒有正文回合。';
       return '<tr class="player" data-i="' + i + '">' +
         '<td><span class="dot' + (u.online ? ' on' : '') + '"></span>' + esc(label(u)) + '</td>' +
-        '<td>' + ago(u.lastSeen) + '</td><td>' + time(u.firstSeen) + '</td>' +
+        '<td>' + time(u.registeredAt) + '</td>' +
+        '<td>' + (Math.max(u.lastSeen || 0, u.lastLogin || 0) ? ago(Math.max(u.lastSeen || 0, u.lastLogin || 0)) : '—') + '</td>' +
+        '<td>' + saveCell(u) + '</td>' +
         '<td class="num">' + num(u.turns) + '</td><td class="num">' + num((u.sessions || []).length) + '</td>' +
         '<td class="num">' + duration(u.totalPlayMs) + '</td>' +
         '<td class="num">' + num(u.promptTokens) + '</td><td class="num">' + num(u.completionTokens) + '</td>' +
         '<td class="num">' + usd(u.cost) + '</td></tr>' +
-        '<tr class="detail" data-for="' + i + '" hidden><td colspan="9">' + sessions + '</td></tr>';
+        '<tr class="detail" data-for="' + i + '" hidden><td colspan="9">' + saveError + sessions + '</td></tr>';
     }).join('') || '<tr><td colspan="9" class="sub">還沒有任何紀錄。</td></tr>';
 
     $('models').innerHTML = (data.models || []).map(function (m) {
@@ -170,16 +206,22 @@
       showStatus('請先在<a href="./">遊戲首頁</a>用管理員帳號登入，再回到這一頁。', true);
       return;
     }
-    fetch(WORKER, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Undercurrent-Token': t }, body: '{}' })
-      .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
-      .then(function (res) {
+    var roster = fetch(GAS, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'admin/users', token: t }), redirect: 'follow' })
+      .then(function (r) { return r.json(); })
+      .then(function (body) { return body && body.success ? { users: body.data.users } : { error: (body && body.error && body.error.message) || '讀取失敗' }; })
+      .catch(function (err) { return { error: err.message }; });
+    var stats = fetch(WORKER, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Undercurrent-Token': t }, body: '{}' })
+      .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); });
+    Promise.all([stats, roster])
+      .then(function (results) {
+        var res = results[0], rosterRes = results[1];
         if (!res.ok) {
           var msg = (res.body && res.body.error && res.body.error.message) || '無法取得資料。';
           showStatus(esc(msg) + ' 若剛換帳號，請回<a href="./">遊戲首頁</a>重新登入。', true);
           return;
         }
-        showStatus('');
-        render(res.body.data || {});
+        showStatus(rosterRes.error ? 'Google 註冊名單讀取失敗：' + esc(rosterRes.error) + '（下方只列出有遊玩紀錄的玩家）' : '', !!rosterRes.error);
+        render(mergeRoster(res.body.data || {}, rosterRes.users || []));
       })
       .catch(function (err) { showStatus('連線失敗：' + esc(err.message), true); });
   }

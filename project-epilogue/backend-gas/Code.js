@@ -120,6 +120,9 @@ function doPost(e) {
       case 'lore/get-character':
         return handleGetCharacterLore(userSession, payload);
 
+      case 'admin/users':
+        return handleAdminUsers(userSession);
+
       default:
         return createErrorResponse('Unknown API action: ' + action, 404);
     }
@@ -800,4 +803,62 @@ function handleLLMProxy(userSession, payload) {
   } catch (e) {
     return createErrorResponse('LLM Proxy failed: ' + e.message, 502);
   }
+}
+
+
+/**
+ * 管理後台用的註冊名單。只有 CONFIG.NOTIFICATIONS.EMAIL（管理員）能讀。
+ * 只回傳帳號、註冊與最後登入時間，以及存檔的回合數與更新時間；
+ * 不回傳密碼雜湊、鹽、權杖，也不回傳人設或劇情內容。
+ */
+function handleAdminUsers(userSession) {
+  var adminEmail = String(CONFIG.ADMIN_EMAIL || '').trim().toLowerCase();
+  if (!adminEmail || String(userSession.email || '').trim().toLowerCase() !== adminEmail) {
+    return createErrorResponse('Administrator privileges required.', 403);
+  }
+  var ss = SpreadsheetApp.openById(CONFIG.SHEET.SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(CONFIG.SHEET.USERS_SHEET_NAME);
+  if (!sheet) return createSuccessResponse({ users: [] });
+  var rows = sheet.getDataRange().getValues();
+  var col = CONFIG.SHEET.COLUMNS;
+  var users = [];
+  for (var i = 1; i < rows.length; i++) {
+    var row = rows[i];
+    var userId = String(row[col.USER_ID - 1] || '');
+    if (!userId) continue;
+    var entry = {
+      userId: userId,
+      email: String(row[col.EMAIL - 1] || ''),
+      createdAt: toIsoOrEmpty(row[col.CREATED_AT - 1]),
+      lastActive: toIsoOrEmpty(row[col.LAST_ACTIVE - 1]),
+      hasSave: false,
+      saveUpdatedAt: '',
+      turnCount: null
+    };
+    try {
+      var folderId = String(row[col.DRIVE_FOLDER_ID - 1] || '');
+      if (folderId) {
+        var files = DriveApp.getFolderById(folderId).getFilesByName(CONFIG.STORAGE.SAVE_FILE_NAME);
+        if (files.hasNext()) {
+          var file = files.next();
+          entry.hasSave = true;
+          entry.saveUpdatedAt = file.getLastUpdated().toISOString();
+          try {
+            var save = JSON.parse(file.getBlob().getDataAsString());
+            entry.turnCount = save && typeof save.turnCount === 'number' ? save.turnCount : null;
+          } catch (parseErr) { /* 存檔格式異常時只略過回合數 */ }
+        }
+      }
+    } catch (driveErr) {
+      entry.saveError = driveErr.message;
+    }
+    users.push(entry);
+  }
+  return createSuccessResponse({ users: users, generatedAt: new Date().toISOString() });
+}
+
+function toIsoOrEmpty(value) {
+  if (!value) return '';
+  var d = value instanceof Date ? value : new Date(value);
+  return isNaN(d.getTime()) ? String(value) : d.toISOString();
 }
