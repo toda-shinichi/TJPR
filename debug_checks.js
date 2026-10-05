@@ -273,8 +273,8 @@ assert.match(xuLingqianLore, /正式場合一律稱「徐顧問」[\s\S]*熟識�
 assert.strictEqual((rootApp.match(/徐令謙在正式、政商場合稱「徐顧問」/g) || []).length, 2, '開局與續回提示詞未共同套用徐令謙稱謂規則');
 assert.doesNotMatch(xuLingqianLore, /深沉狠戾|高階獵食者|退路全被封死|凌虐般的懲戒|絕對支配權/, '徐令謙角色卡仍殘留兇狠控制型舊模板');
 assert.match(xuLingqianLore, /力量方向：他的危險與權勢只朝向外部威脅，絕不朝向玩家/, '徐令謙角色卡缺少力量方向規則');
-assert.match(xuLingqianLore, /給玩家充分自由，不監禁、不命令、不以安全之名剝奪選擇/, '徐令謙角色卡缺少自由與守護規則');
-assert.strictEqual((rootApp.match(/徐令謙專屬例外：克制、壓抑、紀律嚴明，唯獨面對玩家會控制不住；傲嬌卻主動，會要求、請求、彆扭地撒嬌，但不命令、不威脅、不強迫，只守護/g) || []).length, 2, '開局與續回提示詞未共同套用徐令謙戀愛校準');
+assert.match(xuLingqianLore, /給玩家充分自由，不監禁、不以安全之名剝奪選擇/, '徐令謙角色卡缺少自由與守護規則');
+assert.strictEqual((rootApp.match(/徐令謙專屬例外：克制、壓抑、紀律嚴明，唯獨面對玩家會控制不住；傲嬌卻主動，會要求、請求、彆扭地撒嬌；平時紳士而篤定，不靠命令或威脅/g) || []).length, 2, '開局與續回提示詞未共同套用徐令謙戀愛校準');
 // 作者指示（2026-10-05）：徐令謙克制紀律，但面對玩家會失控、傲嬌、主動；不得再以「妳可以拒絕」把決定權推回
 const xuVoice = JSON.parse(fs.readFileSync('characters/voice/01_徐令謙.json', 'utf8'));
 assert.match(xuVoice.courtship, /傲嬌|反話/, '徐令謙演繹卡缺少傲嬌');
@@ -302,7 +302,7 @@ const chunks = vm.runInContext("splitCharacterCard('# 測試\\n\\n⚖️ 基本�
 assert.ok(chunks.length >= 2 && chunks.every(c => c.length <= 560), '角色卡切段長度異常');
 assert.match(
   vm.runInContext("finishCharacterBlocks([], '01_徐令謙', [])", frontendContext),
-  /權勢與危險只用來處理外部威脅[^。]*絕不朝向玩家/,
+  /權勢與危險主要用來處理外部威脅、守護她/,
   '徐令謙作為主角時未套用最終演繹校準'
 );
 assert.match(
@@ -1069,5 +1069,16 @@ assert.match(vm.runInContext(`buildPacingBlock({ allowR18: true }, {}, 1)`, fron
 assert.ok(vm.runInContext(`PASSIVE_ENDING_PATTERN.test('他沒有催促，只是等著妳的決定。')`, frontendContext), '未偵測等待結尾');
 assert.ok(!vm.runInContext(`PASSIVE_ENDING_PATTERN.test('他扣住妳的手腕，帶妳上樓。')`, frontendContext), '主動結尾被誤判');
 assert.match(rootApp, /await repairPassiveEnding\(chapter, model\);/, '結尾改寫未接入 finalizeChapter');
+
+// 跨回重複段落：露骨回合不論隔幾回都要比對
+{
+  const spicyOld = { generationMode: 'spicy', prose: '車廂裡只剩下喘息、布料摩擦與他低沉的呻吟。' };
+  const filler = n => Array.from({ length: n }, (_, i) => ({ generationMode: 'normal', prose: `第${i}回的早餐是清粥小菜。` }));
+  const hits = vm.runInContext(`findRepeatedSentences('他關上門。車廂裡只剩下喘息、布料摩擦與他低沉的呻吟。', ${JSON.stringify([spicyOld, ...filler(4)])})`, frontendContext);
+  assert.strictEqual(hits.length, 1, '隔三回的露骨段落重複未被偵測');
+  const none = vm.runInContext(`findRepeatedSentences('他關上門，雨停了。', ${JSON.stringify([spicyOld, ...filler(4)])})`, frontendContext);
+  assert.strictEqual(none.length, 0, '不重複的句子被誤判');
+  assert.match(rootApp, /await repairRepeatedPassages\(chapter, model\);/, '重複段落改寫未接入 finalizeChapter');
+}
 
 console.log('所有本機偵錯檢查皆已通過。');

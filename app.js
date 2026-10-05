@@ -2846,6 +2846,8 @@ async function finalizeChapter(chapter, model) {
   const polished = normalizeChapterChinese(chapter);
   if (polished) console.info(`[Polish] ${model}：就地修正 ${polished} 個字（簡繁／台灣用語／標點），未重新生成。`);
 
+  chapter.generationMode = state.generationMode;
+  await repairRepeatedPassages(chapter, model);
   await repairPassiveEnding(chapter, model);
 
   await repairChapterStructure(chapter, model);
@@ -2864,6 +2866,89 @@ async function finalizeChapter(chapter, model) {
     console.info(`[Literary Quality] ${model}：${literaryError} —— 保留本章，將於下一回提示詞中點名修正。`);
   }
   return chapter;
+}
+
+/** 與先前回合連續相同達此字數（去標點後）的句子，視為重複段落。 */
+const REPEATED_PASSAGE_MIN_CHARS = 14;
+
+/**
+ * 比對的先前回合：最近 3 回，加上所有露骨回合。
+ * 2026-10-05 修羅場實測：第 9 回整句沿用第 5 回的性愛描寫（「車廂裡只剩下
+ * 喘息……」「將名字喊成一句祈禱」），中間隔了 3 回，舊的照抄檢查只看最近 3 回。
+ */
+function collectComparisonProse(historyList = []) {
+  const list = Array.isArray(historyList) ? historyList : [];
+  const recent = list.slice(-3);
+  const intimate = list.filter(item => item?.generationMode === 'spicy' && !recent.includes(item));
+  return [...intimate, ...recent].map(item => String(item?.prose || '')).filter(Boolean);
+}
+
+/** 找出與先前回合重複的句子（連續 REPEATED_PASSAGE_MIN_CHARS 字相同）。 */
+function findRepeatedSentences(prose, historyList = []) {
+  const normalize = value => String(value || '').replace(/[\s，。！？!?；;、：「」『』“”‘’（）()—…·,.:'"\-]/g, '');
+  const n = REPEATED_PASSAGE_MIN_CHARS;
+  const grams = new Set();
+  collectComparisonProse(historyList).forEach(text => {
+    const t = normalize(text);
+    for (let i = 0; i + n <= t.length; i += 1) grams.add(t.slice(i, i + n));
+  });
+  if (!grams.size) return [];
+  const sentences = String(prose || '').match(/[^。！？\n]+[。！？」]*/g) || [];
+  return sentences.filter(sentence => {
+    const t = normalize(sentence);
+    for (let i = 0; i + n <= t.length; i += 1) if (grams.has(t.slice(i, i + n))) return true;
+    return false;
+  }).map(sentence => sentence.trim());
+}
+
+/**
+ * 只改寫含重複句的段落，不重跑整回；失敗或不合格就保留原文。
+ */
+async function repairRepeatedPassages(chapter, model) {
+  const repeated = findRepeatedSentences(chapter?.prose, state.chapterHistoryList);
+  if (!repeated.length) return false;
+  const paragraphs = String(chapter.prose).split(/\n+/);
+  const targets = paragraphs
+    .map((text, index) => ({ text, index }))
+    .filter(p => p.text.trim() && repeated.some(sentence => p.text.includes(sentence)));
+  if (!targets.length) return false;
+
+  const repairModel = state.generationMode === 'spicy' ? model : LLM_CONFIG.SUMMARY_MODEL;
+  try {
+    const raw = await requestWorkerCompletion({
+      model: repairModel,
+      system: '你是女性向情慾小說的編修。用台灣繁體中文改寫使用者給的段落，只輸出 JSON。',
+      user: `下面這些段落裡，有句子和前幾回幾乎一模一樣。請逐段改寫：保留發生的事、人物、人稱與尺度（情慾描寫維持原本的直白程度），換成新的動作、感官細節與說法，不要沿用這些句子：
+${repeated.map(sentence => `- ${sentence}`).join('\n')}
+
+段落：
+${targets.map((p, i) => `[${i}] ${p.text}`).join('\n\n')}
+
+只輸出 JSON：{"paragraphs":["改寫後的第 0 段","改寫後的第 1 段"]}，數量與順序和輸入相同。`,
+      maxTokens: 3000,
+      temperature: 0.7,
+      json: true,
+      timeoutMs: 60000
+    });
+    const parsed = JSON.parse(String(raw || '').replace(/^```(?:json)?\s*|\s*```$/g, ''));
+    const rewritten = Array.isArray(parsed?.paragraphs) ? parsed.paragraphs : [];
+    if (rewritten.length !== targets.length) return false;
+    let changed = 0;
+    targets.forEach((p, i) => {
+      const text = polishTaiwaneseText(String(rewritten[i] || '').trim());
+      if (text && text.length >= p.text.length * 0.5 && text.length <= p.text.length * 2) {
+        paragraphs[p.index] = text;
+        changed += 1;
+      }
+    });
+    if (!changed) return false;
+    chapter.prose = paragraphs.join('\n\n');
+    console.info(`[Repeat] ${repairModel}：改寫 ${changed} 段與先前回合重複的段落，未重跑整回。`);
+    return true;
+  } catch (error) {
+    console.warn('[Repeat] 重複段落改寫失敗，保留原文：', error?.message || error);
+    return false;
+  }
 }
 
 /**
@@ -4639,7 +4724,7 @@ function finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs) {
 1. 徐令謙對所有人都克制、壓抑、紀律嚴明；語句簡潔、不油條、不浮誇、不吼叫、不以逞兇鬥狠展示份量。
 2. 唯獨面對玩家，他會控制不住。他用自己的方式主動：嘴上繞圈、說反話（「我只是順路」「別誤會」），行動卻一步不退——主動出現、主動靠近、主動吻她、主動留下。
 3. 他會傲嬌地要求、低聲請求、偶爾彆扭地撒嬌，繞了一圈仍清楚說出他想要什麼；不要讓他停在「妳可以拒絕」「等妳決定」。
-4. 紳士而篤定：不命令、不威脅、不強迫；他的權勢與危險只用來處理外部威脅、守護她，絕不朝向玩家。不預設羞辱、疼痛或強迫。`);
+4. 平時紳士而篤定，不靠命令或威脅；情慾正濃、吃醋或危機等劇情氛圍需要時，可以強勢、直接下命令，用的仍是乾淨有教養的語言。他的權勢與危險主要用來處理外部威脅、守護她。`);
   }
 
   return blocks.join('\n');
@@ -4746,7 +4831,7 @@ function buildPreviousTurnStyleNote(historyList) {
   if (!prose) return '';
   const issues = detectAiFlavor(prose);
   const simileCount = countLiterarySimiles(prose);
-  if (simileCount > 3) issues.push(`比喻詞「像、彷彿、如同、宛如」用了 ${simileCount} 次（上限 3 次）`);
+  if (simileCount > 6) issues.push(`比喻用了 ${simileCount} 次，偏多`);
   const cliches = LITERARY_CLICHE_PATTERNS.filter(phrase => prose.includes(phrase));
   if (cliches.length) issues.push(`套路語：${cliches.slice(0, 4).join('、')}`);
   if (!issues.length) return '';
@@ -4860,7 +4945,7 @@ function buildDominantPlotBlock(profile) {
 - 親密不需要玩家先明確邀請：劇情、氣氛、情慾張力或玩家指令推到合適的時候，男主可以自己發動，直接把關係推到性愛，不必先問、不必等她開口。
 - 可以用權勢落差、職場上下、設局、權謀、交易籌碼、誘惑與魅惑把兩人帶到這一步：他布局讓她只能與他獨處、拿籌碼跟她談條件、用魅力讓她招架不住、把她逼到退無可退。
 - 界線：進入性愛時，女主角是清醒、願意並且回應的——她可以被算計、被逼到牆角、被撩到失守，但最後是她自己迎上去。不寫下藥、灌醉後發生關係、暴力強迫，也不寫她明確拒絕後繼續。
-- 主導方式照各男主的演繹卡：演繹卡禁止的手段（例如徐令謙不命令、不威脅、不強迫）照樣禁止，他用他自己的方式強勢。
+- 主導方式照各男主的演繹卡，用他自己的方式強勢；劇情或氛圍需要時，可以比演繹卡平時的分寸更強勢。
 - 玩家雷區優先於本設定。`;
 }
 
@@ -4900,8 +4985,7 @@ function buildLiteraryCraftBlock(turnCount, historyList) {
 - 文體：女性向情慾戀愛小說，以台北都會的商戰、政治與權謀為背景。用精準名詞、動詞與可驗證細節形成質感；克制形容詞，避免把「高級、危險、壓迫、性感」當成結論反覆宣告。
 - 對話：每位角色的台詞照他自己的演繹卡寫——有人迂迴、有人直接、有人幽默、有人帶刺，說話方式、句型與用字必須一聽就知道是誰。不要在旁白立刻解釋每句台詞。
 - 角色差異化：不同角色不得共用同一套反應模板。「沉默不語、目光沉靜地凝視、手指輕敲桌面、嘴角勾起若有似無的弧度、語氣平淡卻帶著不容忽視的重量」是通用的冷硬男主模板，除非該角色的演繹卡明確如此，否則不要用。角色最有特色的那一面（機鋒、戲謔、詩意、溫暖、粗獷、羞澀）要寫出來，不要磨平成「冷靜克制」。
-- 節奏：長短句與段落密度須有變化。一段只保留一個主要感官焦點；全回核心比喻最多 2 個，且必須取材自當前場景；「像、彷彿、如同、宛如」四種詞合計最多 3 次。
-- 交稿前靜默自檢：逐字搜尋「像、彷彿、如同、宛如」，合計超過 3 次就刪減；這是硬性上限，不是建議。
+- 節奏：長短句與段落密度須有變化。一段只保留一個主要感官焦點；比喻一段最多一個，取自日常生活或當下場景，不用典故。
 - 避免機械重複：同一句話、同一物件狀態或「你＋動作」句型不得換字反覆描述；除非是刻意設計的唯一一次回聲，完整句子不可重複。
 - 跨回推進：不可把上一回的招牌物件、收尾意象或整段動作只換幾個字再寫一次；若物件仍在場，必須寫出它因新行動產生的變化或後果。
 - 情慾與權力：由人物的慾望、主動與具體動作產生；不得直接用「性張力爆發、佔有慾、危險迷人」等詞代替戲劇行動。
@@ -5139,7 +5223,7 @@ function assessLiteraryQuality(chapter, historyList = []) {
   if (clichéHits.length > 1) warnings.push(`套路語密度偏高：${clichéHits.slice(0, 4).join('、')}`);
 
   const simileCount = countLiterarySimiles(prose);
-  if (simileCount > 3) warnings.push(`比喻訊號過密（${simileCount} 次）`);
+  if (simileCount > 6) warnings.push(`比喻訊號過密（${simileCount} 次）`);
 
   const repeatedSentenceCount = countRepeatedLiterarySentences(prose);
   if (repeatedSentenceCount) warnings.push(`完整句子重複（${repeatedSentenceCount} 次）`);
@@ -5187,7 +5271,7 @@ function assessLiteraryQuality(chapter, historyList = []) {
 function getLiteraryValidationError(chapter, historyList = []) {
   const quality = assessLiteraryQuality(chapter, historyList);
   if (quality.metrics.clichéHits.length >= 3) return `套路語過多（${quality.metrics.clichéHits.length} 項）`;
-  if (quality.metrics.simileCount > 4) return `比喻訊號過密（${quality.metrics.simileCount} 次）`;
+  if (quality.metrics.simileCount > 6) return `比喻訊號過密（${quality.metrics.simileCount} 次）`;
   if (quality.metrics.simplifiedChineseCount > SIMPLIFIED_CHINESE_TOLERANCE) {
     return `混入簡體字（${quality.metrics.simplifiedChineseCount} 字）`;
   }
@@ -5220,7 +5304,7 @@ ${literaryCraftBlock}
 
 請嚴格遵守《情慾文學指引》與《系統核心指令》：
 1. 核心與成人情慾（R-18）：本作以情慾與戀愛為核心，商戰、政治、權謀與職場為背景與阻力。以人物慾望、主動、五感細節形成張力；使用純台灣繁體中文。
-   - 徐令謙專屬例外：克制、壓抑、紀律嚴明，唯獨面對玩家會控制不住；傲嬌卻主動，會要求、請求、彆扭地撒嬌，但不命令、不威脅、不強迫，只守護。
+   - 徐令謙專屬例外：克制、壓抑、紀律嚴明，唯獨面對玩家會控制不住；傲嬌卻主動，會要求、請求、彆扭地撒嬌；平時紳士而篤定，不靠命令或威脅；情慾正濃、吃醋或危機等劇情氛圍需要時，可以強勢、直接下命令，用的仍是乾淨有教養的語言。
 2. 【正文篇幅目標】prose 建議 800–1200 個中文字，依場景需要自然增減。完成一個實質改變局勢或關係的戲劇節拍，不必每回高潮或封口；不截斷、不灌水、不套固定模板。
 3. 【數值真實性運算規則】：
    - tension（張力值 0~100）：依據當前壓迫感/物理距離/對峙危險度給出具體整數。
@@ -5274,7 +5358,7 @@ ${FEATURES.favorability ? `    "relationshipChanges": { "${profile.targetLeadNam
 
 - 玩家自訂開局情境：${customScenario || '深夜暴雨台北，帶著關鍵政商洗錢密錄暗帳初次入局'}
 
-請根據以上設定與開局情境創作第 1 回。直接從一個正在發生的具體動作切入，讓人物意圖透過選擇、對話潛台詞與場景細節浮現；不要先介紹世界觀，也不要用旁白宣告角色危險、迷人或充滿性張力。最後生成三個精簡且真正不同策略的抉擇。全文「像、彷彿、如同、宛如」合計不得超過 3 次。
+請根據以上設定與開局情境創作第 1 回。直接從一個正在發生的具體動作切入，讓人物意圖透過選擇、對話潛台詞與場景細節浮現；不要先介紹世界觀，也不要用旁白宣告角色危險、迷人或充滿性張力。最後生成三個精簡且真正不同策略的抉擇。比喻一段最多一個，取自日常生活或當下場景。
 
 ${buildDominantPlotBlock(profile)}
 
@@ -5319,7 +5403,7 @@ ${literaryCraftBlock}
 請嚴格遵守《情慾文學指引》與《系統核心指令》：
 1. 嚴格依據玩家最新行動推進。prose 建議 800–1200 個中文字，依場景自然增減；每回都要有實質推進（關係更進一步、事件發生或真相揭露），不能整回停在試探、對峙或寒暄；不截斷、不灌水。
 2. 描寫要求：本作以情慾與戀愛為核心，權謀與職場是背景與阻力。以人物慾望、主動、距離變化、對話潛台詞及具體感官細節推動感情線；不得只提高形容詞強度，使用純台灣繁體中文。
-   - 徐令謙專屬例外：克制、壓抑、紀律嚴明，唯獨面對玩家會控制不住；傲嬌卻主動，會要求、請求、彆扭地撒嬌，但不命令、不威脅、不強迫，只守護。
+   - 徐令謙專屬例外：克制、壓抑、紀律嚴明，唯獨面對玩家會控制不住；傲嬌卻主動，會要求、請求、彆扭地撒嬌；平時紳士而篤定，不靠命令或威脅；情慾正濃、吃醋或危機等劇情氛圍需要時，可以強勢、直接下命令，用的仍是乾淨有教養的語言。
 3. 絕不重複前篇標題與對話；每回必須產生新資訊、選擇代價或關係偏移，但不必機械式升級衝突。
 3-A. 【時空連續性】本回必須從上一回最後的時間、地點與人物物理位置接續。若 timeLocation 改變，prose 必須明寫離開、移動、抵達或時間流逝的過程；嚴禁狀態面板靜默跳到新地點。連續對話或同一場景原則上只能自然推進數分鐘；若時鐘跳動超過 30 分鐘，正文必須明確交代經過多久與期間發生何事，不得自行從深夜跳到凌晨數小時後。
 3-B. 【核心人物連續性】主要攻略對象若上一回仍在場，本回預設他仍在場並延續互動。只有發生無法推辭的緊急事件時才可離開，且必須先鋪陳；不得無故消失、換人或重置彼此已知情報。
@@ -5387,7 +5471,7 @@ ${FEATURES.favorability ? `    "relationshipChanges": { "${profile.targetLeadNam
     '請緊接玩家最新行動，以具體選擇、對話潛台詞與場景後果呈現對手反應；不要用旁白直接宣布情緒、權力或性張力。生成 3 個精簡、策略真正不同的分支選項。',
     '務必與上方【近期劇情】的場景、時間、在場人物與物理位置完全銜接，不可跳接或重置場景。',
     '若本回變更 timeLocation，正文必須先敘明移動或時間流逝；連續場景不可讓時鐘無故跳超過 30 分鐘。主要攻略對象預設不離場；若真的必須離開，正文要先鋪陳無法推辭的原因。',
-    '全文「像、彷彿、如同、宛如」合計不得超過 3 次；不要使用近期已列出的套路語或近義改寫。',
+    '不要使用近期已列出的套路語或近義改寫。',
     // 人稱規則在系統提示詞前段也有，但露骨鏈的 qwen3-30b 對前段規則遵守較差，結尾再強調一次
     /男/.test(profile.gender || '') ? '旁白稱呼玩家一律用「你」。' : '玩家是女性：旁白一律用第二人稱「妳」稱呼玩家，不可寫成「你」，也不可改用第三人稱「她」。',
     '',
