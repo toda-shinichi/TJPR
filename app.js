@@ -1331,7 +1331,7 @@ function updateGameplayBreadcrumb() {
   const act = state.saveState?.meta?.currentAct || 1;
   const turn = state.saveState?.turnCount || 1;
   const leadName = state.saveState?.meta?.playerProfile?.targetLeadName || '修羅場';
-  dom.gameplayBreadcrumb.textContent = `第 ${act} 幕 · 第 ${turn} 回 ｜ ${leadName}`;
+  dom.gameplayBreadcrumb.textContent = `${formatActTurn(act, turn)} ｜ ${leadName}`;
   updateRebaseSuggestion();
   updateGenderedCopy();
   updateBackToLatestFab();
@@ -2129,9 +2129,30 @@ function extractFirstJson(text) { return extractGameData(text); }
  * 生成後的輕量品質閘門。只做可確定的結構修復；世界觀疑點保留正文並標記，
  * 避免自動替字破壞小說語意或為了稽核額外消耗一次模型請求。
  */
+/**
+ * 幕與回的編號只由遊戲進度決定（saveState.meta.currentAct、turnCount），
+ * 不讓模型自己寫在標題裡。先前範本要模型輸出「第 1 幕 第 N 回：標題」，
+ * 「第 1 幕」是寫死的，換幕後模型仍寫第 1 幕，模型也常數錯回數；
+ * 畫面又另外標示實際進度，兩組編號同時出現、互相矛盾。
+ */
+const CHAPTER_NUMBER_PREFIX = /^(?:\s*[【\[]?\s*第\s*[0-9０-９一二三四五六七八九十百零〇兩]+\s*[幕回章節集話]\s*[】\]]?\s*[．.、:：·・\-—–|｜,，\s]*)+/;
+
+function stripChapterNumbering(title) {
+  const cleaned = String(title || '').replace(CHAPTER_NUMBER_PREFIX, '').replace(/^[【\[]\s*(.*?)\s*[】\]]$/, '$1').trim();
+  return cleaned || '';
+}
+
+function displayChapterTitle(chapter, fallback = '未命名章節') {
+  return stripChapterNumbering(chapter?.chapterTitle) || fallback;
+}
+
+function formatActTurn(act, turn) {
+  return `第 ${Number(act) || 1} 幕 · 第 ${Number(turn) || 1} 回`;
+}
+
 function auditGeneratedChapter(input, profile, historyList = []) {
   const chapter = isPlainObject(input) ? input : {};
-  chapter.chapterTitle = String(chapter.chapterTitle || '未命名章節').slice(0, 160);
+  chapter.chapterTitle = (stripChapterNumbering(chapter.chapterTitle) || '未命名章節').slice(0, 160);
   chapter.prose = String(chapter.prose || '').trim();
   chapter.statusPanel = isPlainObject(chapter.statusPanel) ? chapter.statusPanel : {};
 
@@ -3642,7 +3663,7 @@ function buildRecentHistoryBlock(historyList, saveState = state.saveState) {
   const recent = list.slice(-CONTEXT_BUDGET.recentTurns);
   const parts = recent.map((h, i) => {
     const turn = h.turn || (list.length - recent.length + i + 1);
-    const seg = [`── 第 ${turn} 回：${h.chapterTitle || '前篇'} ──`];
+    const seg = [`── ${formatActTurn(h.act, turn)}：${displayChapterTitle(h, '前篇')} ──`];
     if (h.chosenLabel) seg.push(`【玩家當回行動】${h.chosenLabel}`);
     const prose = clampBlock(h.prose, CONTEXT_BUDGET.recentProsePerTurn);
     seg.push(`【正文】\n${prose}${h.proseArchived ? '\n（本回較早，正文已濃縮）' : ''}`);
@@ -3672,7 +3693,7 @@ function buildPinnedMemoryBlock(historyList, saveState = state.saveState) {
   if (pinned.length === 0) return '';
   const entries = pinned.map(h => {
     const facts = [
-      `── 第 ${h.turn || '?'} 回：${h.chapterTitle || '重要回合'} ──`,
+      `── ${formatActTurn(h.act, h.turn)}：${displayChapterTitle(h, '重要回合')} ──`,
       h.chosenLabel ? `【玩家行動】${h.chosenLabel}` : '',
       `【不可遺忘原文】${clampBlock(h.prose, 1500)}`
     ].filter(Boolean);
@@ -5317,7 +5338,7 @@ ${characterPromptBlock}
 
 5. 輸出必須為合法純 JSON 格式（不要包含任何 markdown 標記）：
 {
-  "chapterTitle": "第 1 回．【原創吸睛標題】",
+  "chapterTitle": "原創章節標題（只寫標題，不要寫「第幾幕」「第幾回」）",
   "statusPanel": {
     "timeLocation": "具體時空地點（如：2026年5月12日 21:30 台北市士林區...）",
     "tension": 【依劇情張力給出 0~100 整數，初次見面高壓對峙約 60~75】,
@@ -5419,7 +5440,7 @@ ${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象'
 
 6. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼標記）：
 {
-  "chapterTitle": "第 1 幕 第 ${turnCount} 回：【全新章節標題】",
+  "chapterTitle": "全新章節標題（只寫標題，不要寫「第幾幕」「第幾回」，編號由系統標示）",
   "prose": "【800–1200 個中文字為建議範圍；緊接玩家行動，完成一個有因果的戲劇節拍並保留具體餘波；不截斷、不灌水、不解釋潛台詞】",
   "statusPanel": {
     "timeLocation": "時空地點",
@@ -6024,11 +6045,11 @@ function renderStoryStream(activeChapter) {
       <div class="border-b border-brand-border/40 pb-3">
         <div class="flex justify-between items-center mb-1">
           <div class="font-mono text-xs text-brand-gold tracking-widest uppercase bg-brand-gold/10 inline-block px-2 py-0.5 rounded border border-brand-gold/20">
-            第 ${escapeHtml(past.act || 1)} 幕 · 第 ${escapeHtml(past.turn || (i + 1))} 回合
+            ${escapeHtml(formatActTurn(past.act, past.turn || (i + 1)))}
           </div>
           ${past.timestamp ? `<span class="font-mono text-[11px] text-slate-500">${new Date(past.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>` : ''}
         </div>
-        <h2 class="font-serif text-xl sm:text-2xl font-black text-slate-100">${escapeHtml(past.chapterTitle || '未命名章節')}</h2>
+        <h2 class="font-serif text-xl sm:text-2xl font-black text-slate-100">${escapeHtml(displayChapterTitle(past))}</h2>
       </div>
       ${decisionPill}
       <article class="font-serif prose-tc is-past select-text">${paragraphsHtml}</article>
@@ -6062,10 +6083,10 @@ function renderStoryStream(activeChapter) {
     <div class="flex justify-between items-start gap-2 border-b border-brand-border pb-4">
       <div>
         <div class="inline-block font-mono text-xs text-brand-gold tracking-widest uppercase bg-brand-gold/10 border border-brand-gold/20 px-2.5 py-1 rounded mb-2">
-          第 ${escapeHtml(currentActNum)} 幕 · 第 ${escapeHtml(currentTurnNum)} 回合（最新進度）
+          ${escapeHtml(formatActTurn(currentActNum, currentTurnNum))}（最新進度）
         </div>
         <h1 class="font-serif text-2xl sm:text-3xl font-black text-white leading-tight">
-          ${escapeHtml(activeChapter.chapterTitle || '未命名章節')}
+          ${escapeHtml(displayChapterTitle(activeChapter))}
         </h1>
       </div>
 
@@ -6394,8 +6415,8 @@ function renderChapterNavList() {
     const summary = ch.turnSummary || summaryByTurn.get(Number(turn)) || '';
     row.innerHTML = `
       <div class="flex items-start gap-2">
-        <span class="font-mono text-[10px] shrink-0 opacity-70 mt-0.5">第 ${ch.act || 1}-${turn} 回</span>
-        <span class="font-serif font-bold break-words min-w-0">${escapeHtml(ch.chapterTitle || '未命名章節')}</span>
+        <span class="font-mono text-[10px] shrink-0 opacity-70 mt-0.5">${formatActTurn(ch.act, turn)}</span>
+        <span class="font-serif font-bold break-words min-w-0">${escapeHtml(displayChapterTitle(ch))}</span>
         ${isCurrent ? '<span class="ml-auto text-[10px] font-mono shrink-0">目前</span>' : ''}
       </div>
       ${summary ? `<div class="mt-1 text-[11px] leading-relaxed text-slate-400">${escapeHtml(summary)}</div>` : ''}
@@ -6509,12 +6530,12 @@ function updateHomeContinueCard() {
     const profile = getActivePlayerProfile();
     const act = state.saveState?.meta?.currentAct || 1;
     const turn = state.saveState?.turnCount || 1;
-    const title = state.chapterData.chapterTitle || `第 ${turn} 回`;
+    const title = displayChapterTitle(state.chapterData, formatActTurn(act, turn));
     desc.textContent = title;
     if (meta) {
       meta.style.display = 'flex';
       meta.innerHTML = `
-        <span class="px-2 py-0.5 rounded bg-sky-950/60 border border-sky-700/50 text-sky-300 font-mono">第 ${act} 幕 · 第 ${turn} 回</span>
+        <span class="px-2 py-0.5 rounded bg-sky-950/60 border border-sky-700/50 text-sky-300 font-mono">${formatActTurn(act, turn)}</span>
         <span class="px-2 py-0.5 rounded bg-brand-gold/15 border border-brand-gold/30 text-brand-gold">${uiIcon('target')} ${escapeHtml(profile.targetLeadName || '修羅場')}</span>
         <span class="text-slate-500">${escapeHtml(profile.name || '主角')}</span>
       `;
@@ -7030,7 +7051,7 @@ function renderMemoryCenter() {
   const pinnedHtml = pinned.length ? pinned.map(ch => `
     <article class="p-3 rounded-xl bg-brand-card border border-brand-border space-y-1.5">
       <div class="flex items-center justify-between gap-2">
-        <strong class="font-serif text-brand-gold">第 ${escapeHtml(ch.turn || '?')} 回 · ${escapeHtml(ch.chapterTitle || '重要回合')}</strong>
+        <strong class="font-serif text-brand-gold">${escapeHtml(formatActTurn(ch.act, ch.turn))} · ${escapeHtml(displayChapterTitle(ch, '重要回合'))}</strong>
         <button class="memory-unpin-btn text-[11px] text-rose-500 hover:text-rose-700 cursor-pointer" data-turn="${escapeHtml(ch.turn || '')}">取消釘選</button>
       </div>
       ${ch.chosenLabel ? `<div class="text-slate-500">玩家行動：${escapeHtml(ch.chosenLabel)}</div>` : ''}
@@ -7110,7 +7131,7 @@ function toggleMemoryPin(turn, forceValue) {
 function createCurrentStoryFork() {
   if (!state.chapterData) return notifyUser('目前尚無進度可建立分歧。', 'error');
   const turn = state.saveState?.turnCount || state.chapterData.turn || 1;
-  const title = String(state.chapterData.chapterTitle || '未命名章節').replace(/^第[^：:]*[：:]?\s*/, '').slice(0, 28);
+  const title = displayChapterTitle(state.chapterData).slice(0, 28);
   const name = `分歧・第${turn}回・${title}`;
   return createNamedSave(name, { branchOrigin: { turn, title: state.chapterData.chapterTitle || '' } });
 }
@@ -7258,7 +7279,7 @@ function renderSaveArchivesList() {
     const p = state.playerProfile || state.saveState?.meta?.playerProfile || {};
     const turn = state.saveState?.turnCount || 1;
     const lead = p.targetLeadName || p.targetLead || '主線';
-    const title = state.chapterData.chapterTitle || `第 ${turn} 回`;
+    const title = displayChapterTitle(state.chapterData, `第 ${turn} 回`);
     const snippet = (state.chapterData.prose || '').replace(/\n+/g, ' ').slice(0, 110) + '……';
 
     const activeCard = document.createElement('div');
@@ -7340,7 +7361,7 @@ function renderSaveArchivesList() {
     const p = s.playerProfile || {};
     const turn = s.turnCount || 1;
     const lead = p.targetLeadName || p.targetLead || '主線';
-    const chTitle = s.chapterTitle || `第 ${turn} 回`;
+    const chTitle = stripChapterNumbering(s.chapterTitle) || `第 ${turn} 回`;
     const snippet = s.chapterData?.prose ? (s.chapterData.prose.replace(/\n+/g, ' ').slice(0, 110) + '……') : '（已儲存之分支劇情節點）';
     const tension = s.saveState?.status?.tension || s.saveState?.tension || 0;
     const tipsy = s.saveState?.status?.tipsy || s.saveState?.tipsy || 0;
@@ -7997,7 +8018,7 @@ async function handleActRebase() {
     `# 第 ${actNumber} 幕幕篇檔案（本機濃縮）`,
     clampBlock(state.saveState.summaryPool || '尚無長期摘要。', 1200),
     '## 幕末銜接',
-    recent.map(ch => `- 第 ${ch.turn || '?'} 回 ${ch.chapterTitle || ''}：${ch.turnSummary || String(ch.prose || '').slice(0, 160)}`).join('\n')
+    recent.map(ch => `- ${formatActTurn(ch.act, ch.turn)} ${displayChapterTitle(ch, '')}：${ch.turnSummary || String(ch.prose || '').slice(0, 160)}`).join('\n')
   ].join('\n\n');
 
   showLoading('正在整理故事記憶……', '系統會保留人物關係、數值、物品與重要情節。');
@@ -8010,7 +8031,7 @@ async function handleActRebase() {
       .filter(Boolean).join('\n');
     const facts = getMemoryBank().filter(m => m.kind === 'fact')
       .slice(-60).map(m => `第 ${m.turn} 回：${m.text}`).join('\n');
-    const tail = recent.map(ch => `── 第 ${ch.turn || '?'} 回 ${ch.chapterTitle || ''} ──\n${clampBlock(ch.prose, 900)}`).join('\n');
+    const tail = recent.map(ch => `── ${formatActTurn(ch.act, ch.turn)} ${displayChapterTitle(ch, '')} ──\n${clampBlock(ch.prose, 900)}`).join('\n');
     const raw = await requestWorkerCompletion({
       model: LLM_CONFIG.SUMMARY_MODEL,
       system: '你是長篇小說的編輯，負責在換幕時撰寫「幕篇檔案」，讓下一幕能無縫承接。使用台灣繁體中文，只輸出檔案內容。'

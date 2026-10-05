@@ -126,9 +126,9 @@ const recentHistoryPrompt = vm.runInContext(`buildRecentHistoryBlock([
   { turn: 3, prose: '第三回' }, { turn: 4, prose: '第四回' },
   { turn: 5, prose: '第五回' }, { turn: 6, prose: '第六回' }
 ])`, frontendContext);
-assert.doesNotMatch(recentHistoryPrompt, /── 第 1 回：/, '近期全文視窗錯誤保留了第 6 回以前的內容');
+assert.doesNotMatch(recentHistoryPrompt, /── 第 1 幕 · 第 1 回：/, '近期全文視窗錯誤保留了第 6 回以前的內容');
 assert.match(recentHistoryPrompt, /最近 5 回全文/, '近期全文視窗沒有保留 5 回');
-assert.match(recentHistoryPrompt, /── 第 2 回：[\s\S]*── 第 6 回：/, '近期全文視窗未正確包含最後 5 回');
+assert.match(recentHistoryPrompt, /── 第 1 幕 · 第 2 回：[\s\S]*── 第 1 幕 · 第 6 回：/, '近期全文視窗未正確包含最後 5 回');
 
 const pinnedPrompt = vm.runInContext(`buildPinnedMemoryBlock([
   { turn: 2, chapterTitle: '未釘選', prose: '不應出現', memoryPinned: false },
@@ -1080,5 +1080,18 @@ assert.match(rootApp, /await repairPassiveEnding\(chapter, model\);/, '結尾改
   assert.strictEqual(none.length, 0, '不重複的句子被誤判');
   assert.match(rootApp, /await repairRepeatedPassages\(chapter, model\);/, '重複段落改寫未接入 finalizeChapter');
 }
+
+// 幕與回的編號只由遊戲進度決定，模型寫在標題裡的編號一律去掉
+for (const [raw, want] of [
+  ['第 1 幕 第 15 回：雨夜的證詞', '雨夜的證詞'],
+  ['第 1 回．【露臺上的名片】', '露臺上的名片'],
+  ['第三幕・第十二回 暗流', '暗流'],
+  ['【第2幕】【第7回】交易', '交易'],
+  ['他說的第 3 回合', '他說的第 3 回合']
+]) {
+  assert.strictEqual(vm.runInContext(`stripChapterNumbering(${JSON.stringify(raw)})`, frontendContext), want, `標題編號清除錯誤：${raw}`);
+}
+assert.strictEqual(vm.runInContext(`formatActTurn(2, 15)`, frontendContext), '第 2 幕 · 第 15 回', '幕回標籤格式錯誤');
+assert.doesNotMatch(rootApp, /"chapterTitle": "第 1 幕 第/, '提示詞範本仍要求模型寫死第 1 幕');
 
 console.log('所有本機偵錯檢查皆已通過。');
