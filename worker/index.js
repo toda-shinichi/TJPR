@@ -29,7 +29,8 @@ const EMBEDDING_MODEL = '@cf/baai/bge-m3';
 const PINNED_PROVIDERS = {
   // 2026-10-03 實測（強制 JSON＋關思考）：parasail 平均 5–7 秒、111 字／秒、3/3 完整可用，
   // 比 streamlake／sail-research 快 2.5 倍以上；novita 次之但曾只寫 128 字。
-  'deepseek/deepseek-v4-flash-0731': ['parasail/fp8', 'novita/fp8', 'streamlake/fp8'],
+  // 2026-10-06：移除 novita（0.41／1.23 美元，約 parasail 的 3 倍）；streamlake 最便宜（0.044／0.132），較慢但可用。
+  'deepseek/deepseek-v4-flash-0731': ['parasail/fp8', 'streamlake/fp8'],
   // 實測 streamlake 2/2 完整可用、分數 100、11.6 秒
   'qwen/qwen3-30b-a3b-instruct-2507': ['streamlake', 'dekallm', 'siliconflow/fp8'],
   // 2026-10-03 實測：gmicloud 12.3s／分數 100／最便宜、parasail 11.1s 最快但篇幅偏短、
@@ -550,9 +551,10 @@ async function recordUsage(env, entry) {
   try {
     await env.USAGE_DB.batch([
       env.USAGE_DB.prepare(
-        'INSERT INTO usage (ts, user_id, email, kind, model, prompt_tokens, completion_tokens, cost, status, duration_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)'
+        'INSERT INTO usage (ts, user_id, email, kind, model, prompt_tokens, completion_tokens, cost, status, duration_ms, cached_tokens) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)'
       ).bind(entry.ts, entry.userId, entry.email || null, entry.kind, entry.model || null,
-        entry.promptTokens || 0, entry.completionTokens || 0, entry.cost || 0, entry.status || 0, entry.durationMs || 0),
+        entry.promptTokens || 0, entry.completionTokens || 0, entry.cost || 0, entry.status || 0, entry.durationMs || 0,
+        entry.cachedTokens || 0),
       env.USAGE_DB.prepare(
         'INSERT INTO players (user_id, email, first_seen, last_seen) VALUES (?1, ?2, ?3, ?3) ON CONFLICT(user_id) DO UPDATE SET last_seen = excluded.last_seen, email = COALESCE(excluded.email, players.email)'
       ).bind(entry.userId, entry.email || null, entry.ts)
@@ -1000,6 +1002,7 @@ export default {
         promptTokens: usage ? usage.prompt_tokens : 0,
         completionTokens: usage ? usage.completion_tokens : 0,
         cost: usage ? Number(usage.cost) || 0 : 0,
+        cachedTokens: usage && usage.prompt_tokens_details ? usage.prompt_tokens_details.cached_tokens || 0 : 0,
         status: upstream.status,
         durationMs: Date.now() - startedAt
       }));

@@ -4688,8 +4688,16 @@ function pushPersonaChunks(blocks, key, name) {
   chunks.forEach(text => blocks.push(text));
 }
 
-function assembleCharacterPromptBlock(primaryLeadKey, activeNPCs, isShura) {
+/**
+ * 組角色設定集。回傳 { stable, scene }：
+ * - stable：核心人設、硬性設定、在場配角簡介、背景名冊——同一場景的連續回合不變。
+ * - scene：依本回場景挑選的角色卡段落與演繹校準——每回可能不同。
+ * 分開是為了提示詞快取（2026-10-06）：供應商只快取「開頭完全相同」的部分，
+ * 先前這些每回變動的段落夾在固定段落中間，連續兩回只有開頭約 3,100 字能命中快取。
+ */
+function assembleCharacterPromptParts(primaryLeadKey, activeNPCs, isShura) {
   const blocks = [];
+  const sceneBlocks = [];
 
   if (isShura) {
     blocks.push('=== 【全勢力修羅場（核心）】 ===');
@@ -4706,7 +4714,7 @@ function assembleCharacterPromptBlock(primaryLeadKey, activeNPCs, isShura) {
     blocks.push('=== 【主要互動角色（核心主角）】 ===');
     blocks.push(formatCoreProfile(c));
     blocks.push(formatCanonRules(key));
-    pushPersonaChunks(blocks, key, c.name);
+    pushPersonaChunks(sceneBlocks, key, c.name);
     blocks.push('');
   }
 
@@ -4718,18 +4726,23 @@ function assembleCharacterPromptBlock(primaryLeadKey, activeNPCs, isShura) {
       blocks.push(`- 在場配角 ${idx + 1}：${c.fullName || npc.name}`);
       blocks.push(c.name ? formatCoreProfile(c, { compact: true }) : `  ${npc.role || ''} ${npc.oneLiner || ''}`);
       if (npc.id && CHARACTER_CANON_RULES[npc.id]) blocks.push(formatCanonRules(npc.id));
-      if (idx < LORE_TIER2_LIMIT && npc.id) pushPersonaChunks(blocks, npc.id, c.name || npc.name);
+      if (idx < LORE_TIER2_LIMIT && npc.id) pushPersonaChunks(sceneBlocks, npc.id, c.name || npc.name);
     });
     blocks.push('');
   }
 
-  return finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs);
+  return finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs, sceneBlocks);
+}
+
+function assembleCharacterPromptBlock(primaryLeadKey, activeNPCs, isShura) {
+  const parts = assembleCharacterPromptParts(primaryLeadKey, activeNPCs, isShura);
+  return [parts.stable, parts.scene].filter(Boolean).join('\n');
 }
 
 /**
  * 補上背景名冊與角色演繹校準。
  */
-function finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs) {
+function finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs, sceneBlocks = []) {
 
   const activeIds = (activeNPCs || []).map(n => n.id);
   if (primaryLeadKey) activeIds.push(primaryLeadKey);
@@ -4752,8 +4765,8 @@ function finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs) {
     || primaryLeadKey === '修羅場'
     || (activeNPCs || []).some(npc => npc.id === '01_徐令謙' || npc.name === '徐令謙');
   if (requiresXuCalibration) {
-    blocks.push('');
-    blocks.push(`=== 【徐令謙最新演繹校準（最高優先，覆蓋角色卡舊版用語）】 ===
+    sceneBlocks.push('');
+    sceneBlocks.push(`=== 【徐令謙最新演繹校準（最高優先，覆蓋角色卡舊版用語）】 ===
 若前方人物卡或快取文字與本段衝突，一律視為舊版並以本段為準：
 1. 徐令謙對所有人都克制、壓抑、紀律嚴明；語句簡潔、不油條、不浮誇、不吼叫、不以逞兇鬥狠展示份量。
 2. 唯獨面對玩家，他會控制不住。他用自己的方式主動：嘴上繞圈、說反話（「我只是順路」「別誤會」），行動卻一步不退——主動出現、主動靠近、主動吻她、主動留下。
@@ -4761,7 +4774,7 @@ function finishCharacterBlocks(blocks, primaryLeadKey, activeNPCs) {
 4. 平時紳士而篤定，不靠命令或威脅；情慾正濃、吃醋或危機等劇情氛圍需要時，可以強勢、直接下命令，用的仍是乾淨有教養的語言。他的權勢與危險主要用來處理外部威脅、守護她。`);
   }
 
-  return blocks.join('\n');
+  return { stable: blocks.join('\n'), scene: sceneBlocks.join('\n') };
 }
 
 const LITERARY_CLICHE_PATTERNS = [
@@ -5412,7 +5425,7 @@ function buildNextTurnPrompt(turnCount, choiceId, customInput, profile, historyL
 
   // 1. 動態偵測在場配角
   const activeNPCs = detectActiveNPCs(lastProseText, playerActionText, leadKey, profile.supportingLeads || []);
-  const characterPromptBlock = assembleCharacterPromptBlock(leadKey, activeNPCs, isShura);
+  const characterParts = assembleCharacterPromptParts(leadKey, activeNPCs, isShura);
 
   // 2. 上下文信封各區塊（見 CONTEXT_BUDGET 的說明）
   const playerBlock = buildPlayerProfileBlock(profile);
@@ -5432,8 +5445,6 @@ ${CHARACTER_IDENTITY_FIREWALL}
 3. 【嚴格對標專屬說話風格與語句】：必須嚴格參照各角色設定檔中的口吻與範例台詞。徐令謙必須冷靜、自持、紳士，台詞簡潔有份量，不油條、不浮誇、不逞兇鬥狠；對玩家尊重自主，以克制形成張力，力量只朝向外部風險。不得把冷靜寫成冷酷、保護寫成控制、佔有慾寫成剝奪自由。
 4. 【血緣與親情既定事實】：楊慕璃與二哥楊紹宸同住陽明山大宅，熟知彼此生活習慣，嚴禁任何初次見面的陌生化描寫！
 
-${literaryCraftBlock}
-
 請嚴格遵守《情慾文學指引》與《系統核心指令》：
 1. 嚴格依據玩家最新行動推進。prose 建議 800–1200 個中文字，依場景自然增減；每回都要有實質推進（關係更進一步、事件發生或真相揭露），不能整回停在試探、對峙或寒暄；不截斷、不灌水。
 2. 描寫要求：本作以情慾與戀愛為核心，權謀與職場是背景與阻力。以人物慾望、主動、距離變化、對話潛台詞及具體感官細節推動感情線；不得只提高形容詞強度，使用純台灣繁體中文。
@@ -5446,8 +5457,7 @@ ${literaryCraftBlock}
    - intoxication（微醺度 0~100）：【物理法則】只有在正文中實際喝了酒才會增加（一杯酒+15~20）；若無任何飲酒情節，微醺度保持原值或隨時間代謝衰減 5%！
 ${FEATURES.favorability ? '   - favorabilityDelta（好感度變動 -5~+10）：依據主角此舉是否合乎該男主性格給予增減（精準博弈 +2~+5，重大浪漫/致命共犯 +8~+10，失誤冒犯 -2~-5）。' + '\n' : ''}   - 【線索與籌碼狀態機】：只能操作【當前數值狀態】列出的可用線索 ID。正文真的取得新線索才放入 intelDelta.add；使用、公開、交付、證偽既有線索時，必須在 intelDelta.update 更新 status 或 confidence。沒有變動時兩個陣列都留空。
 5. 【三層角色設定集】：
-${characterPromptBlock}
-${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象')}
+${characterParts.stable}
 
 6. 輸出必須為合法純 JSON 格式（不要包含 markdown 代碼標記）：
 {
@@ -5480,7 +5490,13 @@ ${FEATURES.favorability ? `    "relationshipChanges": { "${profile.targetLeadNam
     { "id": "B", "label": "[B] 【25–60 字：不同策略的一個行動＋必要對白】", "risk": "medium", "hint": "【10–24 字提示】" },
     { "id": "C", "label": "[C] 【25–60 字：高風險破局行動＋必要對白】", "risk": "high", "hint": "【10–24 字提示】" }
   ]
-}`;
+}
+
+=== 【本回場景補充（依本回情境挑選，與上方設定同等權威）】 ===
+${characterParts.scene}
+${buildLoreRecalibrationNote(turnCount, profile.targetLeadName || '主要對象')}
+
+${literaryCraftBlock}`;
 
   // 由遠而近排列：幕篇檔案 → 摘要池 → 近期全文 → 當前數值 → 本回行動。
   // 最新且最需要精準銜接的資訊放在結尾，模型對結尾的注意力最強。

@@ -301,12 +301,12 @@ assert.ok(vm.runInContext("formatCanonRules('02_韓正寰')", frontendContext).i
 const chunks = vm.runInContext("splitCharacterCard('# 測試\\n\\n⚖️ 基本資料\\n\\n' + '他是檢察官。'.repeat(60) + '\\n\\n' + '他不戴眼鏡。'.repeat(60))", frontendContext);
 assert.ok(chunks.length >= 2 && chunks.every(c => c.length <= 560), '角色卡切段長度異常');
 assert.match(
-  vm.runInContext("finishCharacterBlocks([], '01_徐令謙', [])", frontendContext),
+  vm.runInContext("finishCharacterBlocks([], '01_徐令謙', []).scene", frontendContext),
   /權勢與危險主要用來處理外部威脅、守護她/,
   '徐令謙作為主角時未套用最終演繹校準'
 );
 assert.match(
-  vm.runInContext("finishCharacterBlocks([], '修羅場', [])", frontendContext),
+  vm.runInContext("finishCharacterBlocks([], '修羅場', []).scene", frontendContext),
   /唯獨面對玩家，他會控制不住/,
   '修羅場模式未套用徐令謙最終演繹校準'
 );
@@ -1098,5 +1098,16 @@ assert.doesNotMatch(rootApp, /"chapterTitle": "第 1 幕 第/, '提示詞範本�
 assert.ok(vm.runInContext(`isQuotaExhaustedResponse(403, '{"error":{"message":"Key limit exceeded (total limit)."}}')`, frontendContext), '未辨識金鑰額度用完');
 assert.ok(vm.runInContext(`isQuotaExhaustedResponse(402, '')`, frontendContext), '未辨識餘額不足');
 assert.ok(!vm.runInContext(`isQuotaExhaustedResponse(429, 'rate limited')`, frontendContext), '一般限流被誤判為額度用完');
+
+// 提示詞快取：每回變動的段落必須在系統提示詞的固定段落之後
+{
+  const sp = vm.runInContext(`buildNextTurnPrompt(3, 'A', '看著他', { name: '楊慕璃', gender: '女', targetLead: '01_徐令謙', targetLeadName: '徐令謙', allowR18: true }, [{ turn: 2, prose: '徐令謙站在窗邊。', choices: [] }], '', { turnCount: 3, meta: { currentAct: 1 } })`, frontendContext).systemPrompt;
+  const schema = sp.indexOf('輸出必須為合法純 JSON 格式');
+  assert.ok(schema > 0 && sp.indexOf('本回文學敘事規格') > schema, '本回文學敘事規格應移到固定段落之後');
+  // 測試環境沒有載入角色卡全文時不會有這一段；有的話必須在固定段落之後
+  assert.ok(sp.indexOf('角色卡相關段落') === -1 || sp.indexOf('角色卡相關段落') > schema, '依場景挑選的角色卡段落應移到固定段落之後');
+  assert.ok(sp.indexOf('本回場景補充') > schema, '缺少本回場景補充區');
+  assert.ok(sp.indexOf('【主要互動角色（核心主角）】') < schema, '核心人設應留在固定段落');
+}
 
 console.log('所有本機偵錯檢查皆已通過。');
