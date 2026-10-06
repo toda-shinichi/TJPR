@@ -869,7 +869,7 @@ function toIsoOrEmpty(value) {
  * 授權後所有部署版本都會沿用，不需要重新部署。
  */
 function authorizeMailOnce() {
-  var to = Session.getEffectiveUser().getEmail();
+  var to = CONFIG.ADMIN.EMAIL;
   MailApp.sendEmail(to, '【暗流】寄信權限已授權', '這封信代表《暗流》後台已經可以寄出玩家回報與錯誤通知。今日剩餘寄信額度：' + MailApp.getRemainingDailyQuota());
   return to;
 }
