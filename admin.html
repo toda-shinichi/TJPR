@@ -126,7 +126,7 @@
   var label = function (u) { return u.email || u.userId; };
   var DAY = 86400000;
   var INACTIVE_DAYS = 30;
-  var TEST_EMAIL = /(^|[._+\-])(test|tester|testing|demo|guest|dummy|sample|tmp|temp)\d*([._+@\-]|$)|@example\.|@undercurrent\.game$|@epilogue\.internal$|^master_admin$/i;
+  var TEST_EMAIL = /(^|[._+\-])(test|tester|testing|demo|guest|dummy|sample|tmp|temp)\d*([._+@\-]|$)|@example\.|@epilogue\.internal$|^master_admin$/i;
   var lastData = null;
   var token = function () { try { return localStorage.getItem('undercurrent_auth_token') || ''; } catch (e) { return ''; } };
 
