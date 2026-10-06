@@ -288,10 +288,13 @@ var TelemetryService = (function() {
         safeSheetCell(diagnostics, 8000)
       ]);
 
-      // 嘗試寄送 Email 通知管理員（失敗不阻斷流程）
+      // 嘗試寄送 Email 通知管理員（失敗不阻斷流程）；寄信結果回傳給前端，方便排查
+      var mailStatus = 'skipped';
       try {
         var adminEmail = getAdminEmail();
-        if (adminEmail && shouldSendMailNotification('FB|' + contact + '|' + content.slice(0, 120))) {
+        if (!adminEmail) mailStatus = 'no-admin-email';
+        else if (!shouldSendMailNotification('FB|' + contact + '|' + content.slice(0, 120))) mailStatus = 'throttled';
+        if (adminEmail && mailStatus === 'skipped') {
           var subject = '💬【暗流回饋】收到新的玩家意見 - ' + category + ' (' + contact + ')';
           var body = [
             '《暗流》收到新的玩家意見回饋：',
@@ -312,12 +315,16 @@ var TelemetryService = (function() {
           ].join('\n');
 
           MailApp.sendEmail(adminEmail, subject, body);
+          mailStatus = 'sent';
         }
       } catch (mailErr) {
+        mailStatus = 'error: ' + mailErr.message;
         console.warn('Mail notification failed: ' + mailErr.message);
       }
 
-      return { success: true, submittedAt: nowStr, sheetUrl: ss.getUrl() };
+      var quotaLeft = -1;
+      try { quotaLeft = MailApp.getRemainingDailyQuota(); } catch (qErr) { /* 無寄信權限時讀不到 */ }
+      return { success: true, submittedAt: nowStr, sheetUrl: ss.getUrl(), mailStatus: mailStatus, mailQuotaLeft: quotaLeft };
     } catch (err) {
       console.error('Telemetry submitFeedback failed: ' + err.message);
       return { success: false, error: err.message };

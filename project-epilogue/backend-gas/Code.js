@@ -862,3 +862,14 @@ function toIsoOrEmpty(value) {
   var d = value instanceof Date ? value : new Date(value);
   return isNaN(d.getTime()) ? String(value) : d.toISOString();
 }
+
+/**
+ * 在 Apps Script 編輯器執行一次，授權寄信權限（script.send_mail）。
+ * 2026-10-06：玩家回報信從未寄出，原因是擁有者帳號從未授權寄信。
+ * 授權後所有部署版本都會沿用，不需要重新部署。
+ */
+function authorizeMailOnce() {
+  var to = Session.getEffectiveUser().getEmail();
+  MailApp.sendEmail(to, '【暗流】寄信權限已授權', '這封信代表《暗流》後台已經可以寄出玩家回報與錯誤通知。今日剩餘寄信額度：' + MailApp.getRemainingDailyQuota());
+  return to;
+}
