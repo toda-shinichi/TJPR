@@ -313,8 +313,11 @@ assert.match(
 assert.doesNotMatch(rootApp, /text-\[#d8dbe6\]/, '最新回合仍使用深色主題遺留的低對比淺字');
 assert.match(css, /#stream-prose-content\s*\{[\s\S]*?color:\s*#3e363a\s*!important/, '最新回合正文缺少高對比色保護');
 assert.match(rootApp, /PRIMARY_MODEL: 'deepseek\/deepseek-v4-flash-0731'/, '一般鏈主力不是 deepseek-v4-flash');
-assert.match(rootApp, /PRIMARY_MODEL: 'qwen\/qwen3-30b-a3b-instruct-2507'/, '露骨鏈主力不是 qwen3-30b-a3b');
-assert.strictEqual((rootApp.match(/800–1200 個中文字/g) || []).length, 4, '開局與續回的文學篇幅目標未完整更新');
+assert.match(rootApp, /PRIMARY_MODEL: 'tencent\/hy3'/, '露骨鏈主力不是 hy3');
+assert.match(rootApp, /FALLBACK_MODELS: \['qwen\/qwen3-30b-a3b-instruct-2507'\]/, '露骨鏈備援不是 qwen3-30b-a3b');
+assert.strictEqual((rootApp.match(/800–1200 個中文字/g) || []).length, 2, '開局提示詞的文學篇幅目標未完整更新');
+assert.match(rootApp, /篇幅依結尾【本回情慾尺度】的要求/, '續回篇幅未改由情慾尺度區塊決定');
+assert.match(rootApp, /正文至少 1,000 字，建議 1,100–1,500 字/, '露骨篇幅要求未更新');
 assert.doesNotMatch(rootApp, /字數上限強制執行|600~800 個中文字/, '前端提示詞仍殘留硬性字數上限');
 assert.match(rootApp, /完成一個實質改變局勢或關係的戲劇節拍[\s\S]*不截斷、不灌水、不套固定模板/, '開局提示詞缺少戲劇節拍與避免灌水規則');
 assert.match(rootApp, /每回都要有實質推進（關係更進一步、事件發生或真相揭露），不能整回停在試探、對峙或寒暄；不截斷、不灌水/, '續回提示詞缺少推進與避免灌水規則');
@@ -350,7 +353,6 @@ assert.match(gasConfig, /PRIMARY: 'deepseek\/deepseek-v4-flash-0731'/, 'GAS 一�
 assert.match(rootApp, /PRIMARY_MAX_ATTEMPTS: 2/, '主模型重試次數不是 2 次');
 assert.match(rootApp, /FALLBACK_MAX_ATTEMPTS: 2/, '備援重試次數不是 2 次');
 assert.match(rootApp, /FALLBACK_MODELS: \['qwen\/qwen3-235b-a22b-2507'\]/, '一般鏈備援不是 qwen3-235b');
-assert.match(rootApp, /FALLBACK_MODELS: \['tencent\/hy3'\]/, '露骨鏈備援不是 hy3');
 // 品質問題改為就地修補與下一回回饋，不再整章重跑（見 finalizeChapter）
 assert.match(rootApp, /async function finalizeChapter\(chapter, model\)/, '缺少生成結果分流處理');
 // 舊名 UNCENSORED_FALLBACK_MODELS 會誤導：鏈上並非全是未審查模型
@@ -400,8 +402,8 @@ assert.deepStrictEqual(
 const spicyPlan = vm.runInContext('buildAttemptPlan("spicy")', frontendContext);
 assert.deepStrictEqual(
   Array.from(spicyPlan),
-  ['qwen/qwen3-30b-a3b-instruct-2507', 'qwen/qwen3-30b-a3b-instruct-2507',
-   'tencent/hy3', 'tencent/hy3'],
+  ['tencent/hy3', 'tencent/hy3',
+   'qwen/qwen3-30b-a3b-instruct-2507', 'qwen/qwen3-30b-a3b-instruct-2507'],
 
   '露骨鏈嘗試計畫順序錯誤'
 );
@@ -952,7 +954,7 @@ const spicyBlock = vm.runInContext("buildContentModeBlock('spicy', true)", front
 const normalBlock = vm.runInContext("buildContentModeBlock('normal', true)", frontendContext);
 const r18OffBlock = vm.runInContext("buildContentModeBlock('spicy', false)", frontendContext);
 assert.match(spicyBlock, /必須發生實際的性行為/, '露骨模式未要求必須發生性行為');
-assert.match(spicyBlock, /至少 700 字/, '露骨模式未要求篇幅');
+assert.match(spicyBlock, /至少 1,000 字/, '露骨模式未要求篇幅');
 assert.match(spicyBlock, /不是要迴避或淡化情慾內容/, '未釐清文風守則的「克制」不等於迴避情慾');
 assert.match(normalBlock, /允許情慾與親密內容/, '一般模式未允許情慾內容');
 assert.match(normalBlock, /不使用性器官的名稱/, '一般模式未限制為文學筆法');
@@ -1108,6 +1110,19 @@ assert.ok(!vm.runInContext(`isQuotaExhaustedResponse(429, 'rate limited')`, fron
   assert.ok(sp.indexOf('角色卡相關段落') === -1 || sp.indexOf('角色卡相關段落') > schema, '依場景挑選的角色卡段落應移到固定段落之後');
   assert.ok(sp.indexOf('本回場景補充') > schema, '缺少本回場景補充區');
   assert.ok(sp.indexOf('【主要互動角色（核心主角）】') < schema, '核心人設應留在固定段落');
+}
+
+// 作者寫作守則：提示詞、用語替換與 AI 腔偵測
+assert.match(rootApp, /\$\{TW_FICTION_STYLE_RULES\}\n\n請嚴格遵守《情慾文學指引》/, '續回提示詞缺少台灣中文與去 AI 感規則');
+assert.strictEqual(vm.runInContext(`applyTaiwanTerms('他用筆記本電腦打開視頻，入職第一天')`, frontendContext), '他用筆電打開影片，到職第一天', '台灣用語替換錯誤');
+assert.strictEqual(vm.runInContext(`applyTaiwanTerms('她在酒店工作過，拿捏分寸，大佬點頭')`, frontendContext), '她在酒店工作過，拿捏分寸，大佬點頭', '台灣正常用法被誤換');
+{
+  const issues = vm.runInContext(`detectAiFlavor('此外，這份極致的張力讓她入局。「說真的，你完美。」')`, frontendContext).join('｜');
+  assert.match(issues, /誇大詞：極致/, '未偵測誇大詞');
+  assert.match(issues, /評論行話：張力/, '未偵測評論行話');
+  assert.match(issues, /「局」「刀」比喻：入局/, '未偵測局的比喻');
+  assert.match(issues, /模板銜接或假坦白：此外/, '未偵測模板銜接');
+  assert.doesNotMatch(issues, /完美|說真的/, '對白內的用詞不應被當成旁白問題');
 }
 
 console.log('所有本機偵錯檢查皆已通過。');
