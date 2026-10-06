@@ -2424,6 +2424,12 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
           throw createQueueRetryError(model);
         }
 
+        // AI 額度用完（OpenRouter 金鑰達到上限或餘額不足）：換模型也沒用，直接說明並停止重試。
+        // 2026-10-06 玩家回報「卡住」：金鑰總額度用完，前端仍輪流重試四個模型，畫面只顯示一般錯誤。
+        if (isQuotaExhaustedResponse(response.status, errBody)) {
+          notifyUser('遊戲的 AI 額度暫時用完了，已通知管理員補充。你的進度都還在，補充後就能接著玩。', 'error', 12000);
+          throw createQueueUnavailableError('AI quota exhausted');
+        }
         if (isRateLimitedResponse(errBody)) throw createRateLimitError(model, errBody);
         if (isModelUnavailableResponse(errBody)) throw createModelUnavailableError(model, errBody);
         throw new Error(`Worker HTTP ${response.status}${errBody ? ': ' + errBody.slice(0, 120) : ''}`);
@@ -2660,6 +2666,11 @@ function createQueueRetryError(model) {
   const err = new Error(`Model ${model} queued`);
   err.isQueueRetry = true;
   return err;
+}
+
+function isQuotaExhaustedResponse(status, body) {
+  const text = String(body || '');
+  return status === 402 || /Key limit exceeded|Insufficient credits|credit limit|quota exceeded/i.test(text);
 }
 
 function createQueueUnavailableError(detail) {

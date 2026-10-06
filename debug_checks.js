@@ -1094,4 +1094,9 @@ for (const [raw, want] of [
 assert.strictEqual(vm.runInContext(`formatActTurn(2, 15)`, frontendContext), '第 2 幕 · 第 15 回', '幕回標籤格式錯誤');
 assert.doesNotMatch(rootApp, /"chapterTitle": "第 1 幕 第/, '提示詞範本仍要求模型寫死第 1 幕');
 
+// AI 額度用完時直接停止重試
+assert.ok(vm.runInContext(`isQuotaExhaustedResponse(403, '{"error":{"message":"Key limit exceeded (total limit)."}}')`, frontendContext), '未辨識金鑰額度用完');
+assert.ok(vm.runInContext(`isQuotaExhaustedResponse(402, '')`, frontendContext), '未辨識餘額不足');
+assert.ok(!vm.runInContext(`isQuotaExhaustedResponse(429, 'rate limited')`, frontendContext), '一般限流被誤判為額度用完');
+
 console.log('所有本機偵錯檢查皆已通過。');
