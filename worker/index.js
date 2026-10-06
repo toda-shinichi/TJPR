@@ -611,10 +611,47 @@ function splitSessions(timestamps) {
   return sessions.map(s => ({ ...s, durationMs: s.end - s.start + SESSION_TAIL_MS }));
 }
 
+/**
+ * OpenRouter 金鑰的額度狀態。/key 回報這把金鑰的上限與已用量；
+ * /credits 回報帳戶總儲值與總用量（部分金鑰沒有權限讀，失敗就略過）。
+ */
+async function fetchOpenRouterBalance(env) {
+  const headers = { 'Authorization': `Bearer ${env.API_KEY}` };
+  const read = async url => {
+    try {
+      const res = await fetch(url, { headers });
+      if (!res.ok) return { error: `HTTP ${res.status}` };
+      const body = await res.json();
+      return body && body.data ? body.data : { error: 'empty response' };
+    } catch (err) {
+      return { error: err.message };
+    }
+  };
+  const [key, credits] = await Promise.all([
+    read('https://openrouter.ai/api/v1/key'),
+    read('https://openrouter.ai/api/v1/credits')
+  ]);
+  return {
+    key: key.error ? { error: key.error } : {
+      label: key.label || '',
+      limit: key.limit,
+      usage: key.usage,
+      limitRemaining: key.limit_remaining,
+      usageDaily: key.usage_daily,
+      usageWeekly: key.usage_weekly,
+      usageMonthly: key.usage_monthly
+    },
+    account: credits.error ? { error: credits.error } : {
+      totalCredits: credits.total_credits,
+      totalUsage: credits.total_usage
+    }
+  };
+}
+
 async function buildAdminStats(env) {
   const db = env.USAGE_DB;
   const now = Date.now();
-  const [players, totals, chapters, models] = await Promise.all([
+  const [players, totals, chapters, models, hidden, openrouter] = await Promise.all([
     db.prepare('SELECT user_id, email, first_seen, last_seen FROM players').all(),
     db.prepare(`SELECT user_id, COUNT(*) AS requests,
         SUM(CASE WHEN kind = 'chapter' AND status BETWEEN 200 AND 299 THEN 1 ELSE 0 END) AS turns,
@@ -623,7 +660,9 @@ async function buildAdminStats(env) {
     db.prepare(`SELECT user_id, ts FROM usage WHERE kind = 'chapter' AND status BETWEEN 200 AND 299
         AND ts >= ?1 ORDER BY user_id, ts`).bind(now - 90 * 24 * 3600 * 1000).all(),
     db.prepare(`SELECT model, COUNT(*) AS requests, SUM(prompt_tokens + completion_tokens) AS tokens,
-        SUM(cost) AS cost FROM usage GROUP BY model ORDER BY cost DESC`).all()
+        SUM(cost) AS cost FROM usage GROUP BY model ORDER BY cost DESC`).all(),
+    db.prepare('SELECT user_id FROM admin_hidden').all().catch(() => ({ results: [] })),
+    fetchOpenRouterBalance(env)
   ]);
   const byUser = new Map();
   (players.results || []).forEach(p => byUser.set(p.user_id, {
@@ -657,7 +696,9 @@ async function buildAdminStats(env) {
     onlineWindowMinutes: ONLINE_WINDOW_MS / 60000,
     sessionGapMinutes: SESSION_GAP_MS / 60000,
     users,
-    models: models.results || []
+    models: models.results || [],
+    hiddenIds: (hidden.results || []).map(r => r.user_id),
+    openrouter
   };
 }
 
@@ -671,6 +712,19 @@ async function handleAdmin(request, env, origin, viaSharedKey) {
     return json({ error: { message: '這個帳號沒有管理權限。' } }, 403, origin);
   }
   if (!env.USAGE_DB) return json({ error: { message: '尚未設定用量資料庫。' } }, 500, origin);
+  // 手動隱藏／取消隱藏帳號：只影響後台顯示，不刪除帳號或紀錄
+  let body = {};
+  try { body = await request.json(); } catch (ignore) { /* 空 body 視為單純查詢 */ }
+  const ids = list => (Array.isArray(list) ? list : []).map(String).filter(id => id && id.length <= 200).slice(0, 200);
+  const toHide = ids(body.hide);
+  const toUnhide = ids(body.unhide);
+  if (toHide.length || toUnhide.length) {
+    const now = Date.now();
+    await env.USAGE_DB.batch([
+      ...toHide.map(id => env.USAGE_DB.prepare('INSERT OR REPLACE INTO admin_hidden (user_id, hidden_at) VALUES (?1, ?2)').bind(id, now)),
+      ...toUnhide.map(id => env.USAGE_DB.prepare('DELETE FROM admin_hidden WHERE user_id = ?1').bind(id))
+    ]);
+  }
   try {
     return json({ success: true, data: await buildAdminStats(env) }, 200, origin);
   } catch (error) {

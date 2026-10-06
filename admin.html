@@ -35,6 +35,13 @@
   .error { border-color: var(--red); color: var(--red); }
   a { color: var(--gold); }
   button { background: transparent; color: var(--gold); border: 1px solid var(--gold); border-radius: 6px; padding: 4px 12px; cursor: pointer; font: inherit; font-size: 12px; }
+  .card.warn { border-color: var(--red); }
+  .card.warn .v { color: var(--red); }
+  tr.is-hidden td { opacity: .45; }
+  .tag { display: inline-block; font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 6px; }
+  button.mini { padding: 1px 8px; font-size: 11px; color: var(--muted); border-color: var(--line); }
+  button.mini:hover { color: var(--gold); border-color: var(--gold); }
+  label.toggle { color: var(--muted); font-size: 12px; cursor: pointer; user-select: none; }
   .row { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 </style>
 </head>
@@ -49,23 +56,31 @@
   </div>
   <div id="status"></div>
   <div id="content" hidden>
-    <div class="cards" id="cards"></div>
+    <h2 style="margin-top:20px">OpenRouter 額度</h2>
+    <div class="cards" id="quota" style="margin-top:0"></div>
+    <div class="sub" id="quota-note"></div>
+
+    <h2>遊戲概況</h2>
+    <div class="cards" id="cards" style="margin-top:0"></div>
 
     <h2>正在玩（最近 <span id="online-window">5</span> 分鐘有活動）</h2>
     <div id="online" class="sub"></div>
 
-    <h2>玩家</h2>
+    <div class="row" style="align-items:center;margin:28px 0 10px">
+      <h2 style="margin:0">玩家</h2>
+      <label class="toggle"><input type="checkbox" id="show-hidden"> 顯示已隱藏的帳號（<span id="hidden-count">0</span>）</label>
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr>
           <th>玩家</th><th>註冊時間</th><th>最後活動</th><th>雲端存檔</th>
           <th class="num">回合數</th><th class="num">遊玩段數</th><th class="num">總時數</th>
-          <th class="num">輸入 token</th><th class="num">輸出 token</th><th class="num">花費（美元）</th>
+          <th class="num">輸入 token</th><th class="num">輸出 token</th><th class="num">花費（美元）</th><th></th>
         </tr></thead>
         <tbody id="players"></tbody>
       </table>
     </div>
-    <p class="sub">點一下玩家可以看最近 10 段遊玩時段。兩次正文回合相隔超過 <span id="gap">30</span> 分鐘算新的一段；每段加計最後一回的 3 分鐘閱讀時間。</p>
+    <p class="sub">自動隱藏：測試金鑰、帳號名稱像測試用的（test、demo、guest、example 等），以及超過 30 天沒有任何活動、也沒有存檔與用量的帳號。隱藏只影響這個頁面，不會刪除帳號或紀錄。點一下玩家可以看最近 10 段遊玩時段。兩次正文回合相隔超過 <span id="gap">30</span> 分鐘算新的一段；每段加計最後一回的 3 分鐘閱讀時間。</p>
 
     <h2>各模型用量</h2>
     <div class="table-wrap">
@@ -109,6 +124,10 @@
     return Math.floor(m / 60) + ' 時 ' + (m % 60) + ' 分';
   };
   var label = function (u) { return u.email || u.userId; };
+  var DAY = 86400000;
+  var INACTIVE_DAYS = 30;
+  var TEST_EMAIL = /(^|[._+\-])(test|tester|testing|demo|guest|dummy|sample|tmp|temp)\d*([._+@\-]|$)|@example\.|@undercurrent\.game$|@epilogue\.internal$|^master_admin$/i;
+  var lastData = null;
   var token = function () { try { return localStorage.getItem('undercurrent_auth_token') || ''; } catch (e) { return ''; } };
 
   function showStatus(html, isError) {
@@ -143,21 +162,76 @@
     return (u.save.turn != null ? '第 ' + u.save.turn + ' 回，' : '') + ago(u.save.updatedAt);
   }
 
+  /** 回傳隱藏原因；空字串代表不隱藏。 */
+  function hiddenReason(u, manual) {
+    if (manual[u.userId]) return '手動隱藏';
+    if (TEST_EMAIL.test(u.email || '') || TEST_EMAIL.test(u.userId || '')) return '測試帳號';
+    var last = Math.max(u.lastSeen || 0, u.lastLogin || 0, (u.save && u.save.updatedAt) || 0, u.registeredAt || 0);
+    var idle = !u.requests && !(u.save && u.save.has);
+    if (idle && last && Date.now() - last > INACTIVE_DAYS * DAY) return '超過 ' + INACTIVE_DAYS + ' 天無活動';
+    return '';
+  }
+
+  function renderQuota(or) {
+    if (!or) { $('quota').innerHTML = ''; return; }
+    var key = or.key || {}, acct = or.account || {};
+    var cards = [];
+    if (key.error) {
+      cards.push(['金鑰額度', '讀取失敗', false]);
+    } else {
+      var hasLimit = key.limit != null;
+      var remaining = hasLimit ? Number(key.limitRemaining != null ? key.limitRemaining : key.limit - key.usage) : null;
+      var low = hasLimit && (remaining < 2 || remaining < key.limit * 0.2);
+      cards.push(['金鑰剩餘額度', hasLimit ? '$' + remaining.toFixed(2) : '無上限', low]);
+      cards.push(['金鑰上限', hasLimit ? '$' + Number(key.limit).toFixed(2) : '未設定', false]);
+      cards.push(['金鑰累計已用', '$' + Number(key.usage || 0).toFixed(2), false]);
+      if (key.usageDaily != null) cards.push(['今日用量', '$' + Number(key.usageDaily).toFixed(2), false]);
+      if (key.usageMonthly != null) cards.push(['本月用量', '$' + Number(key.usageMonthly).toFixed(2), false]);
+    }
+    if (!acct.error && acct.totalCredits != null) {
+      var balance = Number(acct.totalCredits) - Number(acct.totalUsage || 0);
+      cards.push(['帳戶餘額', '$' + balance.toFixed(2), balance < 2]);
+    }
+    $('quota').innerHTML = cards.map(function (c) {
+      return '<div class="card' + (c[2] ? ' warn' : '') + '"><div class="k">' + c[0] + '</div><div class="v">' + c[1] + '</div></div>';
+    }).join('');
+    var warn = cards.some(function (c) { return c[2]; });
+    $('quota-note').innerHTML = (warn ? '<span style="color:var(--red)">額度偏低（少於 2 美元或上限的 20%），請到 OpenRouter 補充，用完時玩家會無法生成。</span> ' : '')
+      + (key.error ? '金鑰額度讀取失敗：' + esc(key.error) + '。' : '');
+  }
+
+  function setHidden(userId, hide) {
+    var t = token();
+    var body = hide ? { hide: [userId] } : { unhide: [userId] };
+    fetch(WORKER, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Undercurrent-Token': t }, body: JSON.stringify(body) })
+      .then(function () { load(); })
+      .catch(function (err) { showStatus('隱藏設定失敗：' + esc(err.message), true); });
+  }
+
   function render(data) {
-    var users = data.users || [];
-    var players = users.filter(function (u) { return u.userId !== 'test-shared-key'; });
+    lastData = data;
+    renderQuota(data.openrouter);
+    var manual = {};
+    (data.hiddenIds || []).forEach(function (id) { manual[id] = true; });
+    var everyone = (data.users || []).filter(function (u) { return u.userId !== 'test-shared-key'; });
+    everyone.forEach(function (u) { u.hiddenReason = hiddenReason(u, manual); });
+    var showHidden = $('show-hidden').checked;
+    var hiddenCount = everyone.filter(function (u) { return u.hiddenReason; }).length;
+    $('hidden-count').textContent = hiddenCount;
+    var users = everyone.filter(function (u) { return showHidden || !u.hiddenReason; });
+    var players = everyone.filter(function (u) { return !u.hiddenReason; });
     var withSave = players.filter(function (u) { return u.save && u.save.has; });
     var online = players.filter(function (u) { return u.online; });
     var sum = function (list, key) { return list.reduce(function (s, u) { return s + Number(u[key] || 0); }, 0); };
-    var allCost = sum(users, 'cost');
-    var testUser = users.find(function (u) { return u.userId === 'test-shared-key'; });
+    var allCost = sum(data.users || [], 'cost');
+    var testUser = (data.users || []).find(function (u) { return u.userId === 'test-shared-key'; });
     $('cards').innerHTML = [
       ['註冊玩家', num(players.length)],
       ['有雲端存檔', num(withSave.length)],
       ['正在玩', num(online.length)],
       ['玩家回合數', num(sum(players, 'turns'))],
       ['玩家花費', usd(sum(players, 'cost'))],
-      ['測試花費', usd(testUser ? testUser.cost : 0)],
+      ['測試與隱藏帳號花費', usd(allCost - sum(players, 'cost'))],
       ['總花費', usd(allCost)]
     ].map(function (c) { return '<div class="card"><div class="k">' + c[0] + '</div><div class="v">' + c[1] + '</div></div>'; }).join('');
 
@@ -172,17 +246,21 @@
       var sessions = (u.sessions || []).map(function (s) {
         return time(s.start) + ' 起，' + duration(s.durationMs) + '，' + s.turns + ' 回';
       }).join('<br>') || '還沒有正文回合。';
-      return '<tr class="player" data-i="' + i + '">' +
-        '<td><span class="dot' + (u.online ? ' on' : '') + '"></span>' + esc(label(u)) + '</td>' +
+      return '<tr class="player' + (u.hiddenReason ? ' is-hidden' : '') + '" data-i="' + i + '">' +
+        '<td><span class="dot' + (u.online ? ' on' : '') + '"></span>' + esc(label(u)) + (u.hiddenReason ? '<span class="tag">' + esc(u.hiddenReason) + '</span>' : '') + '</td>' +
         '<td>' + time(u.registeredAt) + '</td>' +
         '<td>' + (Math.max(u.lastSeen || 0, u.lastLogin || 0) ? ago(Math.max(u.lastSeen || 0, u.lastLogin || 0)) : '—') + '</td>' +
         '<td>' + saveCell(u) + '</td>' +
         '<td class="num">' + num(u.turns) + '</td><td class="num">' + num((u.sessions || []).length) + '</td>' +
         '<td class="num">' + duration(u.totalPlayMs) + '</td>' +
         '<td class="num">' + num(u.promptTokens) + '</td><td class="num">' + num(u.completionTokens) + '</td>' +
-        '<td class="num">' + usd(u.cost) + '</td></tr>' +
-        '<tr class="detail" data-for="' + i + '" hidden><td colspan="9">' + saveError + sessions + '</td></tr>';
-    }).join('') || '<tr><td colspan="9" class="sub">還沒有任何紀錄。</td></tr>';
+        '<td class="num">' + usd(u.cost) + '</td>' +
+        '<td><button type="button" class="mini" data-hide="' + esc(u.userId) + '" data-state="' + (u.hiddenReason === '手動隱藏' ? 'unhide' : 'hide') + '">'
+          + (u.hiddenReason === '手動隱藏' ? '取消隱藏' : (u.hiddenReason ? '' : '隱藏')) + '</button></td></tr>' +
+        '<tr class="detail" data-for="' + i + '" hidden><td colspan="11">' + saveError + sessions + '</td></tr>';
+    }).join('') || '<tr><td colspan="11" class="sub">還沒有任何紀錄。</td></tr>';
+    // 自動隱藏的帳號沒有可按的按鈕（規則決定），只留手動隱藏的切換
+    Array.prototype.forEach.call(document.querySelectorAll('button.mini'), function (b) { if (!b.textContent) b.remove(); });
 
     $('models').innerHTML = (data.models || []).map(function (m) {
       return '<tr><td>' + esc(m.model || '—') + '</td><td class="num">' + num(m.requests) + '</td><td class="num">' + num(m.tokens) + '</td><td class="num">' + usd(m.cost) + '</td></tr>';
@@ -192,7 +270,15 @@
     $('content').hidden = false;
   }
 
+  $('show-hidden').addEventListener('change', function () { if (lastData) render(lastData); });
+
   $('players').addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-hide]');
+    if (btn) {
+      e.stopPropagation();
+      setHidden(btn.dataset.hide, btn.dataset.state === 'hide');
+      return;
+    }
     var row = e.target.closest('tr.player');
     if (!row) return;
     var detail = document.querySelector('tr.detail[data-for="' + row.dataset.i + '"]');
