@@ -1136,7 +1136,7 @@ vm.runInContext(`resetTurnUsage(); addTurnUsage({ prompt_tokens: 14000, completi
   assert.strictEqual(vm.runInContext(`formatChapterUsage({ usage: ${JSON.stringify(u)} })`, frontendContext), '本回 6 字・1.7 萬 token・NT$0.07', '每回用量顯示格式錯誤');
   assert.strictEqual(vm.runInContext(`takeTurnUsage('x')`, frontendContext), null, '取用後應清空，避免背景請求算進下一回');
 }
-assert.match(html, /我的用量（2026\/10\/7 起）/, '用量起算日未改為 2026/10/7');
+assert.strictEqual((html.match(/我的用量<span class="usage-since"><\/span>/g) || []).length, 2, '用量起算日應依玩家第一筆紀錄顯示');
 assert.match(html, /<button id="home-usage-chip"/, '首頁用量應可點開詳情');
 
 // 自動分幕：時機、幕號、幕篇檔案、全書前情（假模型回應，不打真實 API）

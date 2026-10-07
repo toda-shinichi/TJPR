@@ -15,8 +15,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./tailwind.generated.css?v=029215b9ce">
-  <link rel="stylesheet" href="./style.css?v=029215b9ce">
+  <link rel="stylesheet" href="./tailwind.generated.css?v=92b91456c5">
+  <link rel="stylesheet" href="./style.css?v=92b91456c5">
   <style>
     /* 線條 icon（取代 emoji）：跟著文字大小與顏色走 */
     .ui-icon { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; flex-shrink: 0;
@@ -111,9 +111,10 @@
             我的用量：<span id="home-usage-display" class="font-mono text-slate-200"></span> <span aria-hidden="true">▾</span>
           </button>
           <div id="home-usage-detail" class="hidden order-last basis-full w-full max-w-md mx-auto bg-brand-card/95 border border-brand-border rounded-xl p-3.5 text-left space-y-1.5">
-            <div class="text-xs font-bold tracking-wider text-brand-gold">我的用量（2026/10/7 起）</div>
+            <div class="text-xs font-bold tracking-wider text-brand-gold">我的用量<span class="usage-since"></span></div>
             <div id="home-usage-detail-body" class="text-xs text-slate-300 leading-relaxed"></div>
             <p class="text-[11px] text-slate-500">每一回的 AI 生成都有實際費用，目前由子桓個人負擔；台幣以 1 美元＝31 元換算。</p>
+            <p class="text-[11px] text-slate-500">每回下方的小字只算那一回的生成；總用量還包含背景整理記憶（逐回摘要、本幕摘要、換幕整理），所以每回加起來會比總用量少一點。</p>
           </div>
           <button id="home-logout-btn" class="hidden px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-brand-border transition items-center gap-1 cursor-pointer">
             <span>登出帳號</span>
@@ -870,9 +871,10 @@
 
     <!-- 男主好感度矩陣（FEATURES.favorability 關閉時由 JS 隱藏） -->
     <div id="usage-section" class="hidden bg-brand-card p-3.5 rounded-xl border border-brand-border space-y-1.5">
-      <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">我的用量（2026/10/7 起）</h3>
+      <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">我的用量<span class="usage-since"></span></h3>
       <div id="drawer-usage-display" class="text-xs text-slate-300 leading-relaxed"></div>
       <p class="text-[11px] text-slate-500">每一回的 AI 生成都有實際費用，台幣以 1 美元＝31 元換算。</p>
+      <p class="text-[11px] text-slate-500">每回下方的小字只算那一回的生成；總用量還包含背景整理記憶（逐回摘要、本幕摘要、換幕整理），所以每回加起來會比總用量少一點。</p>
     </div>
 
     <div id="relationships-section" class="bg-brand-card p-3.5 rounded-xl border border-brand-border space-y-2">
@@ -1194,6 +1196,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=029215b9ce" defer></script>
+    <script src="app.js?v=92b91456c5" defer></script>
 </body>
 </html>

@@ -724,12 +724,16 @@ async function buildAdminStats(env) {
   };
 }
 
-/** 玩家看得到的用量從這天開始算（台北時間 2026-10-07 00:00）。 */
-const PLAYER_USAGE_SINCE = Date.parse('2026-10-07T00:00:00+08:00');
 const USD_TO_TWD = 31;
 /** output_chars 欄位加入前的正文回合，用輸出 token 估算字數（正文約佔章節輸出的七成）。 */
 const CHARS_PER_COMPLETION_TOKEN = 0.7;
 
+/**
+ * 玩家自己的用量：從這位玩家第一筆用量紀錄開始算（後台 2026-10-05 起才有紀錄）。
+ * 舊版畫面不會標示請求類型，正文回合被記成 aux；以用量特徵辨認：
+ * 正文回合讀 8,000 token 以上、寫 2,100 以下（背景摘要約讀 4,000–7,000、寫 2,000 以上）。
+ * 只套用在這位玩家第一筆正確標示的正文回合之前。
+ */
 async function handleMyUsage(request, env, origin, viaSharedKey) {
   const auth = await authenticateRequest(request, env, viaSharedKey);
   if (!auth.ok || viaSharedKey) {
@@ -737,21 +741,31 @@ async function handleMyUsage(request, env, origin, viaSharedKey) {
   }
   if (!env.USAGE_DB) return json({ error: { message: '用量資料暫時無法讀取。' } }, 503, origin);
   try {
-    const row = await env.USAGE_DB.prepare(`SELECT
+    const row = await env.USAGE_DB.prepare(`WITH f AS (
+        SELECT COALESCE(MIN(CASE WHEN kind = 'chapter' THEN ts END), 9000000000000000) AS first_chapter
+        FROM usage WHERE user_id = ?1)
+      SELECT MIN(ts) AS first_ts,
         SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens, SUM(cost) AS cost,
         SUM(CASE WHEN kind = 'chapter' THEN output_chars ELSE 0 END) AS chars,
-        SUM(CASE WHEN kind = 'chapter' AND output_chars = 0 AND status BETWEEN 200 AND 299 THEN completion_tokens ELSE 0 END) AS legacy_tokens,
-        SUM(CASE WHEN kind = 'chapter' AND status BETWEEN 200 AND 299 THEN 1 ELSE 0 END) AS turns
-      FROM usage WHERE user_id = ?1 AND ts >= ?2`).bind(auth.userId || '', PLAYER_USAGE_SINCE).first();
-    const cost = Number(row && row.cost) || 0;
-    const estimated = Math.round((Number(row && row.legacy_tokens) || 0) * CHARS_PER_COMPLETION_TOKEN);
+        SUM(CASE WHEN kind = 'chapter' AND status BETWEEN 200 AND 299 THEN 1 ELSE 0 END) AS turns,
+        SUM(CASE WHEN kind = 'chapter' AND output_chars = 0 AND status BETWEEN 200 AND 299 THEN completion_tokens ELSE 0 END) AS untracked_tokens,
+        SUM(CASE WHEN kind = 'aux' AND status BETWEEN 200 AND 299 AND prompt_tokens >= 8000 AND completion_tokens < 2100 AND ts < f.first_chapter THEN 1 ELSE 0 END) AS legacy_turns,
+        SUM(CASE WHEN kind = 'aux' AND status BETWEEN 200 AND 299 AND prompt_tokens >= 8000 AND completion_tokens < 2100 AND ts < f.first_chapter THEN completion_tokens ELSE 0 END) AS legacy_tokens
+      FROM usage, f WHERE user_id = ?1`).bind(auth.userId || '').first();
+    const n = key => Number(row && row[key]) || 0;
+    const cost = n('cost');
+    const estimated = Math.round((n('untracked_tokens') + n('legacy_tokens')) * CHARS_PER_COMPLETION_TOKEN);
+    const firstTs = n('first_ts');
+    const since = firstTs
+      ? new Date(firstTs + 8 * 3600 * 1000).toISOString().slice(0, 10)
+      : new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
     return json({ success: true, data: {
-      since: '2026-10-07',
-      turns: Number(row && row.turns) || 0,
-      chars: (Number(row && row.chars) || 0) + estimated,
+      since,
+      turns: n('turns') + n('legacy_turns'),
+      chars: n('chars') + estimated,
       charsEstimated: estimated > 0,
-      promptTokens: Number(row && row.prompt_tokens) || 0,
-      completionTokens: Number(row && row.completion_tokens) || 0,
+      promptTokens: n('prompt_tokens'),
+      completionTokens: n('completion_tokens'),
       costUsd: cost,
       costTwd: cost * USD_TO_TWD
     } }, 200, origin);

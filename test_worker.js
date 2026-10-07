@@ -231,7 +231,7 @@ async function runOfflineTests() {
   {
     const writes = [];
     const fakeDb = {
-      prepare(sql) { return { bind: (...args) => ({ sql, args, all: async () => ({ results: [] }), first: async () => ({ prompt_tokens: 1000, completion_tokens: 500, cost: 0.01, chars: 300, legacy_tokens: 100, turns: 2 }) }), all: async () => ({ results: [] }) }; },
+      prepare(sql) { return { bind: (...args) => ({ sql, args, all: async () => ({ results: [] }), first: async () => ({ first_ts: Date.parse('2026-10-05T16:25:32+08:00'), prompt_tokens: 1000, completion_tokens: 500, cost: 0.01, chars: 300, untracked_tokens: 0, legacy_tokens: 100, legacy_turns: 3, turns: 2 }) }), all: async () => ({ results: [] }) }; },
       async batch(statements) { writes.push(...statements); }
     };
     const pending = [];
@@ -262,6 +262,8 @@ async function runOfflineTests() {
     assert.strictEqual(res.status, 200, '玩家無法查詢自己的用量');
     assert.strictEqual(mine.chars, 370, '字數應為實際記錄加上舊資料估算');
     assert.ok(Math.abs(mine.costTwd - 0.31) < 1e-9, '台幣換算錯誤');
+    assert.strictEqual(mine.since, '2026-10-05', '起算日應為玩家第一筆紀錄的台北日期');
+    assert.strictEqual(mine.turns, 5, '舊版畫面的正文回合應計入回數');
 
     // 管理後台：非管理員 403，管理員 200
     const adminReq = token => new Request('https://worker.test/admin/stats', {

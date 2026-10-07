@@ -1921,7 +1921,7 @@ function updateUserBadgeUI(status = 'active') {
 }
 
 /**
- * 玩家自己的用量（2026-10-07 起）：正文字數、token、花費。
+ * 玩家自己的用量（從這位玩家第一筆紀錄起算）：正文字數、token、花費。
  * 資料來自 Worker 的用量紀錄（只查自己的帳號），讀取不花 OpenRouter 額度。
  */
 let myUsageTimer = null;
@@ -1976,6 +1976,10 @@ function renderMyUsage(u) {
       `花費：<span class="font-mono text-slate-100">${twd}</span>（約 ${(Number(u.costUsd) || 0).toFixed(3)} 美元）`
     ].join('<br>');
   }
+  // 起算日：這位玩家第一筆用量紀錄的日期（後台 2026-10-05 起才有紀錄）
+  const since = String(u.since || '').replace(/-/g, '/').replace(/\/0(\d)/g, '/$1');
+  document.querySelectorAll('.usage-since').forEach(el => { el.textContent = since ? `（${since} 起）` : ''; });
+  if (chip) chip.title = since ? `點擊查看詳細用量（自 ${since} 起）` : '點擊查看詳細用量';
   const detail = document.getElementById('home-usage-detail-body');
   if (detail && drawer) detail.innerHTML = drawer.innerHTML;
   if (chip) chip.classList.remove('hidden');
