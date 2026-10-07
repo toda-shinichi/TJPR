@@ -15,8 +15,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./tailwind.generated.css?v=a5537b684a">
-  <link rel="stylesheet" href="./style.css?v=a5537b684a">
+  <link rel="stylesheet" href="./tailwind.generated.css?v=98d4efb65d">
+  <link rel="stylesheet" href="./style.css?v=98d4efb65d">
   <style>
     /* 線條 icon（取代 emoji）：跟著文字大小與顏色走 */
     .ui-icon { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; flex-shrink: 0;
@@ -38,7 +38,7 @@
 
     <!-- 電腦版導航功能按鈕組 (>= md 展開文字) -->
     <div class="hidden md:flex items-center gap-2">
-      <button id="force-reload-btn" onclick="forceBypassCacheReload()" class="hidden px-2.5 py-1.5 rounded-lg bg-sky-950/60 hover:bg-sky-900 border border-sky-700/50 text-xs text-sky-300 hover:text-white transition items-center gap-1 cursor-pointer" title="強制穿透快取並載入最新版">
+      <button id="force-reload-btn" onclick="forceBypassCacheReload()" class="hidden px-2.5 py-1.5 rounded-lg bg-sky-950/60 hover:bg-sky-900 border border-sky-700/50 text-xs text-sky-300 hover:text-white transition items-center gap-1 cursor-pointer" title="重新載入最新版">
         <span>更新最新版</span>
       </button>
       <button id="nav-guide-btn" class="hidden px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-amber-200 hover:text-white transition items-center gap-1 cursor-pointer" title="遊戲指南與13男主圖鑑">
@@ -113,8 +113,8 @@
           <div id="home-usage-detail" class="hidden order-last basis-full w-full max-w-md mx-auto bg-brand-card/95 border border-brand-border rounded-xl p-3.5 text-left space-y-1.5">
             <div class="text-xs font-bold tracking-wider text-brand-gold">我的用量<span class="usage-since"></span></div>
             <div id="home-usage-detail-body" class="text-xs text-slate-300 leading-relaxed"></div>
-            <p class="text-[11px] text-slate-500">每一回的 AI 生成都有實際費用，目前由子桓個人負擔；台幣以 1 美元＝31 元換算。</p>
-            <p class="text-[11px] text-slate-500">每回下方的小字只算那一回的生成；總用量還包含背景整理記憶（逐回摘要、本幕摘要、換幕整理），所以每回加起來會比總用量少一點。</p>
+            <p class="text-[11px] text-slate-500">每回的故事生成都有實際費用，目前由開發者負擔。</p>
+            <p class="text-[11px] text-slate-500">每回下方僅為該回產出之數據，供玩家參考；總用量包含摘要、整理、記憶等諸多功能，故總用量會較高。</p>
           </div>
           <button id="home-logout-btn" class="hidden px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-brand-border transition items-center gap-1 cursor-pointer">
             <span>登出帳號</span>
@@ -237,9 +237,9 @@
             <span><svg class="ui-icon" aria-hidden="true"><use href="#i-save"></use></svg></span>
             <span class="hidden sm:inline">存檔</span>
           </button>
-          <button id="gameplay-memory-btn" aria-label="故事記憶" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="查看故事記憶與重要的回">
+          <button id="gameplay-memory-btn" aria-label="劇情回顧" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="前情提要與重要段落">
             <span><svg class="ui-icon" aria-hidden="true"><use href="#i-brain"></use></svg></span>
-            <span class="hidden sm:inline">記憶</span>
+            <span class="hidden sm:inline">回顧</span>
           </button>
           <button id="gameplay-drawer-btn" aria-label="角色狀態" class="px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition flex items-center gap-1 cursor-pointer" title="角色狀態">
             <span><svg class="ui-icon" aria-hidden="true"><use href="#i-chart"></use></svg></span>
@@ -252,7 +252,7 @@
       <div id="server-status-badge" class="flex items-center justify-between px-3 py-1.5 rounded-lg bg-brand-surface/80 border border-brand-border text-xs text-slate-400">
         <div class="flex items-center gap-2">
           <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span id="server-status-text">故事引擎已就緒</span>
+          <span id="server-status-text">準備就緒</span>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <span id="save-trust-status" class="text-[11px] text-slate-600">進度已保存在本機</span>
@@ -414,8 +414,8 @@
       <details id="privacy-note" class="mt-4 text-[11px] text-slate-500">
         <summary class="cursor-pointer select-none hover:text-slate-300">隱私說明</summary>
         <div class="mt-2 space-y-1.5 leading-relaxed text-slate-400">
-          <p>《暗流》每一回的 AI 生成都有實際費用，目前由子桓個人負擔。為了掌握使用量、讓遊戲更順，後台會記錄技術資料：帳號、使用時間、使用的模型、token 數與花費。</p>
-          <p>後台不會記錄你的人設、開局設定與遊戲內容。遊戲進行時，劇情內容會送到 AI 模型產生下一回；雲端存檔會存在你的存檔資料夾，只用來讓你換裝置接著玩。</p>
+          <p>《暗流》每回的故事生成都有實際費用，目前由開發者負擔。為了掌握使用量、讓遊戲更順，後台會記錄帳號、使用時間與用量。</p>
+          <p>後台不會記錄你的人設、開局設定與遊戲內容；雲端存檔只用來讓你換裝置接著玩。</p>
         </div>
       </details>
     </div>
@@ -561,7 +561,7 @@
 
         <div class="creator-advanced-field">
           <label class="block font-bold text-slate-300 mb-1">自訂開場劇本 / 特殊開局情境（如：在超商、在官邸、在遊艇...）</label>
-          <textarea id="form-custom-scenario" rows="2" placeholder="輸入任何自訂情境，AI 大模型將即時為您現場創作第 1 回..." class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white text-xs focus:border-brand-gold focus:outline-none">在深夜的台北士林便利商店遇到徐令謙</textarea>
+          <textarea id="form-custom-scenario" rows="2" placeholder="輸入任何自訂情境，故事會依你的情境展開第 1 回..." class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white text-xs focus:border-brand-gold focus:outline-none">在深夜的台北士林便利商店遇到徐令謙</textarea>
         </div>
 
                 <div class="flex flex-col sm:flex-row gap-2 pt-2">
@@ -661,7 +661,7 @@
         <div class="md:col-span-5 flex flex-col justify-end space-y-1.5">
           <div class="text-[11px] text-slate-400 font-bold">雲端同步與備份工具：</div>
           <div class="flex items-center gap-1.5">
-            <button id="manual-cloud-sync-btn" class="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-900 to-indigo-900 hover:from-blue-800 hover:to-indigo-800 text-blue-100 hover:text-white border border-blue-500/50 transition text-xs font-bold flex items-center justify-center gap-1.5 shadow-md cursor-pointer" title="將當前真實遊玩的小說內文、主角設定、摘要池即時寫入雲端（可跨裝置遊戲）">
+            <button id="manual-cloud-sync-btn" class="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-900 to-indigo-900 hover:from-blue-800 hover:to-indigo-800 text-blue-100 hover:text-white border border-blue-500/50 transition text-xs font-bold flex items-center justify-center gap-1.5 shadow-md cursor-pointer" title="把目前的進度存到雲端，換裝置也能接著玩">
               <span>手動同步至雲端（可跨裝置遊戲）</span>
             </button>
           <button id="cloud-load-btn" class="px-3 py-2 rounded-xl bg-sky-950/60 hover:bg-sky-900 text-sky-200 hover:text-white font-bold text-xs border border-sky-700/50 transition cursor-pointer flex items-center gap-1.5" title="從雲端載入存檔以在其他裝置接續遊玩">
@@ -695,15 +695,15 @@
     </div>
   </div>
 
-  <!-- AI 記憶中心 -->
-  <div id="memory-center-modal" role="dialog" aria-modal="true" aria-label="AI 記憶中心" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[90] overflow-y-auto p-3 sm:p-6 flex justify-center items-start" style="display:none;">
+  <!-- 劇情回顧 -->
+  <div id="memory-center-modal" role="dialog" aria-modal="true" aria-label="劇情回顧" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[90] overflow-y-auto p-3 sm:p-6 flex justify-center items-start" style="display:none;">
     <div class="bg-brand-surface border border-brand-gold/50 rounded-2xl max-w-3xl w-full max-h-[90vh] my-auto flex flex-col shadow-2xl p-5 sm:p-6 space-y-4">
       <div class="flex items-start justify-between gap-3 pb-3 border-b border-brand-border">
         <div>
-          <h3 class="font-serif font-black text-lg text-brand-gold">AI 記憶中心</h3>
-          <p class="text-xs text-slate-400 mt-1">查看長期摘要、當前狀態與玩家指定不可遺忘的重要段落。</p>
+          <h3 class="font-serif font-black text-lg text-brand-gold">劇情回顧</h3>
+          <p class="text-xs text-slate-400 mt-1">前情提要、目前狀態，以及你標記的重要段落。</p>
         </div>
-        <button id="close-memory-center-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer" aria-label="關閉記憶中心"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+        <button id="close-memory-center-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer" aria-label="關閉劇情回顧"><svg class="ui-icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
       </div>
       <div id="memory-center-content" class="modal-scroll-container flex-1 overflow-y-auto space-y-4 pr-1 text-xs"></div>
       <div class="flex flex-wrap justify-end gap-2 pt-2 border-t border-brand-border">
@@ -795,10 +795,10 @@
 
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-brain"></use></svg> 2. 近期上下文與長期摘要</span>
+              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-brain"></use></svg> 2. 劇情延續與重要段落</span>
             </h4>
             <p class="text-slate-300 text-xs">
-              每次推進會參考最近 5 回的全文、本幕摘要、前兩幕的幕篇檔案與全書前情，以及玩家釘選的重要段落；系統每 5 回在背景更新一次本幕摘要。每一幕滿 40 回後，遇到換場景時會自動進入下一幕，並把前一幕整理成幕篇檔案，不需要另開新局。遊玩畫面上方的「記憶」可查看 AI 目前掌握的摘要與狀態，重要承諾或轉折也可標記為不可遺忘。
+              故事會記得你們之間發生過的事，前面的承諾、秘密與轉折會延續到後面。遊玩畫面上方的「回顧」可以查看前情提要與目前狀態；特別在意的承諾或轉折，可以在章節卡片標記為重要段落。
             </p>
           </div>
 
@@ -822,10 +822,10 @@
 
           <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
             <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
-              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-library"></use></svg> 5. 長局遊玩與故事記憶整理</span>
+              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-library"></use></svg> 5. 長局遊玩</span>
             </h4>
             <p class="text-slate-300 text-xs">
-              每一幕滿 40 回後，遇到換場景時會自動進入下一幕，並把前一幕整理成幕篇檔案；更早的幕會濃縮成全書前情。不需要另開新局，數值、道具與原始正文都會保留。也可以在選單裡隨時手動「整理故事記憶」。
+              同一局可以一直玩下去，不需要另開新局。故事會自然分成一幕一幕，每一幕落幕時畫面上會出現分隔，數值、道具與正文都會保留。
             </p>
           </div>
 
@@ -885,8 +885,8 @@
     <div id="usage-section" class="hidden bg-brand-card p-3.5 rounded-xl border border-brand-border space-y-1.5">
       <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">我的用量<span class="usage-since"></span></h3>
       <div id="drawer-usage-display" class="text-xs text-slate-300 leading-relaxed"></div>
-      <p class="text-[11px] text-slate-500">每一回的 AI 生成都有實際費用，台幣以 1 美元＝31 元換算。</p>
-      <p class="text-[11px] text-slate-500">每回下方的小字只算那一回的生成；總用量還包含背景整理記憶（逐回摘要、本幕摘要、換幕整理），所以每回加起來會比總用量少一點。</p>
+      <p class="text-[11px] text-slate-500">每回的故事生成都有實際費用，目前由開發者負擔。</p>
+      <p class="text-[11px] text-slate-500">每回下方僅為該回產出之數據，供玩家參考；總用量包含摘要、整理、記憶等諸多功能，故總用量會較高。</p>
     </div>
 
     <div id="relationships-section" class="bg-brand-card p-3.5 rounded-xl border border-brand-border space-y-2">
@@ -905,12 +905,12 @@
       </div>
     </div>
 
-    <!-- 故事記憶整理 -->
+    <!-- 結束本幕 -->
     <div class="bg-brand-card p-3.5 rounded-xl border border-brand-border space-y-2">
-      <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">故事記憶整理</h3>
-      <p class="text-[11px] text-slate-400">當前幕篇進行過長時，可將對話濃縮為 800 字檔案重整視窗，保留數值與道具。</p>
+      <h3 class="text-xs font-bold uppercase tracking-wider text-brand-gold">結束本幕</h3>
+      <p class="text-[11px] text-slate-400">想讓故事在這裡告一段落時，可以提前結束本幕、進入下一幕，數值與道具都會保留。</p>
       <button id="rebase-act-btn" class="w-full bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold font-bold py-2 rounded-lg text-xs transition cursor-pointer">
-        整理本幕故事記憶
+        結束本幕，進入下一幕
       </button>
     </div>
   </aside>
@@ -940,7 +940,7 @@
         </button>
         <button id="drawer-timeline-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-brand-gold/50 text-left transition cursor-pointer flex flex-col gap-0.5">
           <div class="text-xs font-bold text-brand-gold flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-clock"></use></svg></span><span>劇情時間軸</span></div>
-          <div class="text-[10px] text-slate-400">每回 50 字摘要</div>
+          <div class="text-[10px] text-slate-400">每回重點回顧</div>
         </button>
         <button id="drawer-saves-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-emerald-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
           <div class="text-xs font-bold text-emerald-300 flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-save"></use></svg></span><span>存檔庫</span></div>
@@ -960,7 +960,7 @@
         </button>
         <button onclick="forceBypassCacheReload()" class="p-2.5 rounded-xl bg-sky-950/40 hover:bg-sky-950 border border-sky-700/50 text-left transition cursor-pointer flex flex-col gap-0.5">
           <div class="text-xs font-bold text-sky-200 flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-refresh"></use></svg></span><span>更新最新版</span></div>
-          <div class="text-[10px] text-slate-400">強制穿透快取</div>
+          <div class="text-[10px] text-slate-400">重新載入遊戲</div>
         </button>
       </div>
     </div>
@@ -1221,6 +1221,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=a5537b684a" defer></script>
+    <script src="app.js?v=98d4efb65d" defer></script>
 </body>
 </html>

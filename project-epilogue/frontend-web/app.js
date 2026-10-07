@@ -2557,7 +2557,7 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
         throw new Error(`Worker HTTP ${response.status}${errBody ? ': ' + errBody.slice(0, 120) : ''}`);
       }
 
-      setLoadingPhase('writing', '故事引擎已開始撰寫；首段文字出現後會即時顯示。');
+      setLoadingPhase('writing', '故事開始撰寫，第一段出現後會即時顯示。');
       const reader = response.body.getReader();
       queueTicket = '';
       const decoder = new TextDecoder("utf-8");
@@ -2831,14 +2831,14 @@ function createRefusalError(model, reason) {
 function noteUncensoredFallbackUsed(model, attemptNo) {
   const short = String(model).split('/').pop();
   console.log(`[Fallback] 主模型連續失敗，本回改由 ${short} 生成（第 ${attemptNo} 次嘗試）。`);
-  notifyUser(`主模型連續拒絕，本回改由 ${short} 生成。`, 'info', 6000);
+  notifyUser('這一回換個寫法再試一次，請稍候。', 'info', 5000);
 }
 
 /** 把重試進度寫進 loading 文字，避免五次重試期間畫面看起來像卡住 */
 function reportGenerationProgress(model, attemptNo, total, note) {
   const short = String(model).split('/').pop();
   if (dom.loadingSubtext) {
-    dom.loadingSubtext.textContent = `模型 ${short}（第 ${attemptNo}/${total} 次嘗試）${note}……`;
+    dom.loadingSubtext.textContent = `第 ${attemptNo}/${total} 次嘗試${note}……`;
   }
 }
 
@@ -6355,7 +6355,7 @@ function renderStoryStream(activeChapter) {
     <article id="stream-prose-content" class="font-serif text-slate-800 tracking-wide prose-tc cursor-pointer select-text" title="打字中點擊可直接顯示全文">
       故事載入中……
     </article>
-    ${formatChapterUsage(activeChapter) ? `<div class="chapter-usage text-right font-mono text-[11px] text-slate-500" title="本回生成（含重試與改寫）的字數、token 與費用；台幣以 1 美元＝31 元換算">${escapeHtml(formatChapterUsage(activeChapter))}</div>` : ''}
+    ${formatChapterUsage(activeChapter) ? `<div class="chapter-usage text-right font-mono text-[11px] text-slate-500" title="本回產出的數據，供參考">${escapeHtml(formatChapterUsage(activeChapter))}</div>` : ''}
 
     ${(activeChapter.qualityWarnings || []).length ? `
       <div class="rounded-xl border border-amber-300/60 bg-amber-50 p-3 text-xs text-amber-800">
@@ -6652,7 +6652,7 @@ function renderChapterNavList() {
   if (archived.length) {
     const box = document.createElement('div');
     box.className = 'px-3 py-2 rounded-lg border border-brand-border/40 bg-brand-dark/40 text-slate-400 space-y-1';
-    box.innerHTML = `<div class="text-[10px] font-mono opacity-70">較早的回（正文已封存，僅保留摘要）</div>`
+    box.innerHTML = `<div class="text-[10px] font-mono opacity-70">較早的回（僅保留重點）</div>`
       + archived.map(([t, text]) => `<div class="text-[11px] leading-relaxed"><span class="font-mono opacity-60">第 ${t} 回</span>　${escapeHtml(text)}</div>`).join('');
     listEl.appendChild(box);
   }
@@ -7287,16 +7287,15 @@ function renderExpandableProse(prose) {
 function renderMemoryCenter() {
   const container = dom.memoryCenterContent;
   if (!container) return;
-  const summary = state.saveState?.summaryPool || '目前尚未建立本幕摘要；最近幾回仍以完整正文保留。';
+  const summary = state.saveState?.summaryPool || '故事才剛開始，前情提要會隨劇情累積。';
   const pinned = getPinnedMemories();
   const sp = state.chapterData?.statusPanel || {};
   const rels = state.saveState?.relationships || {};
-  const recentCount = Math.min(CONTEXT_BUDGET.recentTurns, (state.chapterHistoryList || []).length);
   const facts = getMemoryBank().filter(m => m.kind === 'fact').slice().sort((a, b) => b.turn - a.turn);
   const factsHtml = facts.length
     ? `<div class="p-3 rounded-xl bg-brand-card border border-brand-border space-y-1.5 max-h-80 overflow-y-auto">${facts.map(m => `
         <div class="leading-relaxed text-slate-600"><span class="font-mono text-[10px] text-slate-400 mr-1">第 ${escapeHtml(m.turn)} 回</span>${m.topic ? `<span class="text-brand-gold mr-1">［${escapeHtml(m.topic)}］</span>` : ''}${escapeHtml(m.text)}</div>`).join('')}</div>`
-    : '<div class="p-3 rounded-xl bg-brand-card/60 border border-brand-border text-slate-500">記憶庫目前是空的。每一回結束後，模型會把新確立的事實寫進來。</div>';
+    : '<div class="p-3 rounded-xl bg-brand-card/60 border border-brand-border text-slate-500">目前還沒有記下的線索。</div>';
   const pinnedHtml = pinned.length ? pinned.map(ch => `
     <article class="p-3 rounded-xl bg-brand-card border border-brand-border space-y-1.5">
       <div class="flex items-center justify-between gap-2">
@@ -7309,7 +7308,7 @@ function renderMemoryCenter() {
 
   container.innerHTML = `
     <section class="space-y-2">
-      <div class="flex items-center justify-between"><h4 class="font-serif font-bold text-brand-gold">長期劇情摘要</h4><span class="text-[10px] text-slate-500">近期 ${recentCount} 回另以全文保留</span></div>
+      <h4 class="font-serif font-bold text-brand-gold">前情提要</h4>
       <div class="whitespace-pre-wrap leading-relaxed p-3 rounded-xl bg-brand-card border border-brand-border text-slate-600">${escapeHtml(summary)}</div>
     </section>
     <section class="space-y-2">
@@ -7319,9 +7318,9 @@ function renderMemoryCenter() {
         ${FEATURES.favorability ? `<div class="p-3 rounded-xl bg-brand-card border border-brand-border"><span class="text-slate-500">角色關係</span><div class="mt-1 text-slate-700">${escapeHtml(Object.entries(rels).map(([k,v]) => `${k} ${v}/100`).join('、') || '尚未記錄')}</div></div>` : ''}
       </div>
     </section>
-    <section class="space-y-2"><h4 class="font-serif font-bold text-brand-gold">玩家釘選的重要記憶（${pinned.length}）</h4>${pinnedHtml}</section>
+    <section class="space-y-2"><h4 class="font-serif font-bold text-brand-gold">你標記的重要段落（${pinned.length}）</h4>${pinnedHtml}</section>
     <section class="space-y-2">
-      <div class="flex items-center justify-between"><h4 class="font-serif font-bold text-brand-gold">記憶庫：已確立的事實（${facts.length}）</h4><span class="text-[10px] text-slate-500">每回生成前依劇情檢索</span></div>
+      <h4 class="font-serif font-bold text-brand-gold">已知線索（${facts.length}）</h4>
       ${factsHtml}
     </section>
   `;
@@ -8362,7 +8361,7 @@ async function advanceAct({ silent = true } = {}) {
   updateGameplayBreadcrumb();
   renderSaveState();
   renderChapterNavList();
-  if (!silent) notifyUser(`已整理${formatActLabel(actNumber)}${title ? `「${title}」` : ''}，進入${formatActLabel(actNumber + 1)}。`, 'success', 5000);
+  if (!silent) notifyUser(`${formatActLabel(actNumber)}${title ? `「${title}」` : ''}落幕，進入${formatActLabel(actNumber + 1)}。`, 'success', 5000);
   else notifyUser(`${formatActLabel(actNumber)}${title ? `「${title}」` : ''}落幕，故事進入${formatActLabel(actNumber + 1)}。`, 'info', 4500);
   return true;
 }
@@ -8375,15 +8374,15 @@ function maybeAutoAdvanceAct(chapter) {
 }
 
 async function handleActRebase() {
-  if (state.isGenerating) return notifyUser('目前有劇情正在生成，請完成後再整理故事記憶。');
+  if (state.isGenerating) return notifyUser('目前有劇情正在生成，請完成後再結束本幕。');
   if (!state.saveState) return notifyUser('目前尚無可整理的遊戲進度。', 'error');
-  if (state.saveState.meta?.actRolloverPending) return notifyUser('故事記憶正在整理中，請稍候。');
+  if (state.saveState.meta?.actRolloverPending) return notifyUser('本幕正在落幕，請稍候。');
   const rebaseOk = await confirmDialog(
-    '系統會把本幕整理成幕篇檔案，並進入下一幕。\n數值、道具與原始正文都會保留。\n（每幕滿 40 回後，系統也會在換場景時自動換幕。）',
-    { title: '整理故事記憶', confirmText: '開始整理' }
+    '讓故事在這裡告一段落，進入下一幕。\n數值、道具與正文都會保留。',
+    { title: '結束本幕', confirmText: '結束本幕' }
   );
   if (!rebaseOk) return;
-  showLoading('正在整理故事記憶……', '系統會保留人物關係、數值、物品與重要情節。');
+  showLoading('本幕落幕中……', '人物關係、數值、物品與重要情節都會延續到下一幕。');
   setGenerationBusy(true);
   try {
     await advanceAct({ silent: false });
@@ -8404,7 +8403,7 @@ function startServerCooldown(seconds) {
     if (statusText) {
       statusText.textContent = remaining > 0
         ? '正在等待下一個生成時段'
-        : '故事引擎已就緒';
+        : '準備就緒';
     }
     cooldownEls.forEach(el => {
       el.textContent = remaining > 0 ? `約 ${remaining} 秒` : '可立即操作';

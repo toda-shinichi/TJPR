@@ -915,7 +915,7 @@ assert.doesNotMatch(summaryFn, /action: 'llm\/proxy'/, '摘要池仍經 GAS 代�
 assert.ok(vm.runInContext("clampTurnSummary('徐令謙收下胸針並藏進風衣暗格，韓正寰找上門要求交出，徐令謙拒絕後韓正寰揚言申請搜索票再來。').length <= 51", frontendContext), '逐回摘要超過 50 字');
 assert.match(rootApp, /scheduleTurnSummary\(nextChapter\)/, '回合結束未排程逐回摘要');
 assert.match(rootApp, /const timelineBlock = buildTurnTimelineBlock\(turnCount\)/, '逐回摘要未進入提示詞時間軸');
-assert.match(rootApp, /較早的回（正文已封存，僅保留摘要）/, '章節導覽未顯示已封存回合的摘要');
+assert.match(rootApp, /較早的回（僅保留重點）/, '章節導覽未顯示已封存回合的摘要');
 // 回報按鍵只能綁一次，否則表單會被開兩次
 assert.strictEqual((rootApp.match(/on\('report-error-btn'/g) || []).length, 1, '回報按鍵重複綁定');
 // 介面不得有 emoji（以線條 icon 取代）
