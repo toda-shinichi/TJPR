@@ -1244,6 +1244,7 @@ function setupEventListeners() {
     on('drawer-cloud-load-btn', 'click', () => { closeDrawer(); loadStateFromCloud(); });
     on('drawer-reload-lore-btn', 'click', handleReloadLore);
     on('home-open-account-btn', 'click', openMenuDrawer);
+    on('home-usage-chip', 'click', toggleHomeUsageDetail);
 
     // ── A3: 雲端讀檔入口（先前只掛在 window 上，沒有任何按鈕） ──
     on('cloud-load-btn', 'click', loadStateFromCloud);
@@ -1920,10 +1921,35 @@ function updateUserBadgeUI(status = 'active') {
 }
 
 /**
- * 玩家自己的用量（2026-10-06 起）：正文字數、token、花費。
+ * 玩家自己的用量（2026-10-07 起）：正文字數、token、花費。
  * 資料來自 Worker 的用量紀錄（只查自己的帳號），讀取不花 OpenRouter 額度。
  */
 let myUsageTimer = null;
+
+/**
+ * 每回用量：本回所有生成請求（含重試、結尾與重複段落改寫）的 token 與費用，
+ * 從串流最後一段的 usage 取得，不另外查詢。回合結束後產生的背景摘要不算在內。
+ */
+let turnUsage = null;
+function resetTurnUsage() { turnUsage = { promptTokens: 0, completionTokens: 0, cost: 0 }; }
+function addTurnUsage(u) {
+  if (!turnUsage || !u) return;
+  turnUsage.promptTokens += Number(u.prompt_tokens) || 0;
+  turnUsage.completionTokens += Number(u.completion_tokens) || 0;
+  turnUsage.cost += Number(u.cost) || 0;
+}
+function takeTurnUsage(prose) {
+  const u = turnUsage;
+  turnUsage = null;
+  if (!u || (!u.promptTokens && !u.completionTokens)) return null;
+  return Object.assign({ chars: String(prose || '').replace(/\s/g, '').length }, u);
+}
+function formatChapterUsage(chapter) {
+  const u = chapter?.usage;
+  if (!u) return '';
+  const tokens = formatTokenCount((Number(u.promptTokens) || 0) + (Number(u.completionTokens) || 0));
+  return `本回 ${(Number(u.chars) || 0).toLocaleString('zh-TW')} 字・${tokens} token・NT$${((Number(u.cost) || 0) * 31).toFixed(2)}`;
+}
 function formatTokenCount(n) {
   const v = Number(n) || 0;
   return v >= 10000 ? `${(v / 10000).toFixed(1)} 萬` : v.toLocaleString('zh-TW');
@@ -1950,8 +1976,19 @@ function renderMyUsage(u) {
       `花費：<span class="font-mono text-slate-100">${twd}</span>（約 ${(Number(u.costUsd) || 0).toFixed(3)} 美元）`
     ].join('<br>');
   }
+  const detail = document.getElementById('home-usage-detail-body');
+  if (detail && drawer) detail.innerHTML = drawer.innerHTML;
   if (chip) chip.classList.remove('hidden');
   if (section) section.classList.remove('hidden');
+}
+
+function toggleHomeUsageDetail() {
+  const panel = document.getElementById('home-usage-detail');
+  const chip = document.getElementById('home-usage-chip');
+  if (!panel) return;
+  const open = panel.classList.toggle('hidden') === false;
+  if (chip) chip.setAttribute('aria-expanded', String(open));
+  if (open) refreshMyUsage();
 }
 
 async function refreshMyUsage() {
@@ -2541,6 +2578,7 @@ async function generateStoryWithWorkerStream(workerUrl, systemPrompt, userPrompt
           if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
           try {
             const parsed = JSON.parse(line.slice(6));
+            if (parsed?.usage) addTurnUsage(parsed.usage);
             const token = parsed?.choices?.[0]?.delta?.content ?? '';
             if (!token) continue;
             if (!receivedFirstToken) {
@@ -3181,6 +3219,7 @@ async function requestWorkerCompletion({ model, system, user, maxTokens = 800, t
         if (!payload || payload === '[DONE]') return;
         try {
           const o = JSON.parse(payload);
+          if (o.usage) addTurnUsage(o.usage);
           (o.choices || []).forEach(c => { out += (c.delta && c.delta.content) || ''; });
         } catch (e) { /* 不完整片段 */ }
       });
@@ -5880,6 +5919,7 @@ async function startNewGameWithProfile(profile) {
     
     let isFirstToken = true;
     let didStream = false;
+    resetTurnUsage();
     initialChapter = await generateStoryFromLLM(systemPrompt, userPrompt, (streamedProse) => {
          didStream = true;
          if (proseEl) {
@@ -5923,6 +5963,7 @@ async function startNewGameWithProfile(profile) {
   }
 
   initialChapter = auditGeneratedChapter(initialChapter, profile);
+  initialChapter.usage = takeTurnUsage(initialChapter.prose);
   initialChapter.act = 1;
   initialChapter.turn = 1;
   initialChapter.chosenLabel = '【正式開局】';
@@ -6027,6 +6068,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
       
       let isFirstToken = true;
       let didStream = false;
+      resetTurnUsage();
       nextChapter = await generateStoryFromLLM(systemPrompt, userPrompt, (streamedProse) => {
          didStream = true;
          if (proseEl) {
@@ -6048,6 +6090,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
 
     setLoadingPhase('saving', '內容檢查完成，正在套用數值變化並保存本回進度。');
     nextChapter = auditGeneratedChapter(nextChapter, profile, state.chapterHistoryList);
+    nextChapter.usage = takeTurnUsage(nextChapter.prose);
     nextChapter.act = state.saveState.meta.currentAct || 1;
     nextChapter.turn = state.saveState.turnCount;
     applyChapterStateChanges(nextChapter, profile, state.saveState.turnCount);
@@ -6253,6 +6296,7 @@ function renderStoryStream(activeChapter) {
       </div>
       ${decisionPill}
       <article class="font-serif prose-tc is-past select-text">${paragraphsHtml}</article>
+      ${formatChapterUsage(past) ? `<div class="chapter-usage text-right font-mono text-[11px] text-slate-500">${escapeHtml(formatChapterUsage(past))}</div>` : ''}
       <div class="flex flex-wrap justify-end gap-2 pt-2 border-t border-brand-border/30">
         <button class="past-pin-btn px-2.5 py-1.5 rounded-full border border-brand-border text-[11px] ${past.memoryPinned ? 'text-brand-gold border-brand-gold/50' : 'text-slate-500'} cursor-pointer" data-turn="${escapeHtml(past.turn || (i + 1))}">${past.memoryPinned ? uiIcon('pin') + ' 已標記重要' : uiIcon('pin') + ' 標記重要'}</button>
         <button class="past-rewind-btn px-2.5 py-1.5 rounded-full border border-rose-300/50 text-[11px] text-rose-600 cursor-pointer" data-turn="${escapeHtml(past.turn || (i + 1))}">↩︎ 從此回分歧</button>
@@ -6305,6 +6349,7 @@ function renderStoryStream(activeChapter) {
     <article id="stream-prose-content" class="font-serif text-slate-800 tracking-wide prose-tc cursor-pointer select-text" title="打字中點擊可直接顯示全文">
       故事載入中……
     </article>
+    ${formatChapterUsage(activeChapter) ? `<div class="chapter-usage text-right font-mono text-[11px] text-slate-500" title="本回生成（含重試與改寫）的字數、token 與費用；台幣以 1 美元＝31 元換算">${escapeHtml(formatChapterUsage(activeChapter))}</div>` : ''}
 
     ${(activeChapter.qualityWarnings || []).length ? `
       <div class="rounded-xl border border-amber-300/60 bg-amber-50 p-3 text-xs text-amber-800">
@@ -8065,6 +8110,7 @@ async function handleRegenerateTurn() {
       const rProseEl = document.getElementById('stream-prose-content');
       if (rProseEl) rProseEl.innerHTML = '<p class="mb-6 indent-6 sm:indent-8 animate-pulse text-brand-gold/80">重新推演命運中……</p>';
       let rFirstToken = true, rDidStream = false;
+      resetTurnUsage();
       let regeneratedChapter = await generateStoryFromLLM(systemPrompt, userPrompt, (streamedProse) => {
         rDidStream = true;
         if (rProseEl) {
@@ -8076,6 +8122,7 @@ async function handleRegenerateTurn() {
       if (rDidStream) regeneratedChapter.skipTypewriter = true;
       const auditedRegeneratedChapter = auditGeneratedChapter(regeneratedChapter, profile, state.chapterHistoryList.slice(0, -1));
       regeneratedChapter = auditedRegeneratedChapter;
+      regeneratedChapter.usage = takeTurnUsage(regeneratedChapter.prose);
       regeneratedChapter.act = 1;
       regeneratedChapter.turn = 1;
       regeneratedChapter.chosenLabel = '【正式開局】';

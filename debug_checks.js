@@ -1127,6 +1127,18 @@ assert.strictEqual(vm.runInContext(`applyTaiwanTerms('她在酒店工作過，�
   assert.doesNotMatch(issues, /完美|說真的/, '對白內的用詞不應被當成旁白問題');
 }
 
+// 每回用量：累計本回所有請求，台幣以 31 換算
+vm.runInContext(`resetTurnUsage(); addTurnUsage({ prompt_tokens: 14000, completion_tokens: 1500, cost: 0.002 }); addTurnUsage({ prompt_tokens: 900, completion_tokens: 300, cost: 0.0004 });`, frontendContext);
+{
+  const u = JSON.parse(vm.runInContext(`JSON.stringify(takeTurnUsage('他 把 車 停 好。'))`, frontendContext));
+  assert.strictEqual(u.promptTokens, 14900, '每回用量未累計所有請求');
+  assert.strictEqual(u.chars, 6, '每回字數應不含空白');
+  assert.strictEqual(vm.runInContext(`formatChapterUsage({ usage: ${JSON.stringify(u)} })`, frontendContext), '本回 6 字・1.7 萬 token・NT$0.07', '每回用量顯示格式錯誤');
+  assert.strictEqual(vm.runInContext(`takeTurnUsage('x')`, frontendContext), null, '取用後應清空，避免背景請求算進下一回');
+}
+assert.match(html, /我的用量（2026\/10\/7 起）/, '用量起算日未改為 2026/10/7');
+assert.match(html, /<button id="home-usage-chip"/, '首頁用量應可點開詳情');
+
 // 自動分幕：時機、幕號、幕篇檔案、全書前情（假模型回應，不打真實 API）
 (async () => {
   const run = code => vm.runInContext(code, frontendContext);

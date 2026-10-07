@@ -724,8 +724,8 @@ async function buildAdminStats(env) {
   };
 }
 
-/** 玩家看得到的用量從這天開始算（台北時間 2026-10-06 00:00）。 */
-const PLAYER_USAGE_SINCE = Date.parse('2026-10-06T00:00:00+08:00');
+/** 玩家看得到的用量從這天開始算（台北時間 2026-10-07 00:00）。 */
+const PLAYER_USAGE_SINCE = Date.parse('2026-10-07T00:00:00+08:00');
 const USD_TO_TWD = 31;
 /** output_chars 欄位加入前的正文回合，用輸出 token 估算字數（正文約佔章節輸出的七成）。 */
 const CHARS_PER_COMPLETION_TOKEN = 0.7;
@@ -746,7 +746,7 @@ async function handleMyUsage(request, env, origin, viaSharedKey) {
     const cost = Number(row && row.cost) || 0;
     const estimated = Math.round((Number(row && row.legacy_tokens) || 0) * CHARS_PER_COMPLETION_TOKEN);
     return json({ success: true, data: {
-      since: '2026-10-06',
+      since: '2026-10-07',
       turns: Number(row && row.turns) || 0,
       chars: (Number(row && row.chars) || 0) + estimated,
       charsEstimated: estimated > 0,
