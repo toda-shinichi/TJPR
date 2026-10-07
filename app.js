@@ -1944,11 +1944,12 @@ const GENERATION_MODES = {
     label: '露骨',
     // 2026-10-06 對比（4 位男主 × 2 組，Sonnet 盲評）：hy3 勝 6／7，文筆 3.7 vs 2.1、
     // 像角色 4.0 vs 2.4，速度穩定 13–33 秒；qwen3-30b 比喻過密、人稱混亂、會亂加設定。
-    // hy3 每回約 0.0019 美元，qwen3-30b 約 0.0012 美元。
+    // hy3 每回約 0.0019 美元。
     PRIMARY_MODEL: 'tencent/hy3',
     PRIMARY_MAX_ATTEMPTS: 2,
     FALLBACK_MAX_ATTEMPTS: 2,
-    FALLBACK_MODELS: ['qwen/qwen3-30b-a3b-instruct-2507']
+    // 2026-10-07 短篇比較：minimax-m3 文學性與角色演繹最好、露骨完整，取代 qwen3-30b 當備援
+    FALLBACK_MODELS: ['minimax/minimax-m3']
   }
 };
 const DEFAULT_GENERATION_MODE = 'normal';

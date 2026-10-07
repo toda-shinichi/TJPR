@@ -314,7 +314,7 @@ assert.doesNotMatch(rootApp, /text-\[#d8dbe6\]/, '最新回合仍使用深色主
 assert.match(css, /#stream-prose-content\s*\{[\s\S]*?color:\s*#3e363a\s*!important/, '最新回合正文缺少高對比色保護');
 assert.match(rootApp, /PRIMARY_MODEL: 'deepseek\/deepseek-v4-flash-0731'/, '一般鏈主力不是 deepseek-v4-flash');
 assert.match(rootApp, /PRIMARY_MODEL: 'tencent\/hy3'/, '露骨鏈主力不是 hy3');
-assert.match(rootApp, /FALLBACK_MODELS: \['qwen\/qwen3-30b-a3b-instruct-2507'\]/, '露骨鏈備援不是 qwen3-30b-a3b');
+assert.match(rootApp, /FALLBACK_MODELS: \['minimax\/minimax-m3'\]/, '露骨鏈備援不是 minimax-m3');
 assert.strictEqual((rootApp.match(/800–1200 個中文字/g) || []).length, 2, '開局提示詞的文學篇幅目標未完整更新');
 assert.match(rootApp, /篇幅依結尾【本回情慾尺度】的要求/, '續回篇幅未改由情慾尺度區塊決定');
 assert.match(rootApp, /正文至少 1,000 字，建議 1,100–1,500 字/, '露骨篇幅要求未更新');
@@ -329,11 +329,12 @@ assert.match(rootApp, /prose:\s*clampBlock\(h\.prose,\s*CONTEXT_BUDGET\.recentPr
 assert.match(gasConfig, /RECENT_TURNS_CONTEXT_LIMIT:\s*5/, '備用後端近期全文視窗不是 5 回');
 assert.match(memoryPipelineCode, /prose:\s*\(turnOutput\.prose \|\| ''\)\.substring\(0, 1800\)/, '備用後端未保存近期完整正文');
 assert.match(workerCode, /'deepseek\/deepseek-v4-flash-0731'/, 'Worker 白名單缺少一般鏈主力');
-assert.match(workerCode, /'qwen\/qwen3-30b-a3b-instruct-2507'/, 'Worker 白名單缺少露骨鏈主力');
+assert.match(workerCode, /'tencent\/hy3'/, 'Worker 白名單缺少露骨鏈主力');
 assert.match(workerCode, /openrouter\.ai/, 'Worker 上游未切到 OpenRouter');
 assert.match(workerCode, /sort: 'price'/, 'Worker 未依價格排序供應商');
 assert.match(workerCode, /'qwen\/qwen3-235b-a22b-2507'/, 'Worker 白名單缺少一般鏈備援');
-assert.match(workerCode, /'tencent\/hy3'/, 'Worker 白名單缺少露骨鏈備援');
+assert.match(workerCode, /'tencent\/hy3'/, 'Worker 白名單缺少露骨鏈主力');
+assert.match(workerCode, /'minimax\/minimax-m3',\n/, 'Worker 白名單缺少露骨鏈備援');
 // 實測四家供應商全數拒絕 L4，留在白名單只會讓玩家白等一輪
 assert.doesNotMatch(workerCode, /'google\/gemma-3-27b-it'/, 'gemma-3-27b 不應留在白名單');
 assert.match(gasConfig, /PRIMARY: 'deepseek\/deepseek-v4-flash-0731'/, 'GAS 一般鏈主力不是 deepseek-v4-flash');
@@ -403,7 +404,7 @@ const spicyPlan = vm.runInContext('buildAttemptPlan("spicy")', frontendContext);
 assert.deepStrictEqual(
   Array.from(spicyPlan),
   ['tencent/hy3', 'tencent/hy3',
-   'qwen/qwen3-30b-a3b-instruct-2507', 'qwen/qwen3-30b-a3b-instruct-2507'],
+   'minimax/minimax-m3', 'minimax/minimax-m3'],
 
   '露骨鏈嘗試計畫順序錯誤'
 );

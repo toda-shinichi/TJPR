@@ -32,7 +32,8 @@ const PINNED_PROVIDERS = {
   // 2026-10-06：移除 novita（0.41／1.23 美元，約 parasail 的 3 倍）；streamlake 最便宜（0.044／0.132），較慢但可用。
   'deepseek/deepseek-v4-flash-0731': ['parasail/fp8', 'streamlake/fp8'],
   // 實測 streamlake 2/2 完整可用、分數 100、11.6 秒
-  'qwen/qwen3-30b-a3b-instruct-2507': ['streamlake', 'dekallm', 'siliconflow/fp8'],
+  // 2026-10-07：coreweave 最便宜（0.23／0.96）、短篇實測 10–11 秒；gmicloud、deepinfra 為後備
+  'minimax/minimax-m3': ['coreweave/fp4', 'gmicloud/fp8', 'deepinfra/fp8'],
   // 2026-10-03 實測：gmicloud 12.3s／分數 100／最便宜、parasail 11.1s 最快但篇幅偏短、
   // venice 13.7s、streamlake 15.5s。排除 deepinfra／novita／nebius（51–71 秒）與
   // alibaba（JSON 0/2 可用）。
@@ -51,7 +52,8 @@ const PINNED_PROVIDERS = {
  */
 const REASONING_DISABLED_MODELS = new Set([
   'deepseek/deepseek-v4-flash-0731',
-  'tencent/hy3'
+  'tencent/hy3',
+  'minimax/minimax-m3'
   // qwen 的 -2507 instruct 版本不帶 reasoning 參數（思考版是獨立的 model ID），
   // 列進來只會送出一個供應商看不懂的欄位。
 ]);
@@ -109,11 +111,12 @@ const ALLOWED_MODELS = [
   'deepseek/deepseek-v4-flash-0731',
   'qwen/qwen3-235b-a22b-2507',
   // 露骨鏈：主力 → 備援
-  'qwen/qwen3-30b-a3b-instruct-2507',
+  'minimax/minimax-m3',
   'tencent/hy3'
 ];
 
 // 已移除的模型與原因（保留紀錄以免日後重蹈）：
+//   qwen3-30b-a3b     2026-10-07 露骨備援改用 minimax-m3：比喻過密、人稱混亂、會亂加設定
 //   gemma-4-31b-it    2026-10-07 露骨對比輸給 hy3：宣告式寫法多、人設偏強迫、錯字，速度 16–95 秒
 //   gemini-3.7-flash  60% 機率被靜默降級為 3.5 Flash-Lite，且會審查情慾內容
 //   gemini-3.6-flash  上游已無可用通道（No available channel）
