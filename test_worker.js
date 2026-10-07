@@ -231,7 +231,7 @@ async function runOfflineTests() {
   {
     const writes = [];
     const fakeDb = {
-      prepare(sql) { return { bind: (...args) => ({ sql, args, all: async () => ({ results: [] }) }), all: async () => ({ results: [] }) }; },
+      prepare(sql) { return { bind: (...args) => ({ sql, args, all: async () => ({ results: [] }), first: async () => ({ prompt_tokens: 1000, completion_tokens: 500, cost: 0.01, chars: 300, legacy_tokens: 100, turns: 2 }) }), all: async () => ({ results: [] }) }; },
       async batch(statements) { writes.push(...statements); }
     };
     const pending = [];
@@ -251,6 +251,17 @@ async function runOfflineTests() {
     assert.ok(insert, '未寫入用量紀錄');
     assert.deepStrictEqual(insert.args.slice(1, 8), ['u9', 'p@example.com', 'chapter', validPayload.model, 120, 30, 0.0012], '用量紀錄欄位錯誤');
     assert.ok(!JSON.stringify(insert.args).includes('"content"'), '用量紀錄不應含有提示詞內容');
+    assert.strictEqual(insert.args[11], 1, '正文字數未記錄（測試串流內容為一個中文字）');
+
+    // 玩家查詢自己的用量：只能查本人，台幣以 31 換算
+    globalThis.fetch = async () => Response.json({ success: true, data: { valid: true, userId: 'u9', email: 'p@example.com' } });
+    res = await worker.fetch(new Request('https://worker.test/me/usage', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Origin: ALLOWED_ORIGIN, 'X-Undercurrent-Token': 'epi_' + 'b'.repeat(32) }, body: '{}'
+    }), usageEnv, ctx);
+    const mine = (await res.json()).data;
+    assert.strictEqual(res.status, 200, '玩家無法查詢自己的用量');
+    assert.strictEqual(mine.chars, 370, '字數應為實際記錄加上舊資料估算');
+    assert.ok(Math.abs(mine.costTwd - 0.31) < 1e-9, '台幣換算錯誤');
 
     // 管理後台：非管理員 403，管理員 200
     const adminReq = token => new Request('https://worker.test/admin/stats', {

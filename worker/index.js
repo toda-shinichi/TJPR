@@ -556,10 +556,10 @@ async function recordUsage(env, entry) {
   try {
     await env.USAGE_DB.batch([
       env.USAGE_DB.prepare(
-        'INSERT INTO usage (ts, user_id, email, kind, model, prompt_tokens, completion_tokens, cost, status, duration_ms, cached_tokens) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)'
+        'INSERT INTO usage (ts, user_id, email, kind, model, prompt_tokens, completion_tokens, cost, status, duration_ms, cached_tokens, output_chars) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)'
       ).bind(entry.ts, entry.userId, entry.email || null, entry.kind, entry.model || null,
         entry.promptTokens || 0, entry.completionTokens || 0, entry.cost || 0, entry.status || 0, entry.durationMs || 0,
-        entry.cachedTokens || 0),
+        entry.cachedTokens || 0, entry.outputChars || 0),
       env.USAGE_DB.prepare(
         'INSERT INTO players (user_id, email, first_seen, last_seen) VALUES (?1, ?2, ?3, ?3) ON CONFLICT(user_id) DO UPDATE SET last_seen = excluded.last_seen, email = COALESCE(excluded.email, players.email)'
       ).bind(entry.userId, entry.email || null, entry.ts)
@@ -579,12 +579,16 @@ function tapStreamUsage(stream) {
   const decoder = new TextDecoder();
   let buffer = '';
   let usage = null;
+  let content = '';
   const scan = line => {
-    if (!line.startsWith('data: ') || !line.includes('"usage"')) return;
+    if (!line.startsWith('data: ')) return;
     try {
       const payload = JSON.parse(line.slice(6));
       if (payload && payload.usage) usage = payload.usage;
-    } catch (ignore) { /* 不完整片段 */ }
+      (payload && payload.choices || []).forEach(c => {
+        if (c && c.delta && typeof c.delta.content === 'string' && content.length < 200000) content += c.delta.content;
+      });
+    } catch (ignore) { /* 不完整片段或 [DONE] */ }
   };
   const tapped = stream.pipeThrough(new TransformStream({
     transform(chunk, controller) {
@@ -598,10 +602,21 @@ function tapStreamUsage(stream) {
     },
     flush() {
       scan(buffer.trim());
-      resolveUsage(usage);
+      resolveUsage(usage ? Object.assign({}, usage, { outputChars: countProseChars(content) }) : null);
     }
   }));
   return [tapped, usagePromise];
+}
+
+/** 正文字數：章節是 JSON，只算 prose 欄位；解析不了時退回計算中文字元。 */
+function countProseChars(text) {
+  const raw = String(text || '');
+  try {
+    const start = raw.indexOf('{');
+    const parsed = JSON.parse(raw.slice(start, raw.lastIndexOf('}') + 1));
+    if (parsed && typeof parsed.prose === 'string') return parsed.prose.replace(/\s/g, '').length;
+  } catch (ignore) { /* 非 JSON 或不完整 */ }
+  return (raw.match(/[\u3400-\u9fff]/g) || []).length;
 }
 
 function splitSessions(timestamps) {
@@ -709,6 +724,42 @@ async function buildAdminStats(env) {
   };
 }
 
+/** 玩家看得到的用量從這天開始算（台北時間 2026-10-06 00:00）。 */
+const PLAYER_USAGE_SINCE = Date.parse('2026-10-06T00:00:00+08:00');
+const USD_TO_TWD = 31;
+/** output_chars 欄位加入前的正文回合，用輸出 token 估算字數（正文約佔章節輸出的七成）。 */
+const CHARS_PER_COMPLETION_TOKEN = 0.7;
+
+async function handleMyUsage(request, env, origin, viaSharedKey) {
+  const auth = await authenticateRequest(request, env, viaSharedKey);
+  if (!auth.ok || viaSharedKey) {
+    return json({ error: { message: '請先登入。' } }, auth.serverError ? 503 : 401, origin);
+  }
+  if (!env.USAGE_DB) return json({ error: { message: '用量資料暫時無法讀取。' } }, 503, origin);
+  try {
+    const row = await env.USAGE_DB.prepare(`SELECT
+        SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens, SUM(cost) AS cost,
+        SUM(CASE WHEN kind = 'chapter' THEN output_chars ELSE 0 END) AS chars,
+        SUM(CASE WHEN kind = 'chapter' AND output_chars = 0 AND status BETWEEN 200 AND 299 THEN completion_tokens ELSE 0 END) AS legacy_tokens,
+        SUM(CASE WHEN kind = 'chapter' AND status BETWEEN 200 AND 299 THEN 1 ELSE 0 END) AS turns
+      FROM usage WHERE user_id = ?1 AND ts >= ?2`).bind(auth.userId || '', PLAYER_USAGE_SINCE).first();
+    const cost = Number(row && row.cost) || 0;
+    const estimated = Math.round((Number(row && row.legacy_tokens) || 0) * CHARS_PER_COMPLETION_TOKEN);
+    return json({ success: true, data: {
+      since: '2026-10-06',
+      turns: Number(row && row.turns) || 0,
+      chars: (Number(row && row.chars) || 0) + estimated,
+      charsEstimated: estimated > 0,
+      promptTokens: Number(row && row.prompt_tokens) || 0,
+      completionTokens: Number(row && row.completion_tokens) || 0,
+      costUsd: cost,
+      costTwd: cost * USD_TO_TWD
+    } }, 200, origin);
+  } catch (error) {
+    return json({ error: { message: '用量查詢失敗。' } }, 500, origin);
+  }
+}
+
 async function handleAdmin(request, env, origin, viaSharedKey) {
   const auth = await authenticateRequest(request, env, viaSharedKey);
   if (!auth.ok || viaSharedKey) {
@@ -755,6 +806,10 @@ export default {
 
     // 檢索用嵌入。與生成走同一組驗證，但不佔用生成佇列 ——
     // 嵌入跑在 Cloudflare 邊緣、不碰 OpenRouter 額度，排隊只會拖慢檢索。
+    if (new URL(request.url).pathname === '/me/usage') {
+      return handleMyUsage(request, env, origin, viaSharedKey);
+    }
+
     if (new URL(request.url).pathname === '/admin/stats') {
       return handleAdmin(request, env, origin, viaSharedKey);
     }
@@ -1008,6 +1063,7 @@ export default {
         completionTokens: usage ? usage.completion_tokens : 0,
         cost: usage ? Number(usage.cost) || 0 : 0,
         cachedTokens: usage && usage.prompt_tokens_details ? usage.prompt_tokens_details.cached_tokens || 0 : 0,
+        outputChars: usage && requestKind === 'chapter' ? usage.outputChars || 0 : 0,
         status: upstream.status,
         durationMs: Date.now() - startedAt
       }));

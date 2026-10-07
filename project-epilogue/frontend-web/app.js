@@ -1388,7 +1388,7 @@ function closeDrawer() {
 }
 
 // 向後兼容：openDrawer() 一律開啟狀態面板
-function openDrawer() { openDrawerPanel('status'); }
+function openDrawer() { openDrawerPanel('status'); refreshMyUsage(); }
 function openStatusDrawer() { openDrawerPanel('status'); }
 function openMenuDrawer() { openDrawerPanel('menu'); }
 
@@ -1916,6 +1916,62 @@ function updateUserBadgeUI(status = 'active') {
 
   updateEl(dom.usernameDisplay);
   updateEl(dom.homeUsernameDisplay);
+  refreshMyUsage();
+}
+
+/**
+ * 玩家自己的用量（2026-10-06 起）：正文字數、token、花費。
+ * 資料來自 Worker 的用量紀錄（只查自己的帳號），讀取不花 OpenRouter 額度。
+ */
+let myUsageTimer = null;
+function formatTokenCount(n) {
+  const v = Number(n) || 0;
+  return v >= 10000 ? `${(v / 10000).toFixed(1)} 萬` : v.toLocaleString('zh-TW');
+}
+
+function renderMyUsage(u) {
+  const chip = document.getElementById('home-usage-chip');
+  const section = document.getElementById('usage-section');
+  if (!u) {
+    if (chip) chip.classList.add('hidden');
+    if (section) section.classList.add('hidden');
+    return;
+  }
+  const chars = `${u.charsEstimated ? '約 ' : ''}${(Number(u.chars) || 0).toLocaleString('zh-TW')} 字`;
+  const tokens = formatTokenCount((Number(u.promptTokens) || 0) + (Number(u.completionTokens) || 0));
+  const twd = `NT$${(Number(u.costTwd) || 0).toFixed(2)}`;
+  const home = document.getElementById('home-usage-display');
+  if (home) home.textContent = `${chars}・${tokens} token・${twd}`;
+  const drawer = document.getElementById('drawer-usage-display');
+  if (drawer) {
+    drawer.innerHTML = [
+      `產出正文：<span class="font-mono text-slate-100">${escapeHtml(chars)}</span>（${(Number(u.turns) || 0).toLocaleString('zh-TW')} 回）`,
+      `使用 token：<span class="font-mono text-slate-100">${escapeHtml(tokens)}</span>（讀 ${formatTokenCount(u.promptTokens)}、寫 ${formatTokenCount(u.completionTokens)}）`,
+      `花費：<span class="font-mono text-slate-100">${twd}</span>（約 ${(Number(u.costUsd) || 0).toFixed(3)} 美元）`
+    ].join('<br>');
+  }
+  if (chip) chip.classList.remove('hidden');
+  if (section) section.classList.remove('hidden');
+}
+
+async function refreshMyUsage() {
+  if (!state.token || state.token.startsWith('tok_local_') || !LLM_CONFIG.WORKER_URL) { renderMyUsage(null); return; }
+  try {
+    const res = await fetch(`${LLM_CONFIG.WORKER_URL.replace(/\/$/, '')}/me/usage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Undercurrent-Token': state.token },
+      body: '{}'
+    });
+    if (!res.ok) return;
+    const body = await res.json();
+    if (body && body.success) renderMyUsage(body.data);
+  } catch (err) { /* 用量只是資訊，讀不到就不顯示 */ }
+}
+
+/** 生成完成後稍等再更新：用量紀錄是在串流結束後才寫入資料庫。 */
+function scheduleMyUsageRefresh() {
+  if (myUsageTimer) clearTimeout(myUsageTimer);
+  myUsageTimer = setTimeout(refreshMyUsage, 4000);
 }
 
 // =========================================================================
@@ -5985,6 +6041,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
     }
 
     syncStateToGoogleDriveCloud(state.saveState, nextChapter);
+    scheduleMyUsageRefresh();
     startServerCooldown(10);
   } catch (err) {
     console.error('makeChoice execution error:', err);
