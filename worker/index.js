@@ -114,6 +114,7 @@ const ALLOWED_MODELS = [
 ];
 
 // 已移除的模型與原因（保留紀錄以免日後重蹈）：
+//   gemma-4-31b-it    2026-10-07 露骨對比輸給 hy3：宣告式寫法多、人設偏強迫、錯字，速度 16–95 秒
 //   gemini-3.7-flash  60% 機率被靜默降級為 3.5 Flash-Lite，且會審查情慾內容
 //   gemini-3.6-flash  上游已無可用通道（No available channel）
 //   gemini-3.1-pro    會審查，且供應商間歇性回傳空回應（Google 擋 egress IP）
