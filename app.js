@@ -1190,6 +1190,8 @@ function setupEventListeners() {
         // 意見回饋與問題回報彈窗
     on('nav-feedback-btn', 'click', () => openFeedbackModal());
     on('drawer-feedback-btn', 'click', () => { closeDrawer(); openFeedbackModal(); });
+    on('home-contact-btn', 'click', () => openFeedbackModal());
+    on('contact-copy-email-btn', 'click', copyDeveloperEmail);
     on('close-feedback-btn', 'click', closeFeedbackModal);
     on('cancel-feedback-btn', 'click', closeFeedbackModal);
     on('feedback-form', 'submit', handleFeedbackSubmit);
@@ -8675,6 +8677,17 @@ async function sendTelemetryError(category, message, details = {}) {
 /**
  * 開啟意見回饋彈窗
  */
+const DEVELOPER_EMAIL = 'todashinchi@gmail.com';
+
+async function copyDeveloperEmail() {
+  try {
+    await navigator.clipboard.writeText(DEVELOPER_EMAIL);
+    notifyUser('已複製開發者信箱：' + DEVELOPER_EMAIL, 'success', 4000);
+  } catch (err) {
+    notifyUser('無法自動複製，請手動複製：' + DEVELOPER_EMAIL, 'info', 6000);
+  }
+}
+
 function openFeedbackModal(prefilledData = {}) {
   const modal = openOverlay('feedback-modal', { focusSelector: '#feedback-content' });
   if (!modal) return;
@@ -8759,7 +8772,7 @@ async function handleFeedbackSubmit(e) {
       });
       const data = await res.json();
       if (data.success) {
-        notifyUser('感謝您的回饋，意見已同步至開發團隊。', 'success', 5000);
+        notifyUser('已寄給開發者，謝謝你的來信。有留下 Email 的話，開發者會再回覆你。', 'success', 6000);
       } else {
         notifyUser('回饋提交失敗：' + (data.error?.message || '伺服器回應異常，請稍後再試。'), 'error', 5000);
       }

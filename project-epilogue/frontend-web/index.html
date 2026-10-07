@@ -15,8 +15,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;family=Noto+Serif+TC:wght@400;600;900&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./tailwind.generated.css?v=92b91456c5">
-  <link rel="stylesheet" href="./style.css?v=92b91456c5">
+  <link rel="stylesheet" href="./tailwind.generated.css?v=a5537b684a">
+  <link rel="stylesheet" href="./style.css?v=a5537b684a">
   <style>
     /* 線條 icon（取代 emoji）：跟著文字大小與顏色走 */
     .ui-icon { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; flex-shrink: 0;
@@ -50,8 +50,8 @@
       <button id="nav-presets-btn" class="hidden px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-slate-200 hover:text-white transition items-center gap-1 cursor-pointer" title="人設庫">
         <span>人設庫</span>
       </button>
-      <button id="nav-feedback-btn" class="hidden px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-sky-200 hover:text-white transition items-center gap-1 cursor-pointer" title="填寫測試意見回饋或 Bug 回報">
-        <span>測試回饋</span>
+      <button id="nav-feedback-btn" class="hidden px-2.5 py-1.5 rounded-lg bg-brand-card hover:bg-brand-border border border-brand-border text-xs text-sky-200 hover:text-white transition items-center gap-1 cursor-pointer" title="問題、建議、討論都可以來信">
+        <span>聯繫開發者</span>
       </button>
       <button id="cloud-sync-status-badge" type="button" class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/70 border border-slate-600/50 text-[11px] font-mono text-slate-300 transition cursor-pointer" title="雲端同步狀態（點擊立即同步）">
         <span id="cloud-sync-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
@@ -118,6 +118,9 @@
           </div>
           <button id="home-logout-btn" class="hidden px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-brand-border transition items-center gap-1 cursor-pointer">
             <span>登出帳號</span>
+          </button>
+          <button id="home-contact-btn" type="button" class="px-3 py-1.5 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700 transition flex items-center gap-1 cursor-pointer" title="問題、建議、討論都可以來信">
+            <span>聯繫開發者</span>
           </button>
           <button id="home-open-account-btn" class="px-3 py-1.5 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700 transition flex items-center gap-1 cursor-pointer" title="帳號與資料管理">
             <span>帳號與資料 →</span>
@@ -822,7 +825,16 @@
               <span><svg class="ui-icon" aria-hidden="true"><use href="#i-library"></use></svg> 5. 長局遊玩與故事記憶整理</span>
             </h4>
             <p class="text-slate-300 text-xs">
-              同一幕累積約 30 回後，系統會建議「整理故事記憶」，將本幕的重要情節濃縮並進入下一幕。數值、關係與道具都會保留，建議執行前先建立具名存檔。
+              每一幕滿 40 回後，遇到換場景時會自動進入下一幕，並把前一幕整理成幕篇檔案；更早的幕會濃縮成全書前情。不需要另開新局，數值、道具與原始正文都會保留。也可以在選單裡隨時手動「整理故事記憶」。
+            </p>
+          </div>
+
+          <div class="bg-brand-card p-4 rounded-xl border border-brand-border space-y-2">
+            <h4 class="font-serif font-bold text-sm text-brand-gold flex items-center gap-1.5">
+              <span><svg class="ui-icon" aria-hidden="true"><use href="#i-message"></use></svg> 6. 聯繫開發者</span>
+            </h4>
+            <p class="text-slate-300 text-xs">
+              遇到問題、有建議、想討論劇情或角色，都可以寫信到 <a href="mailto:todashinchi@gmail.com?subject=%E3%80%90%E6%9A%97%E6%B5%81%E3%80%91%E7%8E%A9%E5%AE%B6%E4%BE%86%E4%BF%A1" class="text-brand-gold underline">todashinchi@gmail.com</a>，或從首頁、選單的「聯繫開發者」直接留言，開發者子桓會親自看。
             </p>
           </div>
         </div>
@@ -943,8 +955,8 @@
           <div class="text-[10px] text-slate-400">人物檔案與系統指南</div>
         </button>
                 <button id="drawer-feedback-btn" class="p-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border hover:border-sky-500/50 text-left transition cursor-pointer flex flex-col gap-0.5">
-          <div class="text-xs font-bold text-sky-300 flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-message"></use></svg></span><span>測試回饋</span></div>
-          <div class="text-[10px] text-slate-400">意見與問題回報</div>
+          <div class="text-xs font-bold text-sky-300 flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-message"></use></svg></span><span>聯繫開發者</span></div>
+          <div class="text-[10px] text-slate-400">問題、建議、討論</div>
         </button>
         <button onclick="forceBypassCacheReload()" class="p-2.5 rounded-xl bg-sky-950/40 hover:bg-sky-950 border border-sky-700/50 text-left transition cursor-pointer flex flex-col gap-0.5">
           <div class="text-xs font-bold text-sky-200 flex items-center gap-1"><span><svg class="ui-icon" aria-hidden="true"><use href="#i-refresh"></use></svg></span><span>更新最新版</span></div>
@@ -999,20 +1011,32 @@
   </aside>
 
   <!-- 測試意見反饋與問題回報彈窗 (Feedback Modal) -->
-  <div id="feedback-modal" role="dialog" aria-modal="true" aria-label="測試意見反饋與問題回報" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[90] overflow-y-auto p-3 sm:p-6 flex justify-center items-start transition-opacity" style="display:none;">
+  <div id="feedback-modal" role="dialog" aria-modal="true" aria-label="聯繫開發者" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[90] overflow-y-auto p-3 sm:p-6 flex justify-center items-start transition-opacity" style="display:none;">
     <div class="bg-brand-surface border border-sky-500/50 rounded-2xl max-w-lg w-full my-auto shadow-2xl p-5 sm:p-6 space-y-4 relative">
       
       <div class="flex justify-between items-center pb-3 border-b border-brand-border">
         <div>
           <h3 class="font-serif font-bold text-base sm:text-lg text-sky-300 flex items-center gap-2">
-            <span>測試意見反饋與問題回報 (Beta Feedback)</span>
+            <span>聯繫開發者</span>
           </h3>
-          <p class="text-xs text-slate-400 mt-0.5">您的每一則回饋都將直接同步至開發管理團隊，協助持續打磨《暗流》。</p>
+          <p class="text-xs text-slate-400 mt-0.5">遇到問題、有建議、想討論劇情或角色，都歡迎來信，開發者子桓會親自看。</p>
         </div>
         <button id="close-feedback-btn" class="text-slate-400 hover:text-white p-1 cursor-pointer">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
       </div>
+
+      <div class="rounded-xl border border-brand-border bg-brand-card/70 p-3.5 space-y-2 text-xs">
+        <div class="font-bold text-slate-200">直接寫信</div>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-mono text-brand-gold select-all">todashinchi@gmail.com</span>
+          <a id="contact-mailto-link" href="mailto:todashinchi@gmail.com?subject=%E3%80%90%E6%9A%97%E6%B5%81%E3%80%91%E7%8E%A9%E5%AE%B6%E4%BE%86%E4%BF%A1" class="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold transition">開啟信箱寫信</a>
+          <button type="button" id="contact-copy-email-btn" class="px-2.5 py-1 rounded-lg border border-brand-border text-slate-300 hover:text-white transition cursor-pointer">複製信箱</button>
+        </div>
+        <p class="text-[11px] text-slate-500">適合長篇討論、附圖或想持續往來。</p>
+      </div>
+
+      <div class="text-xs text-slate-400">或直接在這裡留言，送出後會寄到開發者信箱，可以順便附上目前的遊戲進度，方便排查問題：</div>
 
       <form id="feedback-form" class="space-y-3.5 text-xs sm:text-sm">
         
@@ -1023,6 +1047,7 @@
             <option value="Bug / 系統異常報錯">Bug / 系統異常報錯</option>
             <option value="劇情 / 人設走向建議">劇情 / 人設走向建議</option>
             <option value="介面與排版改進">介面與排版改進</option>
+            <option value="想法討論 / 交流">想法討論 / 交流</option>
             <option value="整體遊玩心得 / 其他" selected>整體遊玩心得 / 其他</option>
           </select>
         </div>
@@ -1063,7 +1088,7 @@
         <!-- 稱呼或聯絡方式 -->
         <div>
           <label class="block font-bold text-slate-200 mb-1">您的稱呼 / 聯絡信箱（選填）</label>
-          <input type="text" id="feedback-contact" placeholder="可留 Email 或暱稱，便於團隊跟進" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white text-xs focus:border-sky-400 focus:outline-none">
+          <input type="text" id="feedback-contact" placeholder="想收到回覆的話，請留下 Email" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-white text-xs focus:border-sky-400 focus:outline-none">
         </div>
 
         <!-- 附帶遊戲診斷數據 -->
@@ -1196,6 +1221,6 @@
       window.location.replace(currentUrl.toString());
     }
   </script>
-    <script src="app.js?v=92b91456c5" defer></script>
+    <script src="app.js?v=a5537b684a" defer></script>
 </body>
 </html>

@@ -1139,6 +1139,12 @@ vm.runInContext(`resetTurnUsage(); addTurnUsage({ prompt_tokens: 14000, completi
 assert.strictEqual((html.match(/我的用量<span class="usage-since"><\/span>/g) || []).length, 2, '用量起算日應依玩家第一筆紀錄顯示');
 assert.match(html, /<button id="home-usage-chip"/, '首頁用量應可點開詳情');
 
+// 聯繫開發者：首頁、選單、說明都有入口，可直接寫信或複製信箱
+assert.match(html, /mailto:todashinchi@gmail\.com/, '缺少寫信給開發者的連結');
+assert.match(html, /id="home-contact-btn"/, '首頁缺少聯繫開發者入口');
+assert.match(html, /id="contact-copy-email-btn"/, '缺少複製信箱按鈕');
+assert.match(rootApp, /on\('home-contact-btn', 'click', \(\) => openFeedbackModal\(\)\)/, '首頁聯繫入口未綁定');
+
 // 自動分幕：時機、幕號、幕篇檔案、全書前情（假模型回應，不打真實 API）
 (async () => {
   const run = code => vm.runInContext(code, frontendContext);
