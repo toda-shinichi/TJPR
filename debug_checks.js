@@ -126,9 +126,9 @@ const recentHistoryPrompt = vm.runInContext(`buildRecentHistoryBlock([
   { turn: 3, prose: '第三回' }, { turn: 4, prose: '第四回' },
   { turn: 5, prose: '第五回' }, { turn: 6, prose: '第六回' }
 ])`, frontendContext);
-assert.doesNotMatch(recentHistoryPrompt, /── 第 1 幕 · 第 1 回：/, '近期全文視窗錯誤保留了第 6 回以前的內容');
+assert.doesNotMatch(recentHistoryPrompt, /── 第一幕 · 第 1 回：/, '近期全文視窗錯誤保留了第 6 回以前的內容');
 assert.match(recentHistoryPrompt, /最近 5 回全文/, '近期全文視窗沒有保留 5 回');
-assert.match(recentHistoryPrompt, /── 第 1 幕 · 第 2 回：[\s\S]*── 第 1 幕 · 第 6 回：/, '近期全文視窗未正確包含最後 5 回');
+assert.match(recentHistoryPrompt, /── 第一幕 · 第 2 回：[\s\S]*── 第一幕 · 第 6 回：/, '近期全文視窗未正確包含最後 5 回');
 
 const pinnedPrompt = vm.runInContext(`buildPinnedMemoryBlock([
   { turn: 2, chapterTitle: '未釘選', prose: '不應出現', memoryPinned: false },
@@ -915,7 +915,7 @@ assert.doesNotMatch(summaryFn, /action: 'llm\/proxy'/, '摘要池仍經 GAS 代�
 assert.ok(vm.runInContext("clampTurnSummary('徐令謙收下胸針並藏進風衣暗格，韓正寰找上門要求交出，徐令謙拒絕後韓正寰揚言申請搜索票再來。').length <= 51", frontendContext), '逐回摘要超過 50 字');
 assert.match(rootApp, /scheduleTurnSummary\(nextChapter\)/, '回合結束未排程逐回摘要');
 assert.match(rootApp, /const timelineBlock = buildTurnTimelineBlock\(turnCount\)/, '逐回摘要未進入提示詞時間軸');
-assert.match(rootApp, /較早回合（正文已封存，僅保留摘要）/, '章節導覽未顯示已封存回合的摘要');
+assert.match(rootApp, /較早的回（正文已封存，僅保留摘要）/, '章節導覽未顯示已封存回合的摘要');
 // 回報按鍵只能綁一次，否則表單會被開兩次
 assert.strictEqual((rootApp.match(/on\('report-error-btn'/g) || []).length, 1, '回報按鍵重複綁定');
 // 介面不得有 emoji（以線條 icon 取代）
@@ -1094,7 +1094,8 @@ for (const [raw, want] of [
 ]) {
   assert.strictEqual(vm.runInContext(`stripChapterNumbering(${JSON.stringify(raw)})`, frontendContext), want, `標題編號清除錯誤：${raw}`);
 }
-assert.strictEqual(vm.runInContext(`formatActTurn(2, 15)`, frontendContext), '第 2 幕 · 第 15 回', '幕回標籤格式錯誤');
+assert.strictEqual(vm.runInContext(`formatActTurn(2, 15)`, frontendContext), '第二幕 · 第 15 回', '幕回標籤格式錯誤');
+assert.strictEqual(vm.runInContext(`toChineseNumeral(10) + toChineseNumeral(12) + toChineseNumeral(20) + toChineseNumeral(31)`, frontendContext), '十十二二十三十一', '國字數字錯誤');
 assert.doesNotMatch(rootApp, /"chapterTitle": "第 1 幕 第/, '提示詞範本仍要求模型寫死第 1 幕');
 
 // AI 額度用完時直接停止重試
@@ -1126,4 +1127,39 @@ assert.strictEqual(vm.runInContext(`applyTaiwanTerms('她在酒店工作過，�
   assert.doesNotMatch(issues, /完美|說真的/, '對白內的用詞不應被當成旁白問題');
 }
 
-console.log('所有本機偵錯檢查皆已通過。');
+// 自動分幕：時機、幕號、幕篇檔案、全書前情（假模型回應，不打真實 API）
+(async () => {
+  const run = code => vm.runInContext(code, frontendContext);
+  run(`state.saveState = { turnCount: 40, meta: { currentAct: 1, actStartTurn: 1 }, summaryPool: '本幕摘要', memoryBank: [] };`);
+  assert.strictEqual(run(`shouldAutoAdvanceAct(state.saveState, { statusPanel: { timeLocation: '車上' } }, { statusPanel: { timeLocation: '車上' } })`), false, '同一場景不應在第 40 回換幕');
+  assert.strictEqual(run(`shouldAutoAdvanceAct(state.saveState, { statusPanel: { timeLocation: '他家' } }, { statusPanel: { timeLocation: '車上' } })`), true, '滿 40 回且換場景時應換幕');
+  run(`state.saveState.turnCount = 39;`);
+  assert.strictEqual(run(`shouldAutoAdvanceAct(state.saveState, { statusPanel: { timeLocation: '他家' } }, { statusPanel: { timeLocation: '車上' } })`), false, '未滿 40 回不應換幕');
+  run(`state.saveState.turnCount = 48;`);
+  assert.strictEqual(run(`shouldAutoAdvanceAct(state.saveState, {}, {})`), true, '第 48 回應強制換幕');
+
+  run(`state.saveState = { turnCount: 130, meta: { currentAct: 3, actStartTurn: 89 }, summaryPool: '第三幕摘要',
+        memoryBank: [], actDossiers: ['第一幕舊檔案（字串格式）', { act: 2, title: '雨夜', text: '第二幕檔案' }], sagaSummary: '' };
+       state.chapterHistoryList = [{ turn: 130, act: 3, prose: '他把車停在巷口。', chapterTitle: '巷口' }];
+       requestWorkerCompletion = async () => JSON.stringify({ title: '第三幕　交易', dossier: '幕篇'.repeat(150), saga: '全書前情'.repeat(40) });`);
+  await run(`advanceAct({ silent: true })`);
+  const after = JSON.parse(run(`JSON.stringify(state.saveState)`));
+  assert.strictEqual(after.meta.currentAct, 4, '換幕後幕號應加一');
+  assert.strictEqual(after.meta.actStartTurn, 131, '新幕應從下一回開始');
+  assert.strictEqual(after.summaryPool, '', '換幕後本幕摘要應重新累積');
+  assert.strictEqual(after.actDossiers.length, 2, '只保留最近兩幕的幕篇檔案');
+  assert.deepStrictEqual(after.actDossiers.map(d => d.act), [2, 3], '最舊的幕篇應併入全書前情');
+  assert.strictEqual(after.actDossiers[1].title, '交易', '幕名應去掉編號');
+  assert.match(after.sagaSummary, /全書前情/, '全書前情未更新');
+  assert.strictEqual(after.meta.actTitles['3'], '交易', '幕名未記錄');
+  assert.ok(!after.meta.actRolloverPending, '換幕完成後應清除處理中標記');
+  const block = run(`buildActDossierBlock(state.saveState)`);
+  assert.match(block, /全書前情/, '提示詞缺少全書前情');
+  assert.match(block, /第三幕「交易」 幕篇檔案/, '提示詞幕篇檔案缺少幕號或幕名');
+  assert.strictEqual(run(`clampSummaryPool('舊'.repeat(5000) + '最新劇情')`).slice(-4), '最新劇情', '摘要池截斷應保留最新部分');
+})().then(() => {
+  console.log('所有本機偵錯檢查皆已通過。');
+}).catch(err => {
+  console.error(err);
+  process.exit(1);
+});

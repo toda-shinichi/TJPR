@@ -2206,8 +2206,27 @@ function displayChapterTitle(chapter, fallback = '未命名章節') {
   return stripChapterNumbering(chapter?.chapterTitle) || fallback;
 }
 
+/** 1–99 的國字數字，幕用國字（第二幕），回用阿拉伯數字（第 41 回），兩者一眼可分。 */
+function toChineseNumeral(n) {
+  const digits = '零一二三四五六七八九';
+  const v = Math.max(1, Math.min(99, Math.floor(Number(n) || 1)));
+  if (v < 10) return digits[v];
+  const tens = Math.floor(v / 10), ones = v % 10;
+  return `${tens === 1 ? '' : digits[tens]}十${ones ? digits[ones] : ''}`;
+}
+
+function formatActLabel(act) {
+  return `第${toChineseNumeral(act)}幕`;
+}
+
 function formatActTurn(act, turn) {
-  return `第 ${Number(act) || 1} 幕 · 第 ${Number(turn) || 1} 回`;
+  return `${formatActLabel(act)} · 第 ${Number(turn) || 1} 回`;
+}
+
+/** 幕名由換幕時的幕篇整理一併產生；第一幕在換幕前沒有幕名。 */
+function getActTitle(act, saveState = state.saveState) {
+  const titles = saveState?.meta?.actTitles || {};
+  return String(titles[String(Number(act) || 1)] || '').trim();
 }
 
 function auditGeneratedChapter(input, profile, historyList = []) {
@@ -3672,6 +3691,7 @@ const CONTEXT_BUDGET = {
   recentProsePerTurn: 2400,
   actDossiers: 2,              // 保留最近幾幕的幕篇檔案
   actDossierChars: 1400,       // 單份幕篇檔案上限（幕篇檔案要求 800–1,200 字）
+  // 更早的幕篇不會丟：換幕時併入「全書前情」（見 advanceAct）
   playerProfileChars: 900,
   liveStateChars: 800,
   questFlagsShown: 4           // 任務旗標只列最新幾條，避免隨回合累積膨脹
@@ -3709,14 +3729,23 @@ function buildPlayerProfileBlock(profile) {
  * 但先前前端提示詞從不讀 actDossiers —— 換窗因此變成「刪掉上下文、
  * 換來的東西沒送出去」的淨損失。
  */
+/** 幕篇檔案統一成 { act, title, text }；舊存檔是純字串，依位置推算幕號。 */
+function normalizeDossiers(saveState) {
+  const list = (saveState && Array.isArray(saveState.actDossiers)) ? saveState.actDossiers : [];
+  return list.map((d, i) => (d && typeof d === 'object')
+    ? { act: Number(d.act) || i + 1, title: String(d.title || ''), text: String(d.text || '') }
+    : { act: i + 1, title: '', text: String(d || '') });
+}
+
 function buildActDossierBlock(saveState) {
-  const dossiers = (saveState && Array.isArray(saveState.actDossiers)) ? saveState.actDossiers : [];
-  if (dossiers.length === 0) return '';
-  const recent = dossiers.slice(-CONTEXT_BUDGET.actDossiers);
-  const offset = dossiers.length - recent.length;
-  const parts = recent.map((d, i) =>
-    `── 第 ${offset + i + 1} 幕 幕篇檔案 ──\n${clampBlock(d, CONTEXT_BUDGET.actDossierChars)}`
-  );
+  const dossiers = normalizeDossiers(saveState);
+  const saga = String(saveState?.sagaSummary || '').trim();
+  if (dossiers.length === 0 && !saga) return '';
+  const parts = [];
+  if (saga) parts.push(`── 全書前情（更早各幕的濃縮）──\n${clampBlock(saga, SAGA_SUMMARY_MAX_CHARS)}`);
+  dossiers.slice(-CONTEXT_BUDGET.actDossiers).forEach(d => {
+    parts.push(`── ${formatActLabel(d.act)}${d.title ? `「${d.title}」` : ''} 幕篇檔案 ──\n${clampBlock(d.text, CONTEXT_BUDGET.actDossierChars)}`);
+  });
   return `【已完結幕篇的歷史檔案（早期劇情的權威濃縮，請視為既定事實）】\n${parts.join('\n\n')}\n`;
 }
 
@@ -4051,7 +4080,7 @@ const MEMORY = {
   factChars: 120,          // 模型常寫到 70–90 字；60 字上限曾把約定的時間地點截掉
   sceneChars: 260,
   topK: 6,                 // 撈回幾則。太多會擠壓近期全文的份量。
-  maxScenes: 2,            // 場景條目長且不精確，最多佔兩則，其餘名額留給事實
+  maxSceneHits: 2,         // 檢索時場景條目最多佔兩則（先前與 maxScenes 同名，把保存上限蓋成 2）
   scenePenalty: 0.04,      // 場景條目的分數折扣：同樣相關時優先採用精簡的事實
   minScore: 0.42,          // 低於此分數視為不相關，寧可不補也不要餵雜訊。
   batchSize: 64            // 與 Worker 的 EMBED_MAX_BATCH 一致
@@ -4171,7 +4200,7 @@ async function rankMemories(queryText, candidates, topK = MEMORY.topK) {
   let scenes = 0;
   for (const m of scored) {
     if (m.kind === 'scene') {
-      if (scenes >= MEMORY.maxScenes) continue;
+      if (scenes >= MEMORY.maxSceneHits) continue;
       scenes += 1;
     }
     picked.push(m);
@@ -4530,12 +4559,14 @@ async function backfillTurnSummaries(limit = 10) {
  */
 function buildTurnTimelineBlock(currentTurn) {
   const windowStart = (Number(currentTurn) || 1) - CONTEXT_BUDGET.recentTurns;
+  // 只列本幕：前幾幕已濃縮進幕篇檔案與全書前情
+  const actStart = getActStartTurn(state.saveState);
   const items = getMemoryBank()
-    .filter(m => m.kind === 'summary' && m.turn < windowStart)
+    .filter(m => m.kind === 'summary' && m.turn < windowStart && m.turn >= actStart)
     .sort((a, b) => a.turn - b.turn)
     .slice(-40);
   if (!items.length) return '';
-  return `【劇情時間軸（較早回合的逐回摘要）】\n${items.map(m => `第 ${m.turn} 回：${m.text}`).join('\n')}\n`;
+  return `【本幕劇情時間軸（較早幾回的逐回摘要）】\n${items.map(m => `第 ${m.turn} 回：${m.text}`).join('\n')}\n`;
 }
 
 /**
@@ -5625,7 +5656,7 @@ ${literaryCraftBlock}`;
   const userPrompt = [
     playerBlock,
     '',
-    `【目前進度】第 ${saveState?.meta?.currentAct || 1} 幕 · 第 ${turnCount} 回`,
+    `【目前進度】${formatActTurn(saveState?.meta?.currentAct, turnCount)}`,
     '',
     dossierBlock,
     summaryBlock,
@@ -5917,7 +5948,7 @@ async function startNewGameWithProfile(profile) {
 }
 
 async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
-  if (state.isGenerating) return notifyUser('本回合正在生成，請稍候。');
+  if (state.isGenerating) return notifyUser('這一回正在生成，請稍候。');
   // 重試時沿用原本那一回合的模式，否則「開車」重試會掉回一般鏈而被審查擋下。
   state.generationMode = resolveGenerationMode(
     mode || (isRegenerating ? state.lastChoicePayload?.mode : null)
@@ -6042,6 +6073,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
 
     syncStateToGoogleDriveCloud(state.saveState, nextChapter);
     scheduleMyUsageRefresh();
+    maybeAutoAdvanceAct(nextChapter);
     startServerCooldown(10);
   } catch (err) {
     console.error('makeChoice execution error:', err);
@@ -6054,7 +6086,7 @@ async function makeChoice(choiceId, customInput, isRegenerating = false, mode) {
     if (isGenerationAbortError(err)) {
       renderStoryStream(state.chapterData);
       renderSaveState();
-      notifyUser('已中止本次生成，回合進度未變更。', 'info');
+      notifyUser('已中止本次生成，進度沒有變動。', 'info');
     } else {
       renderStoryStream(state.chapterData);
       renderSaveState();
@@ -6151,6 +6183,19 @@ function splitProseParagraphs(text) {
   return String(text || '').split(/\n\n|\n/).map(p => p.trim()).filter(Boolean);
 }
 
+/** 換幕分隔：前後兩回分屬不同幕時插在中間。 */
+function buildActDivider(act) {
+  const el = document.createElement('div');
+  el.className = 'act-divider flex items-center gap-3 py-2 select-none';
+  el.setAttribute('role', 'separator');
+  const title = getActTitle(act);
+  el.innerHTML = `
+    <span class="flex-1 h-px bg-brand-gold/30"></span>
+    <span class="font-serif text-sm sm:text-base font-bold tracking-[0.3em] text-brand-gold whitespace-nowrap">${escapeHtml(formatActLabel(act))}${title ? `<span class="tracking-normal font-normal text-slate-400">　${escapeHtml(title)}</span>` : ''}</span>
+    <span class="flex-1 h-px bg-brand-gold/30"></span>`;
+  return el;
+}
+
 function renderStoryStream(activeChapter) {
   if (!dom.novelStreamContainer) return;
   if (state.typewriterTimer) {
@@ -6176,6 +6221,11 @@ function renderStoryStream(activeChapter) {
   for (let i = renderStart; i < pastCount; i++) {
     const past = chapters[i];
     if (!past) continue;
+
+    const previousAct = i > 0 ? Number(chapters[i - 1]?.act) || 1 : 0;
+    if (i > renderStart && previousAct && previousAct !== (Number(past.act) || 1)) {
+      dom.novelStreamContainer.appendChild(buildActDivider(Number(past.act) || 1));
+    }
 
     const section = document.createElement('section');
     section.dataset.pastTurnIndex = String(i);
@@ -6233,7 +6283,7 @@ function renderStoryStream(activeChapter) {
     <div class="flex justify-between items-start gap-2 border-b border-brand-border pb-4">
       <div>
         <div class="inline-block font-mono text-xs text-brand-gold tracking-widest uppercase bg-brand-gold/10 border border-brand-gold/20 px-2.5 py-1 rounded mb-2">
-          ${escapeHtml(formatActTurn(currentActNum, currentTurnNum))}（最新進度）
+          ${escapeHtml(formatActTurn(activeRecord?.act || currentActNum, currentTurnNum))}（最新進度）
         </div>
         <h1 class="font-serif text-2xl sm:text-3xl font-black text-white leading-tight">
           ${escapeHtml(displayChapterTitle(activeChapter))}
@@ -6245,7 +6295,7 @@ function renderStoryStream(activeChapter) {
         <div class="absolute right-0 top-full z-20 mt-1 min-w-40 rounded-xl border border-brand-border bg-brand-surface p-1.5 shadow-xl flex flex-col gap-1">
           <button id="stream-regenerate-btn" class="game-action-control text-left text-xs hover:bg-brand-card text-slate-700 px-3 py-2 rounded-lg transition cursor-pointer" title="重新生成本回演繹">重新生成本回</button>
           <button id="stream-edit-last-btn" class="game-action-control text-left text-xs hover:bg-brand-card text-slate-700 px-3 py-2 rounded-lg transition cursor-pointer" title="修改上一個玩家行動再重新演繹">改寫上一個行動</button>
-          <button id="stream-rewind-btn" class="game-action-control text-left text-xs hover:bg-brand-card text-slate-700 px-3 py-2 rounded-lg transition cursor-pointer" title="回退到上一回合（可重新選擇）">回退上一回</button>
+          <button id="stream-rewind-btn" class="game-action-control text-left text-xs hover:bg-brand-card text-slate-700 px-3 py-2 rounded-lg transition cursor-pointer" title="回到上一回（可重新選擇）">回退上一回</button>
         </div>
       </details>
     </div>
@@ -6303,6 +6353,9 @@ function renderStoryStream(activeChapter) {
     </div>
   `;
 
+  const lastPastAct = pastCount > 0 ? Number(chapters[pastCount - 1]?.act) || 1 : 0;
+  const activeAct = Number(activeRecord?.act) || currentActNum;
+  if (lastPastAct && lastPastAct !== activeAct) dom.novelStreamContainer.appendChild(buildActDivider(activeAct));
   dom.novelStreamContainer.appendChild(activeSection);
 
   document.getElementById('stream-regenerate-btn')?.addEventListener('click', handleRegenerateTurn);
@@ -6548,13 +6601,23 @@ function renderChapterNavList() {
   if (archived.length) {
     const box = document.createElement('div');
     box.className = 'px-3 py-2 rounded-lg border border-brand-border/40 bg-brand-dark/40 text-slate-400 space-y-1';
-    box.innerHTML = `<div class="text-[10px] font-mono opacity-70">較早回合（正文已封存，僅保留摘要）</div>`
+    box.innerHTML = `<div class="text-[10px] font-mono opacity-70">較早的回（正文已封存，僅保留摘要）</div>`
       + archived.map(([t, text]) => `<div class="text-[11px] leading-relaxed"><span class="font-mono opacity-60">第 ${t} 回</span>　${escapeHtml(text)}</div>`).join('');
     listEl.appendChild(box);
   }
+  let listedAct = 0;
   chapters.forEach((ch, idx) => {
     const turn = ch.turn || (idx + 1);
     const isCurrent = turn === currentTurn;
+    const chAct = Number(ch.act) || 1;
+    if (chAct !== listedAct) {
+      listedAct = chAct;
+      const head = document.createElement('div');
+      head.className = 'pt-2 pb-1 px-1 text-[11px] font-serif font-bold tracking-widest text-brand-gold border-b border-brand-gold/20';
+      const actTitle = getActTitle(chAct);
+      head.textContent = `${formatActLabel(chAct)}${actTitle ? `　${actTitle}` : ''}`;
+      listEl.appendChild(head);
+    }
     const row = document.createElement('button');
     row.type = 'button';
     row.className = `w-full text-left px-3 py-2 rounded-lg border transition cursor-pointer ${
@@ -6565,7 +6628,7 @@ function renderChapterNavList() {
     const summary = ch.turnSummary || summaryByTurn.get(Number(turn)) || '';
     row.innerHTML = `
       <div class="flex items-start gap-2">
-        <span class="font-mono text-[10px] shrink-0 opacity-70 mt-0.5">${formatActTurn(ch.act, turn)}</span>
+        <span class="font-mono text-[10px] shrink-0 opacity-70 mt-0.5">第 ${turn} 回</span>
         <span class="font-serif font-bold break-words min-w-0">${escapeHtml(displayChapterTitle(ch))}</span>
         ${isCurrent ? '<span class="ml-auto text-[10px] font-mono shrink-0">目前</span>' : ''}
       </div>
@@ -6716,25 +6779,9 @@ const REBASE_SUGGEST_THRESHOLD = 30;
 let rebaseSuggestionDismissedAtTurn = 0;
 
 function updateRebaseSuggestion() {
+  // 2026-10-07 改為自動分幕（見 advanceAct），不再提示玩家手動整理故事記憶
   const banner = document.getElementById('rebase-suggestion-banner');
-  const textEl = document.getElementById('rebase-suggestion-text');
-  if (!banner) return;
-
-  const turn = state.saveState?.turnCount || 1;
-  const act = state.saveState?.meta?.currentAct || 1;
-  const turnsInAct = (state.chapterHistoryList || []).length;
-  const shouldSuggest = turnsInAct >= REBASE_SUGGEST_THRESHOLD
-    && turn > rebaseSuggestionDismissedAtTurn + 10;
-
-  if (!shouldSuggest) {
-    banner.style.display = 'none';
-    return;
-  }
-  if (textEl) {
-    textEl.textContent = `第 ${act} 幕已累積 ${turnsInAct} 回，上下文已相當長。`
-      + '建議整理故事記憶，把本幕濃縮成重要情節以維持連貫度（數值與道具全部保留）。';
-  }
-  banner.style.display = 'flex';
+  if (banner) banner.style.display = 'none';
 }
 
 function dismissRebaseSuggestion() {
@@ -7096,7 +7143,8 @@ const SUMMARY_POOL_MAX_CHARS = 5000;
 function clampSummaryPool(text) {
   const str = String(text || '');
   if (str.length <= SUMMARY_POOL_MAX_CHARS) return str;
-  return str.slice(0, SUMMARY_POOL_MAX_CHARS - 1) + '…';
+  // 保留最新的部分：先前保留開頭、砍掉結尾，等於丟掉最新劇情
+  return '…' + str.slice(-(SUMMARY_POOL_MAX_CHARS - 1));
 }
 
 // ==========================================
@@ -7188,7 +7236,7 @@ function renderExpandableProse(prose) {
 function renderMemoryCenter() {
   const container = dom.memoryCenterContent;
   if (!container) return;
-  const summary = state.saveState?.summaryPool || '目前尚未建立長期摘要；近期回合仍以完整正文保留。';
+  const summary = state.saveState?.summaryPool || '目前尚未建立本幕摘要；最近幾回仍以完整正文保留。';
   const pinned = getPinnedMemories();
   const sp = state.chapterData?.statusPanel || {};
   const rels = state.saveState?.relationships || {};
@@ -7201,12 +7249,12 @@ function renderMemoryCenter() {
   const pinnedHtml = pinned.length ? pinned.map(ch => `
     <article class="p-3 rounded-xl bg-brand-card border border-brand-border space-y-1.5">
       <div class="flex items-center justify-between gap-2">
-        <strong class="font-serif text-brand-gold">${escapeHtml(formatActTurn(ch.act, ch.turn))} · ${escapeHtml(displayChapterTitle(ch, '重要回合'))}</strong>
+        <strong class="font-serif text-brand-gold">${escapeHtml(formatActTurn(ch.act, ch.turn))} · ${escapeHtml(displayChapterTitle(ch, '重要段落'))}</strong>
         <button class="memory-unpin-btn text-[11px] text-rose-500 hover:text-rose-700 cursor-pointer" data-turn="${escapeHtml(ch.turn || '')}">取消釘選</button>
       </div>
       ${ch.chosenLabel ? `<div class="text-slate-500">玩家行動：${escapeHtml(ch.chosenLabel)}</div>` : ''}
       ${renderExpandableProse(ch.prose)}
-    </article>`).join('') : '<div class="p-3 rounded-xl bg-brand-card/60 border border-brand-border text-slate-500">尚未釘選重要回合。可在每一回章節卡片使用「標記重要」。</div>';
+    </article>`).join('') : '<div class="p-3 rounded-xl bg-brand-card/60 border border-brand-border text-slate-500">尚未釘選重要段落。可在每一回章節卡片使用「標記重要」。</div>';
 
   container.innerHTML = `
     <section class="space-y-2">
@@ -7251,7 +7299,7 @@ function toggleMemoryPin(turn, forceValue) {
       if (isOverlayOpen('memory-center-modal')) renderMemoryCenter();
       return notifyUser('已取消重要記憶標記。', 'success');
     }
-    return notifyUser('找不到這個回合，可能已不在本機章節視窗中。', 'error');
+    return notifyUser('找不到這一回，可能已不在本機章節視窗中。', 'error');
   }
   chapter.memoryPinned = typeof forceValue === 'boolean' ? forceValue : !chapter.memoryPinned;
   if (state.chapterData && Number(state.chapterData.turn) === Number(turn)) {
@@ -7275,7 +7323,7 @@ function toggleMemoryPin(turn, forceValue) {
   if (dom.novelStreamContainer) dom.novelStreamContainer.innerHTML = '';
   renderStoryStream(state.chapterData);
   if (isOverlayOpen('memory-center-modal')) renderMemoryCenter();
-  notifyUser(chapter.memoryPinned ? '已標記為重要記憶，後續回合會保留原文摘錄。' : '已取消重要記憶標記。', 'success');
+  notifyUser(chapter.memoryPinned ? '已標記為重要記憶，之後每一回都會保留原文摘錄。' : '已取消重要記憶標記。', 'success');
 }
 
 function createCurrentStoryFork() {
@@ -7291,12 +7339,12 @@ async function rewindStoryToTurn(turn) {
   const chapters = state.chapterHistoryList || [];
   const index = chapters.findIndex(ch => Number(ch.turn) === Number(turn));
   const target = chapters[index];
-  if (!target) return notifyUser('找不到指定回合。', 'error');
+  if (!target) return notifyUser('找不到指定的那一回。', 'error');
   if (!target.stateSnapshot) {
     return notifyUser('這是舊版章節，沒有完整數值快照；為避免狀態錯亂，不執行回溯。可改載入當時建立的具名存檔。', 'error', 7000);
   }
   const removed = chapters.length - index - 1;
-  if (removed <= 0) return notifyUser('目前已位於這個回合。', 'info');
+  if (removed <= 0) return notifyUser('目前已經在這一回。', 'info');
   const ok = await confirmDialog(`將先建立目前進度的安全分歧存檔，再回到第 ${turn} 回。\n其後 ${removed} 回會從目前時間線移除，但可由分歧存檔取回。`, {
     title: '回溯故事時間線', confirmText: '建立分歧並回溯'
   });
@@ -8064,7 +8112,7 @@ async function handleRegenerateTurn() {
     }
   } else {
     if (!restorePreviousTurnForRetry()) {
-      notifyUser('找不到本回合的前一狀態，無法安全重新生成。', 'error', 5000);
+      notifyUser('找不到這一回的前一個狀態，無法安全重新生成。', 'error', 5000);
       return;
     }
     makeChoice(state.lastChoicePayload.choiceId, state.lastChoicePayload.customInput, true);
@@ -8095,9 +8143,9 @@ function handleUndoTurn() {
     renderStoryStream(state.chapterData);
     renderSaveState();
     updateGameplayBreadcrumb();
-    notifyUser('已回退至上一回合，可重新選擇。', 'success');
+    notifyUser('已回到上一回，可以重新選擇。', 'success');
   } else {
-    notifyUser('已無更早的回合可回退。', 'info');
+    notifyUser('已經沒有更早的回可以回退。', 'info');
   }
 }
 
@@ -8116,7 +8164,7 @@ function handleEditLastAction() {
   }
   const original = state.lastChoicePayload.customInput
     || (state.chapterData?.chosenLabel && state.chapterData.chosenLabel !== '【正式開局】' ? state.chapterData.chosenLabel : '');
-  if (!restorePreviousTurnForRetry()) return notifyUser('找不到上一回合快照。', 'error');
+  if (!restorePreviousTurnForRetry()) return notifyUser('找不到上一回的快照。', 'error');
   renderStoryStream(state.chapterData);
   renderSaveState();
   updateGameplayBreadcrumb();
@@ -8127,7 +8175,7 @@ function handleEditLastAction() {
     dom.customActionInput.focus();
     dom.customActionInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
-  notifyUser('已回到上一回合並帶入原行動；修改後按「執行行動」即可重新演繹。', 'success', 5200);
+  notifyUser('已回到上一回並帶入原行動；修改後按「執行行動」即可重新演繹。', 'success', 5200);
 }
 
 function showStreamingAbortControl() {
@@ -8152,66 +8200,140 @@ function handleAbortGeneration() {
   notifyUser('已中止本次生成。', 'info');
 }
 
+/**
+ * 自動分幕（2026-10-07）。
+ * 玩家常在同一局玩到四五百回：不換幕時，四五百回的劇情全擠在一份 5,000 字的摘要池裡，
+ * 越後面忘得越多；每回提示詞也從約 15,000 字漲到約 24,600 字後持平。
+ * 每幕滿 40 回後，遇到換場景（時間或地點改變）就換幕，最晚第 48 回一定換。
+ * 換幕後：本幕寫成幕篇檔案，摘要池與時間軸重新累積；超過兩幕的舊檔案併入「全書前情」。
+ * 記憶分三層：全書前情 → 最近兩幕幕篇檔案 → 本幕摘要＋近 5 回全文＋語意檢索。
+ */
+const AUTO_ACT = { minTurns: 40, maxTurns: 48 };
+const SAGA_SUMMARY_MAX_CHARS = 1600;
+
+function getActStartTurn(saveState) {
+  const meta = saveState?.meta || {};
+  return Math.max(1, Number(meta.actStartTurn) || Number(meta.contextResetTurn) || 1);
+}
+
+function shouldAutoAdvanceAct(saveState, chapter, previousChapter) {
+  if (!saveState || saveState.meta?.actRolloverPending) return false;
+  const turnsInAct = (Number(saveState.turnCount) || 1) - getActStartTurn(saveState) + 1;
+  if (turnsInAct < AUTO_ACT.minTurns) return false;
+  if (turnsInAct >= AUTO_ACT.maxTurns) return true;
+  const before = String(previousChapter?.statusPanel?.timeLocation || '').trim();
+  const after = String(chapter?.statusPanel?.timeLocation || '').trim();
+  return Boolean(before && after && before !== after);
+}
+
+/** 本機濃縮版：Worker 無法使用時的退路，也是 AI 版失敗時的保底。 */
+function buildLocalDossier(actNumber, recent) {
+  return [
+    clampBlock(state.saveState.summaryPool || '尚無長期摘要。', 1000),
+    '幕末銜接：',
+    recent.map(ch => `- 第 ${ch.turn || '?'} 回 ${displayChapterTitle(ch, '')}：${ch.turnSummary || String(ch.prose || '').slice(0, 120)}`).join('\n')
+  ].join('\n');
+}
+
+/**
+ * 換幕。幕號與起始回數先同步切換（下一回的編號立刻正確），幕篇檔案在背景補上。
+ * 一次請求同時產生幕名、幕篇檔案，以及（舊檔案超過兩份時）更新後的全書前情。
+ */
+async function advanceAct({ silent = true } = {}) {
+  const saveState = state.saveState;
+  if (!saveState || saveState.meta?.actRolloverPending) return false;
+  const meta = saveState.meta || (saveState.meta = {});
+  const actNumber = Number(meta.currentAct) || 1;
+  const actStart = getActStartTurn(saveState);
+  const endTurn = Number(saveState.turnCount) || 1;
+  const recent = (state.chapterHistoryList || []).filter(ch => Number(ch.turn) >= actStart).slice(-8);
+
+  meta.currentAct = actNumber + 1;
+  meta.actStartTurn = endTurn + 1;
+  meta.contextResetTurn = endTurn;   // 最後一回仍留在近期全文，維持銜接
+  meta.actRolloverPending = true;
+  safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(saveState));
+  updateGameplayBreadcrumb();
+
+  const dossiers = normalizeDossiers(saveState);
+  const retiring = dossiers.length >= CONTEXT_BUDGET.actDossiers ? dossiers.slice(0, dossiers.length - CONTEXT_BUDGET.actDossiers + 1) : [];
+  let title = '';
+  let text = buildLocalDossier(actNumber, recent);
+  let saga = String(saveState.sagaSummary || '');
+  try {
+    const timeline = getMemoryBank().filter(m => m.kind === 'summary' && m.turn >= actStart && m.turn <= endTurn)
+      .map(m => `第 ${m.turn} 回：${m.text}`).join('\n');
+    const facts = getMemoryBank().filter(m => m.kind === 'fact' && m.turn >= actStart)
+      .slice(-60).map(m => `第 ${m.turn} 回：${m.text}`).join('\n');
+    const tail = recent.map(ch => `── 第 ${ch.turn} 回 ${displayChapterTitle(ch, '')} ──\n${clampBlock(ch.prose, 900)}`).join('\n');
+    const raw = await requestWorkerCompletion({
+      model: LLM_CONFIG.SUMMARY_MODEL,
+      system: '你是長篇小說的編輯，負責在換幕時整理劇情，讓下一幕能無縫承接。只輸出一個 JSON 物件：'
+        + '{"title":"本幕幕名，4–8 個字，具體不浮誇","dossier":"幕篇檔案","saga":"全書前情"}。'
+        + '幕篇檔案依序寫四段：一、本幕主線（發生了什麼、因果）；二、人物關係與立場的變化；三、已確立且不可推翻的事實（承諾、物品去向、身分秘密）；'
+        + '四、懸而未決的線索與下一幕的起點；寫清楚人名，不寫評論與形容，總長 800–1,200 字。'
+        + (retiring.length ? '全書前情：把「既有全書前情」與「要併入的舊幕篇」合寫成 1,500 字以內，依時間順序保留主線、關係轉折與不可推翻的事實。' : '全書前情：沒有要併入的舊幕篇時，原樣輸出「既有全書前情」（可為空字串）。')
+        + TW_PLAIN_STYLE_RULE,
+      user: `【第 ${actNumber} 幕（第 ${actStart}–${endTurn} 回）】\n\n--- 本幕摘要池 ---\n${saveState.summaryPool || '（無）'}\n\n`
+        + (timeline ? `--- 本幕逐回摘要 ---\n${timeline}\n\n` : '')
+        + (facts ? `--- 本幕已確立的事實 ---\n${facts}\n\n` : '')
+        + `--- 幕末最近幾回 ---\n${tail}\n\n`
+        + `--- 既有全書前情 ---\n${saga || '（無）'}\n\n`
+        + (retiring.length ? `--- 要併入的舊幕篇 ---\n${retiring.map(d => `${formatActLabel(d.act)}${d.title ? `「${d.title}」` : ''}\n${d.text}`).join('\n\n')}\n` : ''),
+      maxTokens: 3500,
+      temperature: 0.3,
+      json: true,
+      timeoutMs: 120000
+    });
+    const parsed = JSON.parse(String(raw || '').slice(String(raw || '').indexOf('{'), String(raw || '').lastIndexOf('}') + 1));
+    if (parsed && String(parsed.dossier || '').length > 200) text = polishTaiwaneseText(String(parsed.dossier));
+    title = clampBlock(polishTaiwaneseText(stripChapterNumbering(String(parsed?.title || '')).replace(/[「」『』《》]/g, '')), 12);
+    if (retiring.length && String(parsed?.saga || '').length > 100) saga = polishTaiwaneseText(String(parsed.saga));
+  } catch (err) {
+    console.warn('[Act] 幕篇整理失敗，改用本機濃縮版：', err?.message || err);
+    // 舊幕篇無法濃縮時，直接接在全書前情後面，寧可長一點也不丟
+    if (retiring.length) saga = [saga, ...retiring.map(d => `${formatActLabel(d.act)}：${clampBlock(d.text, 500)}`)].filter(Boolean).join('\n');
+  }
+
+  // 存檔可能在整理期間被換掉（讀檔、開新局），那就不寫回
+  if (state.saveState !== saveState) return false;
+  const kept = dossiers.slice(retiring.length);
+  kept.push({ act: actNumber, title, text });
+  saveState.actDossiers = kept;
+  saveState.sagaSummary = clampBlock(saga, SAGA_SUMMARY_MAX_CHARS);
+  saveState.summaryPool = '';
+  meta.actTitles = Object.assign({}, meta.actTitles, title ? { [String(actNumber)]: title } : {});
+  delete meta.actRolloverPending;
+  safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(saveState));
+  syncStateToGoogleDriveCloud(saveState, state.chapterData);
+  updateGameplayBreadcrumb();
+  renderSaveState();
+  renderChapterNavList();
+  if (!silent) notifyUser(`已整理${formatActLabel(actNumber)}${title ? `「${title}」` : ''}，進入${formatActLabel(actNumber + 1)}。`, 'success', 5000);
+  else notifyUser(`${formatActLabel(actNumber)}${title ? `「${title}」` : ''}落幕，故事進入${formatActLabel(actNumber + 1)}。`, 'info', 4500);
+  return true;
+}
+
+/** 每回生成成功後呼叫：時機到了就在背景換幕，不打斷玩家。 */
+function maybeAutoAdvanceAct(chapter) {
+  const history = state.chapterHistoryList || [];
+  const previous = history.length >= 2 ? history[history.length - 2] : null;
+  if (shouldAutoAdvanceAct(state.saveState, chapter, previous)) advanceAct({ silent: true });
+}
+
 async function handleActRebase() {
   if (state.isGenerating) return notifyUser('目前有劇情正在生成，請完成後再整理故事記憶。');
+  if (!state.saveState) return notifyUser('目前尚無可整理的遊戲進度。', 'error');
+  if (state.saveState.meta?.actRolloverPending) return notifyUser('故事記憶正在整理中，請稍候。');
   const rebaseOk = await confirmDialog(
-    '系統會整理本幕的重要情節，讓下一幕維持連貫。\n數值、好感度、道具與原始正文都會保留。',
+    '系統會把本幕整理成幕篇檔案，並進入下一幕。\n數值、道具與原始正文都會保留。\n（每幕滿 40 回後，系統也會在換場景時自動換幕。）',
     { title: '整理故事記憶', confirmText: '開始整理' }
   );
   if (!rebaseOk) return;
-  if (!state.saveState) return notifyUser('目前尚無可重整的遊戲進度。', 'error');
-
-  const actNumber = state.saveState.meta.currentAct || 1;
-  const recent = (state.chapterHistoryList || []).slice(-8);
-  // 本機濃縮版：Worker 無法使用時的退路，也是 AI 版失敗時的保底
-  const localDossier = [
-    `# 第 ${actNumber} 幕幕篇檔案（本機濃縮）`,
-    clampBlock(state.saveState.summaryPool || '尚無長期摘要。', 1200),
-    '## 幕末銜接',
-    recent.map(ch => `- ${formatActTurn(ch.act, ch.turn)} ${displayChapterTitle(ch, '')}：${ch.turnSummary || String(ch.prose || '').slice(0, 160)}`).join('\n')
-  ].join('\n\n');
-
   showLoading('正在整理故事記憶……', '系統會保留人物關係、數值、物品與重要情節。');
   setGenerationBusy(true);
-  let dossier = localDossier;
   try {
-    // 改走 Worker：GAS 的 novel/rebase 內部用的是舊供應商的模型 ID，在 OpenRouter 上不存在
-    const timeline = (state.chapterHistoryList || [])
-      .map(ch => ch.turnSummary ? `第 ${ch.turn} 回：${ch.turnSummary}` : '')
-      .filter(Boolean).join('\n');
-    const facts = getMemoryBank().filter(m => m.kind === 'fact')
-      .slice(-60).map(m => `第 ${m.turn} 回：${m.text}`).join('\n');
-    const tail = recent.map(ch => `── ${formatActTurn(ch.act, ch.turn)} ${displayChapterTitle(ch, '')} ──\n${clampBlock(ch.prose, 900)}`).join('\n');
-    const raw = await requestWorkerCompletion({
-      model: LLM_CONFIG.SUMMARY_MODEL,
-      system: '你是長篇小說的編輯，負責在換幕時撰寫「幕篇檔案」，讓下一幕能無縫承接。使用台灣繁體中文，只輸出檔案內容。'
-        + '依序寫四段：一、本幕主線（發生了什麼、因果）；二、人物關係與立場的變化；三、已確立且不可推翻的事實（承諾、物品去向、身分秘密）；'
-        + '四、懸而未決的線索與下一幕的起點。寫清楚人名，不寫評論與形容，總長 800–1,200 字。' + TW_PLAIN_STYLE_RULE,
-      user: `【第 ${actNumber} 幕】\n\n--- 摘要池 ---\n${state.saveState.summaryPool || '（無）'}\n\n`
-        + (timeline ? `--- 逐回摘要 ---\n${timeline}\n\n` : '')
-        + (facts ? `--- 已確立的事實 ---\n${facts}\n\n` : '')
-        + `--- 幕末最近幾回 ---\n${tail}`,
-      maxTokens: 2500,
-      temperature: 0.3,
-      timeoutMs: 120000
-    });
-    if (raw && raw.length > 200) dossier = `# 第 ${actNumber} 幕幕篇檔案\n\n${polishTaiwaneseText(raw)}`;
-    else console.warn('[Act Rebase] AI 幕篇檔案過短，改用本機濃縮版。');
-  } catch (err) {
-    console.warn('[Act Rebase] AI 幕篇檔案失敗，改用本機濃縮版：', err.message);
-  }
-
-  try {
-    state.saveState.actDossiers = (Array.isArray(state.saveState.actDossiers) ? state.saveState.actDossiers : [])
-      .concat(dossier).slice(-6);
-    state.saveState.meta.currentAct = actNumber + 1;
-    state.saveState.meta.contextResetTurn = Math.max(1, Number(state.saveState.turnCount) || 1);
-    state.saveState.summaryPool = `【第 ${actNumber} 幕已完結並重整】${clampBlock(state.saveState.summaryPool, 4500)}`;
-    safeLocalStorageSet('undercurrent_current_save_state', JSON.stringify(state.saveState));
-    syncStateToGoogleDriveCloud(state.saveState, state.chapterData);
-    updateGameplayBreadcrumb();
-    renderSaveState();
-    notifyUser('故事記憶整理完成，已進入第 ' + state.saveState.meta.currentAct + ' 幕。', 'success', 5000);
+    await advanceAct({ silent: false });
   } finally {
     hideLoading();
     setGenerationBusy(false);
