@@ -125,7 +125,8 @@ const ALLOWED_MODELS = [
 //   gpt-5.6-luna      未納入評測，暫不開放
 
 /** 只允許帶測試金鑰的請求使用：用來評估角色演繹品質的評審模型。 */
-const TEST_ONLY_MODELS = ['anthropic/claude-sonnet-5.5'];
+// 2026-10-07 依作者要求清空：不再用付費模型當評審，測試一律小規模、自行評比。
+const TEST_ONLY_MODELS = [];
 
 const MAX_TOKENS_CEILING = 6144;
 const MAX_BODY_BYTES = 128 * 1024;
